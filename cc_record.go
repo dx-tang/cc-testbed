@@ -2,6 +2,7 @@ package testbed
 
 import (
 	"github.com/totemtang/cc-testbed/spinlock"
+	"log"
 )
 
 type RecType int
@@ -16,6 +17,11 @@ const (
 	PERFIELD = 100
 )
 
+type StrAttr struct {
+	index int
+	value string
+}
+
 type BRecord struct {
 	padding1  [128]byte
 	key       Key
@@ -28,7 +34,7 @@ type BRecord struct {
 	padding2  [128]byte
 }
 
-func MakeBR(k Key, val Value, rt RecType) *BRecord {
+func MakeBR(k Key, v Value, rt RecType) *BRecord {
 	br := &BRecord{
 		key:     k,
 		recType: rt,
@@ -44,12 +50,12 @@ func MakeBR(k Key, val Value, rt RecType) *BRecord {
 	// Initiate Value according to different types
 	switch rt {
 	case SINGLEINT:
-		if val != nil {
-			br.intVal = val.(int64)
+		if v != nil {
+			br.intVal = v.(int64)
 		}
 	case STRINGLIST:
-		if val != nil {
-			var inputStrList = val.([]string)
+		if v != nil {
+			var inputStrList = v.([]string)
 			br.stringVal = make([]string, len(inputStrList))
 			for i, _ := range inputStrList {
 				br.stringVal[i] = inputStrList[i]
@@ -83,4 +89,22 @@ func (br *BRecord) Value() Value {
 		return br.stringVal
 	}
 	return nil
+}
+
+func (br *BRecord) Update(val Value) bool {
+	if val == nil {
+		return false
+	}
+	switch br.recType {
+	case SINGLEINT:
+		br.intVal = val.(int64)
+	case STRINGLIST:
+		strAttr := val.(*StrAttr)
+		if strAttr.index >= len(br.stringVal) {
+			log.Fatalf("Index %v out of range array length %v",
+				strAttr.index, len(br.stringVal))
+		}
+		br.stringVal[strAttr.index] = strAttr.value
+	}
+	return true
 }
