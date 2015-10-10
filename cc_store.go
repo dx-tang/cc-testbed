@@ -2,7 +2,7 @@ package testbed
 
 import (
 	"flag"
-	"github.com/totemtang/cc-testbed/spinlock"
+	"sync"
 )
 
 const (
@@ -30,8 +30,8 @@ type Chunk struct {
 
 type Partition struct {
 	padding1 [128]byte
-	spinlock.Spinlock
 	data     []*Chunk
+	sync.Mutex
 	padding2 [128]byte
 }
 

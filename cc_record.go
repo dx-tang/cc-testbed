@@ -1,8 +1,8 @@
 package testbed
 
 import (
-	"github.com/totemtang/cc-testbed/spinlock"
 	"log"
+	"sync"
 )
 
 type RecType int
@@ -28,7 +28,7 @@ type BRecord struct {
 	intVal    int64
 	stringVal []string
 	recType   RecType
-	lock      spinlock.RWSpinlock
+	lock      sync.RWMutex
 	last      TID
 	exist     bool
 	padding2  [128]byte
@@ -40,11 +40,6 @@ func MakeBR(k Key, v Value, rt RecType) *BRecord {
 		recType: rt,
 		last:    0,
 		exist:   true,
-	}
-
-	// whether need a spinlock for every record
-	if *SysType != PARTITION {
-		br.lock = spinlock.RWSpinlock{}
 	}
 
 	// Initiate Value according to different types
