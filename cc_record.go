@@ -1,8 +1,9 @@
 package testbed
 
 import (
-	"log"
 	"sync"
+
+	"github.com/totemtang/cc-testbed/clog"
 )
 
 type RecType int
@@ -96,7 +97,7 @@ func (br *BRecord) Update(val Value) bool {
 	case STRINGLIST:
 		strAttr := val.(*StrAttr)
 		if strAttr.index >= len(br.stringVal) {
-			log.Fatalf("Index %v out of range array length %v",
+			clog.Error("Index %v out of range array length %v",
 				strAttr.index, len(br.stringVal))
 		}
 		br.stringVal[strAttr.index] = strAttr.value

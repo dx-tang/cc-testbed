@@ -2,10 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"github.com/totemtang/cc-testbed"
-	"log"
 	"runtime"
+
+	"github.com/totemtang/cc-testbed"
+	"github.com/totemtang/cc-testbed/clog"
 )
 
 var ncores = flag.Int("ncores", 2, "number of cores to be used")
@@ -27,10 +27,10 @@ func main() {
 	nworkers := *ncores
 
 	if *contention < 0 || *contention > 1 {
-		log.Fatalf("Contention factor should be between 0 and 1")
+		clog.Error("Contention factor should be between 0 and 1")
 	}
 
-	fmt.Printf("Number of clients %v, Number of workers %v \n", clients, nworkers)
+	clog.Info("Number of clients %v, Number of workers %v \n", clients, nworkers)
 
 	// create store
 	s := testbed.NewStore()
