@@ -6,6 +6,9 @@ import (
 )
 
 func TestHashPartitioner(t *testing.T) {
+	fmt.Println("======================")
+	fmt.Println("Test Partitioner Begin")
+	fmt.Println("======================")
 	nParts := int64(100)
 	nKeys := int64(100000)
 	hp := &HashPartitioner{
@@ -22,4 +25,7 @@ func TestHashPartitioner(t *testing.T) {
 	}
 
 	fmt.Printf("%v tests passed \n", nKeys)
+	fmt.Println("====================")
+	fmt.Println("Test Partitioner End")
+	fmt.Println("====================\n")
 }

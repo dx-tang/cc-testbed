@@ -6,6 +6,9 @@ import (
 )
 
 func TestStore(t *testing.T) {
+	fmt.Println("=================")
+	fmt.Println("Test Store Begin")
+	fmt.Println("=================")
 	// Test Partition-based CC
 	*NumPart = 10
 	*SysType = PARTITION
@@ -48,4 +51,8 @@ func TestStore(t *testing.T) {
 	s.SetRecord(key, strAttr, part)
 	//Get it again
 	fmt.Printf("Updated value is %v \n", s.GetRecord(key, part).Value())
+
+	fmt.Println("==============")
+	fmt.Println("Test Store End")
+	fmt.Println("==============\n")
 }

@@ -7,6 +7,9 @@ import (
 
 func TestRecord(t *testing.T) {
 
+	fmt.Println("=================")
+	fmt.Println("Test Record Begin")
+	fmt.Println("=================")
 	// test MakeBR
 	var k Key
 	var intValue int64 = 10
@@ -28,4 +31,8 @@ func TestRecord(t *testing.T) {
 	br.RUnlock()
 	br.Lock()
 	br.Unlock()
+
+	fmt.Println("===============")
+	fmt.Println("Test Record End")
+	fmt.Println("===============\n")
 }
