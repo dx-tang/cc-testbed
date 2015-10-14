@@ -1,7 +1,7 @@
 package testbed
 
 import (
-	"math"
+	"math/rand"
 )
 
 type WValue interface{}
@@ -31,14 +31,15 @@ type Query struct {
 	wValue      WValue
 }
 
-func (q *Query) GenValue(seed uint32) {
+func (q *Query) GenValue(rnd *rand.Rand) {
 	if q.TXN == RANDOM_UPDATE_INT {
 		v := &SingleIntValue{
 			intVals: make([]int32, len(q.wKeys)),
 		}
 
 		for i := range v.intVals {
-			v.intVals[i] = int32(RandN(&seed, uint32(math.MaxInt32)))
+			//v.intVals[i] = int32(RandN(&seed, uint32(math.MaxInt32)))
+			v.intVals[i] = rnd.Int31()
 		}
 
 		q.wValue = v
@@ -47,12 +48,12 @@ func (q *Query) GenValue(seed uint32) {
 			strVals: make([]*StrAttr, len(q.wKeys)),
 		}
 
-		var sz uint32
 		for i := range v.strVals {
-			sz = RandN(&seed, uint32(PERFIELD)) + 1
+			//sz = RandN(&seed, uint32(PERFIELD)) + 1
 			v.strVals[i] = &StrAttr{
-				index: int(RandN(&seed, uint32(FIELDS-1))),
-				value: Randstr(int(sz)),
+				//index: int(RandN(&seed, uint32(FIELDS-1))),
+				index: rnd.Intn(FIELDS),
+				value: Randstr(int(PERFIELD)),
 			}
 		}
 

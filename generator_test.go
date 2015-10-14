@@ -10,7 +10,7 @@ func TestGenerator(t *testing.T) {
 	fmt.Println("Test Generator Begin")
 	fmt.Println("====================")
 
-	// Test a store with 23 keys
+	// Test a store with 100 keys
 	// Without partition, RANDOM_UPDATE_INT
 	fmt.Println("Without partition")
 
@@ -23,20 +23,53 @@ func TestGenerator(t *testing.T) {
 	zk := NewZipfKey(0, nKeys, 1, pKeysArray, s, nil)
 
 	rr := float64(50)
-	txnLen := 2
+	txnLen := 16
 
 	generator := NewTxnGen(RANDOM_UPDATE_INT, rr, txnLen, -1, zk)
 
 	// Generator 3 queries
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 3; i++ {
 		printOneQuery(generator.GenOneQuery())
 	}
 
-	/*
-		cr := float64()
+	// Test partition
+	fmt.Println("With Partition")
 
-		maxParts := 3
-	*/
+	*SysType = PARTITION
+
+	nParts := 5
+	var p Partitioner
+	p = &HashPartitioner{
+		NParts: int64(nParts),
+		NKeys:  nKeys,
+	}
+
+	pKeysArray = make([]int64, nParts)
+	for i := int64(0); i < nKeys; i++ {
+		key := CKey(i)
+		pKeysArray[p.GetPartition(key)]++
+	}
+
+	// Only Test Partition 0
+	zk = NewZipfKey(0, nKeys, nParts, pKeysArray, s, p)
+
+	rr = float64(50)
+	txnLen = 5
+	//cr := float64(0)
+	*cr = float64(50)
+	maxParts := 3
+
+	generator = NewTxnGen(RANDOM_UPDATE_STRING, rr, txnLen, maxParts, zk)
+
+	// Generator 3 queries
+	for i := 0; i < 3; i++ {
+		printOneQuery(generator.GenOneQuery())
+	}
+
+	fmt.Println("==================")
+	fmt.Println("Test Generator End")
+	fmt.Println("==================")
+
 }
 
 func printOneQuery(q *Query) {
@@ -67,9 +100,9 @@ func printOneQuery(q *Query) {
 		fmt.Printf("\n")
 	} else if q.TXN == RANDOM_UPDATE_STRING {
 		wValue := q.wValue.(*StringListValue)
-		fmt.Printf("Write Values Include: ")
+		fmt.Printf("Write Values Include: \n")
 		for _, v := range wValue.strVals {
-			fmt.Printf("%v %s; ", v.index, v.value)
+			fmt.Printf("%v. %s \n", v.index, v.value)
 		}
 		fmt.Printf("\n")
 	}
