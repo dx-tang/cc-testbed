@@ -37,7 +37,7 @@ func TestGenerator(t *testing.T) {
 
 	*SysType = PARTITION
 
-	nParts := 5
+	nParts := 6
 	var p Partitioner
 	p = &HashPartitioner{
 		NParts: int64(nParts),
@@ -51,13 +51,13 @@ func TestGenerator(t *testing.T) {
 	}
 
 	// Only Test Partition 0
-	zk = NewZipfKey(0, nKeys, nParts, pKeysArray, s, p)
+	zk = NewZipfKey(3, nKeys, nParts, pKeysArray, s, p)
 
 	rr = float64(50)
 	txnLen = 5
 	//cr := float64(0)
 	*cr = float64(50)
-	maxParts := 3
+	maxParts := 5
 
 	generator = NewTxnGen(RANDOM_UPDATE_STRING, rr, txnLen, maxParts, zk)
 

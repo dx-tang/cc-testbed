@@ -2,6 +2,7 @@ package testbed
 
 import (
 	"math/rand"
+	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 )
@@ -34,12 +35,12 @@ func NewZipfKey(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s fl
 
 	zk.isPartition = *SysType == PARTITION
 
-	zk.wholeUniform = rand.New(rand.NewSource(int64(partIndex * 12467)))
+	zk.wholeUniform = rand.New(rand.NewSource(time.Now().Unix()))
 
 	if zk.isPartition {
 		zk.partUniform = make([]*rand.Rand, nParts)
 		for i := 0; i < nParts; i++ {
-			zk.partUniform[i] = rand.New(rand.NewSource(int64(i * 12467)))
+			zk.partUniform[i] = rand.New(rand.NewSource(time.Now().Unix()))
 		}
 	}
 

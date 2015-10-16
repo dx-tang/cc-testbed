@@ -78,9 +78,18 @@ func (tg *TxnGen) GenOneQuery() *Query {
 			q.accessParts = make([]int, numAccess)
 
 			// Generate partitions this txn will touch
-			// For simplicity, only generate random continuous partitions
+			// For simplicity, only generate continuous partitions
 			for i := 0; i < numAccess; i++ {
-				q.accessParts[i] = tg.partIndex + i
+				if tg.partIndex+numAccess <= tg.nParts {
+					q.accessParts[i] = tg.partIndex + i
+				} else {
+					tmp := tg.partIndex + i
+					if tmp >= tg.nParts {
+						q.accessParts[tmp-tg.nParts] = tmp - tg.nParts
+					} else {
+						q.accessParts[numAccess-tg.nParts+tg.partIndex+i] = tmp
+					}
+				}
 			}
 
 			var j int = 0
