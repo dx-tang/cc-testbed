@@ -1,6 +1,7 @@
 package testbed
 
 import (
+	"errors"
 	"flag"
 	"sync"
 )
@@ -13,6 +14,11 @@ const (
 	PARTITION = iota
 	OCC
 	LOCKING
+)
+
+var (
+	EABORT   = errors.New("abort")
+	ENORETRY = errors.New("no entry")
 )
 
 type TID int64
