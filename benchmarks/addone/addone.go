@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -11,7 +12,7 @@ import (
 )
 
 var nsec = flag.Int("nsec", 2, "number of seconds to run")
-var rr = flag.Float64("rr", 0.5, "percentage of read operations")
+var rr = flag.Float64("rr", 0, "percentage of read operations")
 var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
 var txnlen = flag.Int("txnlen", 16, "number of operations for each transaction")
 var nKeys = flag.Int64("nkeys", 1000000, "number of keys")
@@ -21,14 +22,6 @@ var mp = flag.Int("mp", 1, "Max partitions cross-partition transactions will tou
 
 func main() {
 	flag.Parse()
-
-	//f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	//defer f.close()
-	//if err != nil {
-	//	clog.Error("Open File Error %s\n", err.Error())
-	//}
-
-	//clog.SetOutput(f)
 
 	// set max cores used, number of clients and number of workers
 	runtime.GOMAXPROCS(*testbed.NumPart)
@@ -79,11 +72,7 @@ func main() {
 		generators[i] = testbed.NewTxnGen(testbed.ADD_ONE, *rr, *txnlen, *mp, zk)
 	}
 
-	workers := make([]*testbed.Worker, nworkers)
-
-	for i := 0; i < nworkers; i++ {
-		workers[i] = testbed.NewWorker(i, s)
-	}
+	coord := testbed.NewCoordinator(nworkers, s)
 
 	clog.Info("Done with Initialization")
 
@@ -91,17 +80,28 @@ func main() {
 	for i := 0; i < clients; i++ {
 		wg.Add(1)
 		go func(n int) {
+			w := coord.Workers[n]
 			end_time := time.Now().Add(time.Duration(*nsec) * time.Second)
 			for {
 				tm := time.Now()
 				if !end_time.After(tm) {
 					break
 				}
-				workers[n].One(generators[n].GenOneQuery())
+				_, err := w.One(generators[n].GenOneQuery())
+				if err == testbed.ENOKEY {
+					clog.Error("No Key Error")
+					break
+				}
 			}
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
 
+	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	defer f.Close()
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	coord.PrintStats(f)
 }

@@ -6,6 +6,16 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+const (
+	NABORTS = iota
+	NENOKEY
+	NTXN
+	NCROSSTXN
+	NREADKEYS
+	NWRITEKEYS
+	LAST_STAT
+)
+
 type TransactionFunc func(*Query, ETransaction) (*Result, error)
 
 type Worker struct {
@@ -14,6 +24,7 @@ type Worker struct {
 	store    *Store
 	E        ETransaction
 	txns     []TransactionFunc
+	NStats   []int64
 	padding2 [128]byte
 }
 
@@ -23,9 +34,10 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 
 func NewWorker(id int, s *Store) *Worker {
 	w := &Worker{
-		ID:    id,
-		store: s,
-		txns:  make([]TransactionFunc, LAST_TXN),
+		ID:     id,
+		store:  s,
+		txns:   make([]TransactionFunc, LAST_TXN),
+		NStats: make([]int64, LAST_STAT),
 	}
 
 	if *SysType == PARTITION {
@@ -46,9 +58,26 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		debug.PrintStack()
 		clog.Error("Unknown transaction number %v\n", q.TXN)
 	}
+	w.NStats[NTXN]++
+
+	if len(q.accessParts) > 1 {
+		w.NStats[NCROSSTXN]++
+	}
+
+	w.NStats[NREADKEYS] += int64(len(q.rKeys))
+	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
+
 	w.E.Reset()
 
 	x, err := w.txns[q.TXN](q, w.E)
+
+	if err == EABORT {
+		w.NStats[NABORTS]++
+		return nil, err
+	} else if err == ENOKEY {
+		w.NStats[NENOKEY]++
+		return nil, err
+	}
 
 	w.E.Commit()
 

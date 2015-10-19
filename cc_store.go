@@ -17,8 +17,8 @@ const (
 )
 
 var (
-	EABORT   = errors.New("abort")
-	ENORETRY = errors.New("no entry")
+	EABORT = errors.New("abort")
+	ENOKEY = errors.New("no entry")
 )
 
 type TID int64
@@ -44,6 +44,7 @@ type Partition struct {
 type Store struct {
 	padding1 [128]byte
 	store    []*Partition
+	nKeys    int64
 	padding2 [128]byte
 }
 
@@ -76,6 +77,7 @@ func NewStore() *Store {
 }
 
 func (s *Store) CreateKV(k Key, v Value, rt RecType, partNum int) *BRecord {
+	s.nKeys++
 	chunk := s.store[partNum].data[k[0]]
 	if _, ok := chunk.rows[k]; ok {
 		return nil // One record with that key has existed; return nil to notify this

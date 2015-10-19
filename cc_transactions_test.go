@@ -83,16 +83,3 @@ func PrintPartition(s *Store, nKeys int64, p Partitioner, partNum int) {
 		clog.Info("Key %v: %v", intKey, br.intVal)
 	}
 }
-
-func PrintStore(s *Store, nKeys int64, p Partitioner) {
-	for i := int64(0); i < nKeys; i++ {
-		k := CKey(i)
-		partNum := p.GetPartition(k)
-		br := s.GetRecord(k, partNum)
-		if br == nil {
-			clog.Error("Error No Key")
-		}
-		intKey := int64(br.key[0]) + int64(br.key[1])<<8 + int64(br.key[2])<<16 + int64(br.key[3])<<24 + int64(br.key[4])<<32 + int64(br.key[5])<<40 + int64(br.key[6])<<48 + int64(br.key[7])<<56
-		clog.Info("Key %v: %v", intKey, br.intVal)
-	}
-}

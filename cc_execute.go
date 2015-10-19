@@ -38,7 +38,7 @@ func (p *PTransaction) Reset() {
 func (p *PTransaction) Read(k Key, partNum int) (*BRecord, error) {
 	br := p.s.GetRecord(k, partNum)
 	if br == nil {
-		return nil, ENORETRY
+		return nil, ENOKEY
 	}
 	return br, nil
 }
@@ -47,7 +47,7 @@ func (p *PTransaction) WriteInt64(k Key, intValue int64, partNum int) error {
 	s := p.s
 	success := s.SetRecord(k, intValue, partNum)
 	if !success {
-		return ENORETRY
+		return ENOKEY
 	}
 	return nil
 }
@@ -56,7 +56,7 @@ func (p *PTransaction) WriteString(k Key, sa *StrAttr, partNum int) error {
 	s := p.s
 	success := s.SetRecord(k, sa, partNum)
 	if !success {
-		return ENORETRY
+		return ENOKEY
 	}
 	return nil
 }
