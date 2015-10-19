@@ -6,7 +6,7 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-type TransactionFunc func(Query, ETransaction) (*Result, error)
+type TransactionFunc func(*Query, ETransaction) (*Result, error)
 
 type Worker struct {
 	padding  [128]byte
@@ -41,28 +41,28 @@ func NewWorker(id int, s *Store) *Worker {
 	return w
 }
 
-func (w *Worker) doTxn(t Query) (*Result, error) {
-	if t.TXN >= LAST_TXN {
+func (w *Worker) doTxn(q *Query) (*Result, error) {
+	if q.TXN >= LAST_TXN {
 		debug.PrintStack()
-		clog.Error("Unknown transaction number %v\n", t.TXN)
+		clog.Error("Unknown transaction number %v\n", q.TXN)
 	}
 	w.E.Reset()
 
-	x, err := w.txns[t.TXN](t, w.E)
+	x, err := w.txns[q.TXN](q, w.E)
 
 	w.E.Commit()
 
 	return x, err
 }
 
-func (w *Worker) One(t Query) (*Result, error) {
+func (w *Worker) One(q *Query) (*Result, error) {
 	s := w.store
 	// Acquire all locks
-	for i := range t.accessParts {
+	for i := range q.accessParts {
 		s.store[i].Lock()
 	}
-	r, err := w.doTxn(t)
-	for i := range t.accessParts {
+	r, err := w.doTxn(q)
+	for i := range q.accessParts {
 		s.store[i].Unlock()
 	}
 	return r, err

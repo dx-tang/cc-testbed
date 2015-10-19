@@ -76,7 +76,7 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 	}
 }
 
-func AddOneTXN(q Query, tx ETransaction) (*Result, error) {
+func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 	// Apply Writes
 	for _, wk := range q.wKeys {
 		partNum := q.partitioner.GetPartition(wk)
@@ -111,7 +111,7 @@ func AddOneTXN(q Query, tx ETransaction) (*Result, error) {
 	return &r, nil
 }
 
-func UpdateIntTXN(q Query, tx ETransaction) (*Result, error) {
+func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {
 	// Apply Writes
 	updateVals := q.wValue.(*SingleIntValue)
 	for i, wk := range q.wKeys {
@@ -141,7 +141,7 @@ func UpdateIntTXN(q Query, tx ETransaction) (*Result, error) {
 
 }
 
-func UpdateStringTXN(q Query, tx ETransaction) (*Result, error) {
+func UpdateStringTXN(q *Query, tx ETransaction) (*Result, error) {
 	// Apply Writes
 	updateVals := q.wValue.(*StringListValue)
 	for i, wk := range q.wKeys {

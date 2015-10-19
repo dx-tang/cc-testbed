@@ -21,7 +21,7 @@ func init() {
 	debug = log.New(os.Stdout, "Debug: ", log.Ldate|log.Ltime|log.Lmicroseconds)
 }
 
-func setOutput(w io.Writer) {
+func SetOutput(w io.Writer) {
 	info.SetOutput(w)
 	err.SetOutput(w)
 	debug.SetOutput(w)

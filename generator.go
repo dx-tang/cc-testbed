@@ -57,6 +57,7 @@ func (tg *TxnGen) GenOneQuery() *Query {
 		TXN:         tg.TXN,
 		txnLen:      tg.txnLen,
 		isPartition: tg.isPartition,
+		partitioner: tg.zk.hp,
 		rKeys:       make([]Key, 0, tg.txnLen),
 		wKeys:       make([]Key, 0, tg.txnLen),
 	}
