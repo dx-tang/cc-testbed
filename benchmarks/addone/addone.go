@@ -3,29 +3,37 @@ package main
 import (
 	"flag"
 	"runtime"
+	"sync"
+	"time"
 
 	"github.com/totemtang/cc-testbed"
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-var ncores = flag.Int("ncores", 2, "number of cores to be used")
-var nsec = flag.Int("nsec", 10, "number of seconds to run")
+var nsec = flag.Int("nsec", 2, "number of seconds to run")
 var rr = flag.Float64("rr", 0.5, "percentage of read operations")
 var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
 var txnlen = flag.Int("txnlen", 16, "number of operations for each transaction")
 var nKeys = flag.Int64("nkeys", 1000000, "number of keys")
 var out = flag.String("out", "data.out", "output file path")
 var skew = flag.Float64("skew", 0, "skew factor for partition-based concurrency control (Zipf)")
-var sys = flag.Int("sys", testbed.PARTITION, "System Type we will use")
 var mp = flag.Int("mp", 1, "Max partitions cross-partition transactions will touch")
 
 func main() {
 	flag.Parse()
 
+	//f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	//defer f.close()
+	//if err != nil {
+	//	clog.Error("Open File Error %s\n", err.Error())
+	//}
+
+	//clog.SetOutput(f)
+
 	// set max cores used, number of clients and number of workers
-	runtime.GOMAXPROCS(*ncores)
-	clients := *ncores
-	nworkers := *ncores
+	runtime.GOMAXPROCS(*testbed.NumPart)
+	clients := *testbed.NumPart
+	nworkers := *testbed.NumPart
 
 	if *contention < 0 || *contention > 1 {
 		clog.Error("Contention factor should be between 0 and 1")
@@ -39,8 +47,8 @@ func main() {
 	var hp testbed.Partitioner = nil
 	var pKeysArray []int64
 
-	if *sys == testbed.PARTITION {
-		nParts = *ncores
+	if *testbed.SysType == testbed.PARTITION {
+		nParts = *testbed.NumPart
 		pKeysArray = make([]int64, nParts)
 
 		hp = &testbed.HashPartitioner{
@@ -67,10 +75,33 @@ func main() {
 	generators := make([]*testbed.TxnGen, nworkers)
 
 	for i := 0; i < nParts; i++ {
-		zk := testbed.NewZipfKey(i, nKeys, nParts, pKeysArray, *contention, hp)
-		generators[i] = testbed.NewTxnGen(testbed.ADD_ONE, *rr, *txnlen, *mp)
+		zk := testbed.NewZipfKey(i, *nKeys, nParts, pKeysArray, *contention, hp)
+		generators[i] = testbed.NewTxnGen(testbed.ADD_ONE, *rr, *txnlen, *mp, zk)
+	}
+
+	workers := make([]*testbed.Worker, nworkers)
+
+	for i := 0; i < nworkers; i++ {
+		workers[i] = testbed.NewWorker(i, s)
 	}
 
 	clog.Info("Done with Initialization")
+
+	var wg sync.WaitGroup
+	for i := 0; i < clients; i++ {
+		wg.Add(1)
+		go func(n int) {
+			end_time := time.Now().Add(time.Duration(*nsec) * time.Second)
+			for {
+				tm := time.Now()
+				if !end_time.After(tm) {
+					break
+				}
+				workers[n].One(generators[n].GenOneQuery())
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
 
 }
