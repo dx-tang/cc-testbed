@@ -87,7 +87,11 @@ func main() {
 				if !end_time.After(tm) {
 					break
 				}
-				_, err := w.One(generators[n].GenOneQuery())
+				q := generators[n].GenOneQuery()
+				w.NGen += time.Since(tm)
+				tm = time.Now()
+				_, err := w.One(q)
+				w.NExecute += time.Since(tm)
 				if err == testbed.ENOKEY {
 					clog.Error("No Key Error")
 					break

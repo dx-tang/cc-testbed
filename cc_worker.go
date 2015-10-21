@@ -2,6 +2,7 @@ package testbed
 
 import (
 	"runtime/debug"
+	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 )
@@ -19,13 +20,17 @@ const (
 type TransactionFunc func(*Query, ETransaction) (*Result, error)
 
 type Worker struct {
-	padding  [128]byte
-	ID       int
-	store    *Store
-	E        ETransaction
-	txns     []TransactionFunc
-	NStats   []int64
-	padding2 [128]byte
+	padding      [128]byte
+	ID           int
+	store        *Store
+	E            ETransaction
+	txns         []TransactionFunc
+	NStats       []int64
+	NGen         time.Duration
+	NExecute     time.Duration
+	NWait        time.Duration
+	NLockAcquire int64
+	padding2     [128]byte
 }
 
 func (w *Worker) Register(fn int, transaction TransactionFunc) {
@@ -86,14 +91,21 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 
 func (w *Worker) One(q *Query) (*Result, error) {
 	s := w.store
+
+	w.NLockAcquire += int64(len(q.accessParts))
+	tm := time.Now()
 	// Acquire all locks
-	for i := range q.accessParts {
-		s.store[i].Lock()
+	for _, p := range q.accessParts {
+		s.store[p].Lock()
 	}
+
+	w.NWait += time.Since(tm)
 	r, err := w.doTxn(q)
-	for i := range q.accessParts {
-		s.store[i].Unlock()
+
+	for _, p := range q.accessParts {
+		s.store[p].Unlock()
 	}
+
 	return r, err
 }
 

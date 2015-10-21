@@ -74,7 +74,6 @@ func (tg *TxnGen) GenOneQuery() *Query {
 			} else {
 				numAccess = tg.txnLen
 			}
-			//numAccess = int(RandN(&tg.local_seed, uint32(numAccess-2))) + 2
 			numAccess = tg.rnd.Intn(numAccess-1) + 2
 			q.accessParts = make([]int, numAccess)
 

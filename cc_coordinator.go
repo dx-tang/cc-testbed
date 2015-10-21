@@ -3,15 +3,24 @@ package testbed
 import (
 	"fmt"
 	"os"
+	"time"
 )
 
 type Coordinator struct {
-	padding0 [128]byte
-	Workers  []*Worker
-	store    *Store
-	NStats   []int64
-	padding1 [128]byte
+	padding0     [128]byte
+	Workers      []*Worker
+	store        *Store
+	NStats       []int64
+	NGen         time.Duration
+	NExecute     time.Duration
+	NWait        time.Duration
+	NLockAcquire int64
+	padding1     [128]byte
 }
+
+const (
+	PERSEC = 1000000000
+)
 
 func NewCoordinator(nWorkers int, store *Store) *Coordinator {
 	coordinator := &Coordinator{
@@ -35,6 +44,10 @@ func (coord *Coordinator) gatherStats() {
 		coord.NStats[NCROSSTXN] += worker.NStats[NCROSSTXN]
 		coord.NStats[NREADKEYS] += worker.NStats[NREADKEYS]
 		coord.NStats[NWRITEKEYS] += worker.NStats[NWRITEKEYS]
+		coord.NGen += worker.NGen
+		coord.NExecute += worker.NExecute
+		coord.NWait += worker.NWait
+		coord.NLockAcquire += worker.NLockAcquire
 	}
 }
 
@@ -50,16 +63,22 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 	f.WriteString(fmt.Sprintf("Read %v Keys\n", coord.NStats[NREADKEYS]))
 	f.WriteString(fmt.Sprintf("Write %v Keys\n", coord.NStats[NWRITEKEYS]))
 
-	var incrtotal int64
+	/*var incrtotal int64
 	for _, part := range coord.store.store {
 		for _, chunk := range part.data {
 			for _, br := range chunk.rows {
 				incrtotal += br.intVal
 			}
 		}
-	}
+	}*/
 
-	f.WriteString(fmt.Sprintf("Increments %v in total\n", incrtotal))
+	//f.WriteString(fmt.Sprintf("Increments %v in total\n", incrtotal))
+
+	f.WriteString(fmt.Sprintf("Transaction Generation Spends %v secs\n", float64(coord.NGen.Nanoseconds())/float64(PERSEC)))
+	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NExecute.Nanoseconds())/float64(PERSEC)))
+	f.WriteString(fmt.Sprintf("Transaction Waiting Spends %v secs\n", float64(coord.NWait.Nanoseconds())/float64(PERSEC)))
+
+	f.WriteString(fmt.Sprintf("Has Acquired %v Locks\n", coord.NLockAcquire))
 
 	f.WriteString("\n")
 }
