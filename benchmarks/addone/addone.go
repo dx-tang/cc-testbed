@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"runtime"
 	"sync"
@@ -19,6 +20,7 @@ var nKeys = flag.Int64("nkeys", 1000000, "number of keys")
 var out = flag.String("out", "data.out", "output file path")
 var skew = flag.Float64("skew", 0, "skew factor for partition-based concurrency control (Zipf)")
 var mp = flag.Int("mp", 1, "Max partitions cross-partition transactions will touch")
+var benchStat = flag.String("bs", "", "Output file for benchmark statistics")
 
 func main() {
 	flag.Parse()
@@ -80,6 +82,7 @@ func main() {
 	for i := 0; i < clients; i++ {
 		wg.Add(1)
 		go func(n int) {
+			//var count int
 			w := coord.Workers[n]
 			end_time := time.Now().Add(time.Duration(*nsec) * time.Second)
 			for {
@@ -87,8 +90,14 @@ func main() {
 				if !end_time.After(tm) {
 					break
 				}
+				//if count >= 64775 {
+				//	break
+				//}
+				//count++
+				//tm := time.Now()
 				q := generators[n].GenOneQuery()
 				w.NGen += time.Since(tm)
+				//time.Sleep(1 * time.Microsecond)
 				tm = time.Now()
 				_, err := w.One(q)
 				w.NExecute += time.Since(tm)
@@ -103,9 +112,20 @@ func main() {
 	wg.Wait()
 
 	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	defer f.Close()
 	if err != nil {
 		clog.Error("Open File Error %s\n", err.Error())
 	}
+	defer f.Close()
 	coord.PrintStats(f)
+
+	if *benchStat != "" {
+		bs, err := os.OpenFile(*benchStat, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+		defer bs.Close()
+
+		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]))
+	}
+
 }

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"flag"
 	"sync"
+
+	"github.com/totemtang/cc-testbed/spinlock"
 )
 
 const (
@@ -27,6 +29,7 @@ type Value interface{}
 
 var NumPart = flag.Int("ncores", 2, "number of partitions; equals to the number of cores")
 var SysType = flag.Int("sys", PARTITION, "System Type we will use")
+var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
 
 type Chunk struct {
 	padding1 [128]byte
@@ -35,10 +38,27 @@ type Chunk struct {
 }
 
 type Partition struct {
-	padding1 [128]byte
-	data     []*Chunk
-	sync.Mutex
-	padding2 [128]byte
+	padding1  [128]byte
+	data      []*Chunk
+	mutexLock sync.RWMutex
+	spinLock  spinlock.RWSpinlock
+	padding2  [128]byte
+}
+
+func (p *Partition) Lock() {
+	if *SpinLock {
+		p.spinLock.Lock()
+	} else {
+		p.mutexLock.Lock()
+	}
+}
+
+func (p *Partition) Unlock() {
+	if *SpinLock {
+		p.spinLock.Unlock()
+	} else {
+		p.mutexLock.Unlock()
+	}
 }
 
 type Store struct {

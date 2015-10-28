@@ -104,3 +104,7 @@ func (br *BRecord) Update(val Value) bool {
 	}
 	return true
 }
+
+func (br *BRecord) GetTID() TID {
+	return br.last
+}

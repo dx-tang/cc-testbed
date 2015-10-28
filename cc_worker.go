@@ -17,6 +17,13 @@ const (
 	LAST_STAT
 )
 
+type RWSets struct {
+	rKeys  []Key
+	rTIDs  []TID
+	wKeys  []Key
+	wValue WValue
+}
+
 type TransactionFunc func(*Query, ETransaction) (*Result, error)
 
 type Worker struct {
@@ -29,6 +36,7 @@ type Worker struct {
 	NGen         time.Duration
 	NExecute     time.Duration
 	NWait        time.Duration
+	NCrossWait   time.Duration
 	NLockAcquire int64
 	padding2     [128]byte
 }
@@ -74,6 +82,8 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 
 	w.E.Reset()
 
+	//GenerateRWSets(w.Store(), q)
+
 	x, err := w.txns[q.TXN](q, w.E)
 
 	if err == EABORT {
@@ -84,7 +94,7 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		return nil, err
 	}
 
-	w.E.Commit()
+	w.E.Commit(q)
 
 	return x, err
 }
@@ -98,17 +108,47 @@ func (w *Worker) One(q *Query) (*Result, error) {
 	for _, p := range q.accessParts {
 		s.store[p].Lock()
 	}
+	//for i := len(q.accessParts) - 1; i >= 0; i-- {
+	//	s.store[q.accessParts[i]].Lock()
+	//}
 
 	w.NWait += time.Since(tm)
+	if len(q.accessParts) > 1 {
+		w.NCrossWait += time.Since(tm)
+	}
 	r, err := w.doTxn(q)
 
 	for _, p := range q.accessParts {
 		s.store[p].Unlock()
 	}
 
+	//for i := len(q.accessParts) - 1; i >= 0; i-- {
+	//	s.store[q.accessParts[i]].Unlock()
+	//}
+
 	return r, err
 }
 
 func (w *Worker) Store() *Store {
 	return w.store
+}
+
+func GenerateRWSets(s *Store, q *Query) {
+	rwSets := &RWSets{
+		rKeys: make([]Key, len(q.rKeys)+len(q.wKeys)),
+		//rTIDs: make([]TID, len(q.rKeys)+len(q.wKeys)),
+		wKeys: make([]Key, len(q.wKeys)),
+	}
+
+	//for i := range rwSets.rKeys {
+	//	rwSets.rKeys[i] = q.rKeys[i]
+	//	br := s.GetRecord(q.rKeys[i], q.partitioner.GetPartition(q.rKeys[i]))
+	//rwSets.rTIDs[i] = br.GetTID()
+	//}
+
+	/*for i := range rwSets.wKeys {
+		rwSets.wKeys[i] = q.wKeys[i]
+	}*/
+
+	q.rwSets = rwSets
 }

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-var cr = flag.Float64("cr", 0.0, "percentage of cross-partition transactions")
+var CrossPercent = flag.Float64("cr", 0.0, "percentage of cross-partition transactions")
 
 type TxnGen struct {
 	TXN         int
@@ -66,7 +66,7 @@ func (tg *TxnGen) GenOneQuery() *Query {
 	if tg.isPartition {
 		//x := float64(RandN(&tg.local_seed, 100))
 		x := float64(tg.rnd.Int63n(100))
-		if x < *cr {
+		if x < *CrossPercent {
 			// Generate how many partitions this txn will touch; more than 1
 			var numAccess int
 			if tg.maxParts < tg.txnLen {

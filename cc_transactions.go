@@ -44,9 +44,11 @@ type Query struct {
 	rKeys       []Key
 	wKeys       []Key
 	wValue      WValue
+	rwSets      *RWSets
 }
 
 func (q *Query) GenValue(rnd *rand.Rand) {
+
 	if q.TXN == RANDOM_UPDATE_INT {
 		v := &SingleIntValue{
 			intVals: make([]int64, len(q.wKeys)),
@@ -77,6 +79,13 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 }
 
 func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
+	//rwSets := q.rwSets
+	//wValue := &RetIntValue{
+	//	intVals: make([]int64, len(q.wKeys)),
+	//}
+
+	//var rIndex int
+
 	// Apply Writes
 	for _, wk := range q.wKeys {
 		partNum := q.partitioner.GetPartition(wk)
@@ -87,11 +96,20 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 
 		newVal := v.intVal + 1
 
+		//rwSets.wKeys[i] = wk
+		//wValue.intVals[i] = newVal
+
+		//rwSets.rKeys[rIndex] = wk
+		//rwSets.rTIDs[rIndex] = v.GetTID()
+		//rIndex++
+
 		err = tx.WriteInt64(wk, newVal, partNum)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	//rwSets.wValue = wValue
 
 	// Read Results
 	var r Result
@@ -105,6 +123,10 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 			return nil, err
 		}
 		rValue.intVals[i] = v.intVal
+
+		//rwSets.rKeys[rIndex] = rk
+		//rwSets.rTIDs[rIndex] = v.GetTID()
+		//rIndex++
 	}
 
 	r.V = rValue

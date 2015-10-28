@@ -53,26 +53,37 @@ func (coord *Coordinator) gatherStats() {
 
 func (coord *Coordinator) PrintStats(f *os.File) {
 	coord.gatherStats()
+
 	f.WriteString("================\n")
 	f.WriteString("Print Statistics\n")
 	f.WriteString("================\n")
-	f.WriteString(fmt.Sprintf("Issue %v Transactions\n", coord.NStats[NTXN]))
+	f.WriteString(fmt.Sprintf("Issue %v Transactions in Total\n", coord.NStats[NTXN]))
 	f.WriteString(fmt.Sprintf("Abort %v Transactions\n", coord.NStats[NABORTS]))
 	f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))
 	f.WriteString(fmt.Sprintf("Error of No Key %v Transactions\n", coord.NStats[NENOKEY]))
+
+	for i, worker := range coord.Workers {
+		f.WriteString(fmt.Sprintf("Worker %v Issue %v Transactions\n", i, worker.NStats[NTXN]))
+		f.WriteString(fmt.Sprintf("Worker %v Issue %v Cross Transactions\n", i, worker.NStats[NCROSSTXN]))
+		f.WriteString(fmt.Sprintf("Worker %v Spends %v secs\n", i, float64(worker.NExecute.Nanoseconds())/float64(PERSEC)))
+		f.WriteString(fmt.Sprintf("Worker %v Waits %v secs\n", i, float64(worker.NWait.Nanoseconds())/float64(PERSEC)))
+		f.WriteString(fmt.Sprintf("Worker %v Crosswaits %v secs\n", i, float64(worker.NCrossWait.Nanoseconds())/float64(PERSEC)))
+	}
+
 	f.WriteString(fmt.Sprintf("Read %v Keys\n", coord.NStats[NREADKEYS]))
 	f.WriteString(fmt.Sprintf("Write %v Keys\n", coord.NStats[NWRITEKEYS]))
 
-	/*var incrtotal int64
+	// Print Statistics specefic to this app
+	var incrtotal int64
 	for _, part := range coord.store.store {
 		for _, chunk := range part.data {
 			for _, br := range chunk.rows {
 				incrtotal += br.intVal
 			}
 		}
-	}*/
+	}
 
-	//f.WriteString(fmt.Sprintf("Increments %v in total\n", incrtotal))
+	f.WriteString(fmt.Sprintf("Increments %v in total\n", incrtotal))
 
 	f.WriteString(fmt.Sprintf("Transaction Generation Spends %v secs\n", float64(coord.NGen.Nanoseconds())/float64(PERSEC)))
 	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NExecute.Nanoseconds())/float64(PERSEC)))
@@ -81,4 +92,5 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 	f.WriteString(fmt.Sprintf("Has Acquired %v Locks\n", coord.NLockAcquire))
 
 	f.WriteString("\n")
+
 }
