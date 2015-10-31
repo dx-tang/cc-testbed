@@ -1,3 +1,3 @@
 # cc-testbed
 
-Under development
+Partition-based Concurrency Control Finished
