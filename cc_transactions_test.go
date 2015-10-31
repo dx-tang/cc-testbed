@@ -30,14 +30,14 @@ func TestTransactions(t *testing.T) {
 	store := NewStore()
 	//Create Keys
 	for i := int64(0); i < nKeys; i++ {
-		k := CKey(i)
+		k := Key(i)
 		partNum := p.GetPartition(k)
 		store.CreateKV(k, int64(0), SINGLEINT, partNum)
 	}
 
 	pKeysArray = make([]int64, nParts)
 	for i := int64(0); i < nKeys; i++ {
-		key := CKey(i)
+		key := Key(i)
 		pKeysArray[p.GetPartition(key)]++
 	}
 
@@ -45,7 +45,7 @@ func TestTransactions(t *testing.T) {
 
 	rr := float64(0)
 	txnLen := 5
-	*cr = float64(0)
+	*CrossPercent = float64(0)
 	maxParts := 5
 
 	generator := NewTxnGen(ADD_ONE, rr, txnLen, maxParts, zk)
@@ -71,15 +71,14 @@ func TestTransactions(t *testing.T) {
 
 func PrintPartition(s *Store, nKeys int64, p Partitioner, partNum int) {
 	for i := int64(0); i < nKeys; i++ {
-		k := CKey(i)
+		k := Key(i)
 		if p.GetPartition(k) != partNum {
 			continue
 		}
-		br := s.GetRecord(k, partNum)
-		if br == nil {
+		r := s.GetRecord(k, partNum)
+		if r == nil {
 			clog.Error("Error No Key")
 		}
-		intKey := int64(br.key[0]) + int64(br.key[1])<<8 + int64(br.key[2])<<16 + int64(br.key[3])<<24 + int64(br.key[4])<<32 + int64(br.key[5])<<40 + int64(br.key[6])<<48 + int64(br.key[7])<<56
-		clog.Info("Key %v: %v", intKey, br.intVal)
+		clog.Info("Key %v: %v", r.GetKey(), r.Value())
 	}
 }

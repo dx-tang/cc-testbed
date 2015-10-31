@@ -41,14 +41,12 @@ func NewTxnGen(TXN int, rr float64, txnLen int, maxParts int, zk *ZipfKey) *TxnG
 }
 
 //Determine a read or a write operation
-func insertRWKey(q *Query, k int64, rr float64, rnd *rand.Rand) {
-	insertK := CKey(k)
-	//x := float64(RandN(seed, 100))
+func insertRWKey(q *Query, k Key, rr float64, rnd *rand.Rand) {
 	x := float64(rnd.Int63n(100))
 	if x < rr {
-		q.rKeys = append(q.rKeys, insertK)
+		q.rKeys = append(q.rKeys, k)
 	} else {
-		q.wKeys = append(q.wKeys, insertK)
+		q.wKeys = append(q.wKeys, k)
 	}
 }
 

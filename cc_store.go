@@ -24,7 +24,7 @@ var (
 )
 
 type TID int64
-type Key [16]byte
+type Key int64
 type Value interface{}
 
 var NumPart = flag.Int("ncores", 2, "number of partitions; equals to the number of cores")
@@ -33,7 +33,7 @@ var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
 
 type Chunk struct {
 	padding1 [128]byte
-	rows     map[Key]*BRecord
+	rows     map[Key]Record
 	padding2 [128]byte
 }
 
@@ -76,7 +76,6 @@ func NewStore() *Store {
 		store: make([]*Partition, *NumPart),
 	}
 
-	var bb0 byte
 	var bb1 byte
 
 	for i := 0; i < *NumPart; i++ {
@@ -85,44 +84,43 @@ func NewStore() *Store {
 		}
 		for j := 0; j < CHUNKS; j++ {
 			chunk := &Chunk{
-				rows: make(map[Key]*BRecord),
+				rows: make(map[Key]Record),
 			}
 			bb1 = byte(j)
 			part.data[bb1] = chunk
 		}
-		bb0 = byte(i)
-		s.store[bb0] = part
+		s.store[i] = part
 	}
 	return s
 }
 
-func (s *Store) CreateKV(k Key, v Value, rt RecType, partNum int) *BRecord {
+func (s *Store) CreateKV(k Key, v Value, rt RecType, partNum int) Record {
 	s.nKeys++
-	chunk := s.store[partNum].data[k[0]]
+	chunk := s.store[partNum].data[byte(k)]
 	if _, ok := chunk.rows[k]; ok {
 		return nil // One record with that key has existed; return nil to notify this
 	}
 
-	br := MakeBR(k, v, rt)
-	chunk.rows[k] = br
-	return br
+	r := MakeRecord(k, v, rt)
+	chunk.rows[k] = r
+	return r
 }
 
-func (s *Store) GetRecord(k Key, partNum int) *BRecord {
-	chunk := s.store[partNum].data[k[0]]
-	br, ok := chunk.rows[k]
+func (s *Store) GetRecord(k Key, partNum int) Record {
+	chunk := s.store[partNum].data[byte(k)]
+	r, ok := chunk.rows[k]
 	if !ok {
 		return nil
 	}
-	return br
+	return r
 }
 
 // Update
 func (s *Store) SetRecord(k Key, val Value, partNum int) bool {
-	chunk := s.store[partNum].data[k[0]]
-	br, ok := chunk.rows[k]
+	chunk := s.store[partNum].data[byte(k)]
+	r, ok := chunk.rows[k]
 	if !ok {
 		return false // No such record; Fail
 	}
-	return br.Update(val)
+	return r.UpdateValue(val)
 }

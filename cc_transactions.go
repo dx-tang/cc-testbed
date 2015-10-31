@@ -44,7 +44,6 @@ type Query struct {
 	rKeys       []Key
 	wKeys       []Key
 	wValue      WValue
-	rwSets      *RWSets
 }
 
 func (q *Query) GenValue(rnd *rand.Rand) {
@@ -55,7 +54,6 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 		}
 
 		for i := range v.intVals {
-			//v.intVals[i] = int32(RandN(&seed, uint32(math.MaxInt32)))
 			v.intVals[i] = rnd.Int63()
 		}
 
@@ -66,9 +64,7 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 		}
 
 		for i := range v.strVals {
-			//sz = RandN(&seed, uint32(PERFIELD)) + 1
 			v.strVals[i] = &StrAttr{
-				//index: int(RandN(&seed, uint32(FIELDS-1))),
 				index: rnd.Intn(FIELDS),
 				value: Randstr(int(PERFIELD)),
 			}
@@ -79,13 +75,6 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 }
 
 func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
-	//rwSets := q.rwSets
-	//wValue := &RetIntValue{
-	//	intVals: make([]int64, len(q.wKeys)),
-	//}
-
-	//var rIndex int
-
 	// Apply Writes
 	for _, wk := range q.wKeys {
 		partNum := q.partitioner.GetPartition(wk)
@@ -94,22 +83,13 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 			return nil, err
 		}
 
-		newVal := v.intVal + 1
-
-		//rwSets.wKeys[i] = wk
-		//wValue.intVals[i] = newVal
-
-		//rwSets.rKeys[rIndex] = wk
-		//rwSets.rTIDs[rIndex] = v.GetTID()
-		//rIndex++
+		newVal := (v.Value().(int64)) + 1
 
 		err = tx.WriteInt64(wk, newVal, partNum)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	//rwSets.wValue = wValue
 
 	// Read Results
 	var r Result
@@ -122,11 +102,7 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		rValue.intVals[i] = v.intVal
-
-		//rwSets.rKeys[rIndex] = rk
-		//rwSets.rTIDs[rIndex] = v.GetTID()
-		//rIndex++
+		rValue.intVals[i] = v.Value().(int64)
 	}
 
 	r.V = rValue
@@ -155,7 +131,7 @@ func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		rValue.intVals[i] = v.intVal
+		rValue.intVals[i] = v.Value().(int64)
 	}
 
 	r.V = rValue
@@ -185,7 +161,7 @@ func UpdateStringTXN(q *Query, tx ETransaction) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		rValue.strVals[i] = v.stringVal
+		rValue.strVals[i] = v.Value().([]string)
 	}
 
 	r.V = rValue

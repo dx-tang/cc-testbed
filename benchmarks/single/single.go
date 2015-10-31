@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ var out = flag.String("out", "data.out", "output file path")
 var skew = flag.Float64("skew", 0, "skew factor for partition-based concurrency control (Zipf)")
 var mp = flag.Int("mp", 1, "Max partitions cross-partition transactions will touch")
 var benchStat = flag.String("bs", "", "Output file for benchmark statistics")
+var txntype = flag.String("tt", "addone", "set transaction type")
 
 func main() {
 	flag.Parse()
@@ -36,11 +38,14 @@ func main() {
 
 	clog.Info("Number of clients %v, Number of workers %v \n", clients, nworkers)
 
+	tt, dt := getTxn(*txntype)
+
 	// create store
 	s := testbed.NewStore()
 	var nParts int
 	var hp testbed.Partitioner = nil
 	var pKeysArray []int64
+	var value interface{}
 
 	if *testbed.SysType == testbed.PARTITION {
 		nParts = *testbed.NumPart
@@ -53,17 +58,27 @@ func main() {
 
 		var partNum int
 		for i := int64(0); i < *nKeys; i++ {
-			k := testbed.CKey(i)
+			k := testbed.Key(i)
 			partNum = hp.GetPartition(k)
 			pKeysArray[partNum]++
-			s.CreateKV(k, int64(0), testbed.SINGLEINT, partNum)
+			if dt == testbed.SINGLEINT {
+				value = int64(0)
+			} else if dt == testbed.STRINGLIST {
+				value = testbed.GenStringList()
+			}
+			s.CreateKV(k, value, dt, partNum)
 		}
 
 	} else {
 		nParts = 1
 		for i := int64(0); i < *nKeys; i++ {
-			k := testbed.CKey(i)
-			s.CreateKV(k, int64(0), testbed.SINGLEINT, 0)
+			k := testbed.Key(i)
+			if dt == testbed.SINGLEINT {
+				value = int64(0)
+			} else if dt == testbed.STRINGLIST {
+				value = testbed.GenStringList()
+			}
+			s.CreateKV(k, value, dt, 0)
 		}
 	}
 
@@ -71,7 +86,7 @@ func main() {
 
 	for i := 0; i < nParts; i++ {
 		zk := testbed.NewZipfKey(i, *nKeys, nParts, pKeysArray, *contention, hp)
-		generators[i] = testbed.NewTxnGen(testbed.ADD_ONE, *rr, *txnlen, *mp, zk)
+		generators[i] = testbed.NewTxnGen(tt, *rr, *txnlen, *mp, zk)
 	}
 
 	coord := testbed.NewCoordinator(nworkers, s)
@@ -90,14 +105,8 @@ func main() {
 				if !end_time.After(tm) {
 					break
 				}
-				//if count >= 64775 {
-				//	break
-				//}
-				//count++
-				//tm := time.Now()
 				q := generators[n].GenOneQuery()
 				w.NGen += time.Since(tm)
-				//time.Sleep(1 * time.Microsecond)
 				tm = time.Now()
 				_, err := w.One(q)
 				w.NExecute += time.Since(tm)
@@ -128,4 +137,17 @@ func main() {
 		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]))
 	}
 
+}
+
+func getTxn(txntype string) (int, testbed.RecType) {
+	if strings.Compare(txntype, "addone") == 0 {
+		return testbed.ADD_ONE, testbed.SINGLEINT
+	} else if strings.Compare(txntype, "updateint") == 0 {
+		return testbed.RANDOM_UPDATE_INT, testbed.SINGLEINT
+	} else if strings.Compare(txntype, "updatestring") == 0 {
+		return testbed.RANDOM_UPDATE_STRING, testbed.STRINGLIST
+	} else {
+		clog.Error("Not Supported %s Transaction", txntype)
+		return -1, -1
+	}
 }

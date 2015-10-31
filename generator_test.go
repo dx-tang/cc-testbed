@@ -46,7 +46,7 @@ func TestGenerator(t *testing.T) {
 
 	pKeysArray = make([]int64, nParts)
 	for i := int64(0); i < nKeys; i++ {
-		key := CKey(i)
+		key := Key(i)
 		pKeysArray[p.GetPartition(key)]++
 	}
 
@@ -56,7 +56,7 @@ func TestGenerator(t *testing.T) {
 	rr = float64(50)
 	txnLen = 5
 	//cr := float64(0)
-	*cr = float64(50)
+	*CrossPercent = float64(50)
 	maxParts := 5
 
 	generator = NewTxnGen(RANDOM_UPDATE_STRING, rr, txnLen, maxParts, zk)

@@ -73,18 +73,6 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 	f.WriteString(fmt.Sprintf("Read %v Keys\n", coord.NStats[NREADKEYS]))
 	f.WriteString(fmt.Sprintf("Write %v Keys\n", coord.NStats[NWRITEKEYS]))
 
-	// Print Statistics specefic to this app
-	var incrtotal int64
-	for _, part := range coord.store.store {
-		for _, chunk := range part.data {
-			for _, br := range chunk.rows {
-				incrtotal += br.intVal
-			}
-		}
-	}
-
-	f.WriteString(fmt.Sprintf("Increments %v in total\n", incrtotal))
-
 	f.WriteString(fmt.Sprintf("Transaction Generation Spends %v secs\n", float64(coord.NGen.Nanoseconds())/float64(PERSEC)))
 	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NExecute.Nanoseconds())/float64(PERSEC)))
 	f.WriteString(fmt.Sprintf("Transaction Waiting Spends %v secs\n", float64(coord.NWait.Nanoseconds())/float64(PERSEC)))

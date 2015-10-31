@@ -65,15 +65,15 @@ func NewZipfKey(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s fl
 	return zk
 }
 
-func (zk *ZipfKey) GetKey() int64 {
+func (zk *ZipfKey) GetKey() Key {
 	if zk.isZipf {
-		return int64(zk.wholeZipf.Uint64())
+		return Key(zk.wholeZipf.Uint64())
 	} else {
-		return zk.wholeUniform.Int63n(zk.nKeys)
+		return Key(zk.wholeUniform.Int63n(zk.nKeys))
 	}
 }
 
-func (zk *ZipfKey) GetSelfKey() int64 {
+func (zk *ZipfKey) GetSelfKey() Key {
 	if !zk.isPartition {
 		clog.Error("Should not be invoked for non-partition CC")
 	}
@@ -88,7 +88,7 @@ func (zk *ZipfKey) GetSelfKey() int64 {
 	}
 }
 
-func (zk *ZipfKey) GetOtherKey(pi int) int64 {
+func (zk *ZipfKey) GetOtherKey(pi int) Key {
 	if !zk.isPartition {
 		clog.Error("Should not be invoked for non-partition CC")
 	}

@@ -1,8 +1,6 @@
 package testbed
 
 import (
-	"sync"
-
 	"github.com/totemtang/cc-testbed/clog"
 )
 
@@ -23,88 +21,105 @@ type StrAttr struct {
 	value string
 }
 
-type BRecord struct {
+type Record interface {
+	Lock()
+	Unlock()
+	RLock()
+	RUnlock()
+	Value() Value
+	GetKey() Key
+	UpdateValue(val Value) bool
+	GetTID() TID
+}
+
+type PRecord struct {
 	padding1  [128]byte
 	key       Key
 	intVal    int64
 	stringVal []string
 	recType   RecType
-	lock      sync.RWMutex
-	last      TID
-	exist     bool
 	padding2  [128]byte
 }
 
-func MakeBR(k Key, v Value, rt RecType) *BRecord {
-	br := &BRecord{
-		key:     k,
-		recType: rt,
-		last:    0,
-		exist:   true,
-	}
-
-	// Initiate Value according to different types
-	switch rt {
-	case SINGLEINT:
-		if v != nil {
-			br.intVal = v.(int64)
+func MakeRecord(k Key, v Value, rt RecType) Record {
+	if *SysType == PARTITION {
+		pr := &PRecord{
+			key:     k,
+			recType: rt,
 		}
-	case STRINGLIST:
-		if v != nil {
-			var inputStrList = v.([]string)
-			br.stringVal = make([]string, len(inputStrList))
-			for i, _ := range inputStrList {
-				br.stringVal[i] = inputStrList[i]
+
+		// Initiate Value according to different types
+		switch rt {
+		case SINGLEINT:
+			if v != nil {
+				pr.intVal = v.(int64)
+			}
+		case STRINGLIST:
+			if v != nil {
+				var inputStrList = v.([]string)
+				pr.stringVal = make([]string, len(inputStrList))
+				for i, _ := range inputStrList {
+					pr.stringVal[i] = inputStrList[i]
+				}
 			}
 		}
+		return pr
+	} else {
+		clog.Error("System Type %v Not Supported Yet", *SysType)
+		return nil
 	}
-	return br
+
 }
 
-func (br *BRecord) Lock() {
-	br.lock.Lock()
+func (pr *PRecord) GetKey() Key {
+	return pr.key
 }
 
-func (br *BRecord) Unlock() {
-	br.lock.Unlock()
+func (pr *PRecord) Lock() {
+	clog.Error("Partition mode does not support Lock Operation")
 }
 
-func (br *BRecord) RLock() {
-	br.lock.RLock()
+func (pr *PRecord) Unlock() {
+	clog.Error("Partition mode does not support Unlock Operation")
 }
 
-func (br *BRecord) RUnlock() {
-	br.lock.RUnlock()
+func (pr *PRecord) RLock() {
+	clog.Error("Partition mode does not support RLock Operation")
 }
 
-func (br *BRecord) Value() Value {
-	switch br.recType {
+func (pr *PRecord) RUnlock() {
+	clog.Error("Partition mode does not support RUnlock Operation")
+}
+
+func (pr *PRecord) Value() Value {
+	switch pr.recType {
 	case SINGLEINT:
-		return br.intVal
+		return pr.intVal
 	case STRINGLIST:
-		return br.stringVal
+		return pr.stringVal
 	}
 	return nil
 }
 
-func (br *BRecord) Update(val Value) bool {
+func (pr *PRecord) UpdateValue(val Value) bool {
 	if val == nil {
 		return false
 	}
-	switch br.recType {
+	switch pr.recType {
 	case SINGLEINT:
-		br.intVal = val.(int64)
+		pr.intVal = val.(int64)
 	case STRINGLIST:
 		strAttr := val.(*StrAttr)
-		if strAttr.index >= len(br.stringVal) {
+		if strAttr.index >= len(pr.stringVal) {
 			clog.Error("Index %v out of range array length %v",
-				strAttr.index, len(br.stringVal))
+				strAttr.index, len(pr.stringVal))
 		}
-		br.stringVal[strAttr.index] = strAttr.value
+		pr.stringVal[strAttr.index] = strAttr.value
 	}
 	return true
 }
 
-func (br *BRecord) GetTID() TID {
-	return br.last
+func (pr *PRecord) GetTID() TID {
+	clog.Error("Partition mode does not support GetTID Operation")
+	return 0
 }

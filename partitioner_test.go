@@ -16,7 +16,7 @@ func TestHashPartitioner(t *testing.T) {
 	}
 
 	for i := int64(0); i < nKeys; i++ {
-		k := CKey(i)
+		k := Key(i)
 		p := i % nParts
 		testP := hp.GetPartition(k)
 		if testP != int(p) {

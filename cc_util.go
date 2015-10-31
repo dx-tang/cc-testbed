@@ -29,11 +29,11 @@ func printOneQuery(q *Query) {
 	}
 	fmt.Printf("Read Keys Include: ")
 	for _, k := range q.rKeys {
-		fmt.Printf("%v ", ParseKey(k))
+		fmt.Printf("%v ", k)
 	}
 	fmt.Printf("\nWrite Keys Include: ")
 	for _, k := range q.wKeys {
-		fmt.Printf("%v ", ParseKey(k))
+		fmt.Printf("%v ", k)
 	}
 	fmt.Printf("\n")
 	if q.TXN == RANDOM_UPDATE_INT {
@@ -56,13 +56,20 @@ func printOneQuery(q *Query) {
 
 func PrintStore(s *Store, nKeys int64, p Partitioner) {
 	for i := int64(0); i < nKeys; i++ {
-		k := CKey(i)
+		k := Key(i)
 		partNum := p.GetPartition(k)
-		br := s.GetRecord(k, partNum)
-		if br == nil {
+		r := s.GetRecord(k, partNum)
+		if r == nil {
 			clog.Error("Error No Key")
 		}
-		intKey := int64(br.key[0]) + int64(br.key[1])<<8 + int64(br.key[2])<<16 + int64(br.key[3])<<24 + int64(br.key[4])<<32 + int64(br.key[5])<<40 + int64(br.key[6])<<48 + int64(br.key[7])<<56
-		clog.Info("Key %v: %v", intKey, br.intVal)
+		clog.Info("Key %v: %v", k, r.Value())
 	}
+}
+
+func GenStringList() []string {
+	ret := make([]string, FIELDS)
+	for i := 0; i < FIELDS; i++ {
+		ret[i] = Randstr(PERFIELD)
+	}
+	return ret
 }
