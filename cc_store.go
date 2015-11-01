@@ -23,7 +23,7 @@ var (
 	ENOKEY = errors.New("no entry")
 )
 
-type TID int64
+type TID uint64
 type Key int64
 type Value interface{}
 

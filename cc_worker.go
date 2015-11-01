@@ -22,6 +22,8 @@ type TransactionFunc func(*Query, ETransaction) (*Result, error)
 type Worker struct {
 	padding      [128]byte
 	ID           int
+	next         TID
+	epoch        TID
 	store        *Store
 	E            ETransaction
 	txns         []TransactionFunc
@@ -48,6 +50,8 @@ func NewWorker(id int, s *Store) *Worker {
 
 	if *SysType == PARTITION {
 		w.E = StartPTransaction(w)
+	} else if *SysType == OCC {
+		w.E = StartOTransaction(w)
 	} else {
 		clog.Error("OCC and 2PL not supported yet")
 	}
@@ -73,7 +77,7 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 	w.NStats[NREADKEYS] += int64(len(q.rKeys))
 	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
 
-	w.E.Reset()
+	w.E.Reset(q)
 
 	x, err := w.txns[q.TXN](q, w.E)
 
@@ -84,8 +88,6 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		w.NStats[NENOKEY]++
 		return nil, err
 	}
-
-	w.E.Commit()
 
 	return x, err
 }
@@ -115,4 +117,22 @@ func (w *Worker) One(q *Query) (*Result, error) {
 
 func (w *Worker) Store() *Store {
 	return w.store
+}
+
+func (w *Worker) ResetTID(bigger TID) {
+	big := bigger >> 16
+	if big < w.next {
+		clog.Error("%v How is supposedly bigger TID %v smaller than %v\n", w.ID, big, w.next)
+	}
+	w.next = TID(big + 1)
+}
+
+func (w *Worker) nextTID() TID {
+	w.next++
+	x := uint64(w.next<<16) | uint64(w.ID)<<8 | uint64(w.next%CHUNKS)
+	return TID(x)
+}
+
+func (w *Worker) commitTID() TID {
+	return w.nextTID() | w.epoch
 }

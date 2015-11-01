@@ -106,6 +106,11 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 	}
 
 	r.V = rValue
+
+	if tx.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return &r, nil
 }
 
@@ -135,6 +140,11 @@ func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {
 	}
 
 	r.V = rValue
+
+	if tx.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return &r, nil
 
 }
@@ -165,5 +175,10 @@ func UpdateStringTXN(q *Query, tx ETransaction) (*Result, error) {
 	}
 
 	r.V = rValue
+
+	if tx.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return &r, nil
 }
