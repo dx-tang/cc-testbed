@@ -13,7 +13,7 @@ const (
 )
 
 const (
-	FIELDS   = 16
+	FIELDS   = 10
 	PERFIELD = 100
 )
 
@@ -170,7 +170,7 @@ func (or *ORecord) Unlock(tid TID) {
 func (or *ORecord) IsUnlocked() (bool, TID) {
 	x := or.last.Read()
 	if x&wfmutex.LOCKED != 0 {
-		return false, TID(x)
+		return false, TID(x & wfmutex.TIDMASK)
 	}
 	return true, TID(x)
 }
@@ -213,4 +213,49 @@ func (or *ORecord) GetTID() TID {
 
 func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
+}
+
+// Dummy Record
+type DRecord struct {
+	padding1 [128]byte
+	key      Key
+	value    Value
+	padding2 [128]byte
+}
+
+func (dr *DRecord) GetKey() Key {
+	clog.Error("Dummy Record does not support GetKey Operation")
+	return dr.key
+}
+
+func (dr *DRecord) Lock() (bool, TID) {
+	clog.Error("Dummy Record does not support Lock Operation")
+	return false, 0
+}
+
+func (dr *DRecord) Unlock(tid TID) {
+	clog.Error("Dummy Record does not support Unlock Operation")
+}
+
+func (dr *DRecord) IsUnlocked() (bool, TID) {
+	clog.Error("Dummy Record does not support IsUnlocked Operation")
+	return false, 0
+}
+
+func (dr *DRecord) Value() Value {
+	return dr.value
+}
+
+func (dr *DRecord) UpdateValue(val Value) bool {
+	dr.value = val
+	return true
+}
+
+func (dr *DRecord) GetTID() TID {
+	clog.Error("Dummy Record does not support GetTID Operation")
+	return 0
+}
+
+func (dr *DRecord) SetTID(tid TID) {
+	clog.Error("Dummy Record does not support SetTID Operation")
 }

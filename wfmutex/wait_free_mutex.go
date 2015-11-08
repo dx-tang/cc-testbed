@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	LOCKED = 1 << 63
+	LOCKED  = 1 << 63
+	TIDMASK = 1<<63 - 1
 )
 
 type WFMutex struct {

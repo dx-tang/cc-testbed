@@ -84,7 +84,7 @@ func main() {
 
 	generators := make([]*testbed.TxnGen, nworkers)
 
-	for i := 0; i < nParts; i++ {
+	for i := 0; i < nworkers; i++ {
 		zk := testbed.NewZipfKey(i, *nKeys, nParts, pKeysArray, *contention, hp)
 		generators[i] = testbed.NewTxnGen(tt, *rr, *txnlen, *mp, zk)
 	}

@@ -70,6 +70,17 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 		f.WriteString(fmt.Sprintf("Worker %v Crosswaits %v secs\n", i, float64(worker.NCrossWait.Nanoseconds())/float64(PERSEC)))
 	}
 
+	/*
+		var sum int64
+		for i := int64(0); i < coord.store.nKeys; i++ {
+			k := Key(i)
+			rec := coord.store.GetRecord(k, 0)
+			sum += rec.Value().(int64)
+		}
+
+		f.WriteString(fmt.Sprintf("Total Value %v\n", sum))
+	*/
+
 	f.WriteString(fmt.Sprintf("Read %v Keys\n", coord.NStats[NREADKEYS]))
 	f.WriteString(fmt.Sprintf("Write %v Keys\n", coord.NStats[NWRITEKEYS]))
 
