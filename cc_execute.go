@@ -121,6 +121,7 @@ func (o *OTransaction) Read(k Key, partNum int, force bool) (Record, error) {
 		if ok {
 			ok, _ = wk.rec.IsUnlocked()
 			if !ok {
+				o.w.NStats[NREADABORTS]++
 				return nil, EABORT
 			}
 			o.dummyRecord.UpdateValue(wk.v)
@@ -138,6 +139,7 @@ func (o *OTransaction) Read(k Key, partNum int, force bool) (Record, error) {
 	ok, tid = r.IsUnlocked()
 
 	if !ok {
+		o.w.NStats[NREADABORTS]++
 		return nil, EABORT
 	}
 
@@ -170,6 +172,7 @@ func (o *OTransaction) WriteInt64(k Key, intValue int64, partNum int) error {
 	ok, tid := r.IsUnlocked()
 
 	if !ok {
+		o.w.NStats[NREADABORTS]++
 		return EABORT
 	}
 
@@ -211,6 +214,7 @@ func (o *OTransaction) WriteString(k Key, sa *StrAttr, partNum int) error {
 	ok, tid := r.IsUnlocked()
 
 	if !ok {
+		o.w.NStats[NREADABORTS]++
 		return EABORT
 	}
 
@@ -257,6 +261,7 @@ func (o *OTransaction) Commit() TID {
 		var former TID
 		var ok bool
 		if ok, former = wk.rec.Lock(); !ok {
+			o.w.NStats[NLOCKABORTS]++
 			return o.Abort()
 		}
 		wk.locked = true
@@ -282,6 +287,7 @@ func (o *OTransaction) Commit() TID {
 		var tmpTID TID
 		ok1, tmpTID = rk.rec.IsUnlocked()
 		if tmpTID != rk.last {
+			o.w.NStats[NRCHANGEABORTS]++
 			return o.Abort()
 		}
 
@@ -289,6 +295,7 @@ func (o *OTransaction) Commit() TID {
 		_, ok2 = o.wKeys[k]
 
 		if !ok1 && !ok2 {
+			o.w.NStats[NRWABORTS]++
 			return o.Abort()
 		}
 	}

@@ -9,6 +9,7 @@ import (
 var CrossPercent = flag.Float64("cr", 0.0, "percentage of cross-partition transactions")
 
 type TxnGen struct {
+	ID          int
 	TXN         int
 	nKeys       int64
 	nParts      int
@@ -21,8 +22,9 @@ type TxnGen struct {
 	zk          *ZipfKey
 }
 
-func NewTxnGen(TXN int, rr float64, txnLen int, maxParts int, zk *ZipfKey) *TxnGen {
+func NewTxnGen(ID int, TXN int, rr float64, txnLen int, maxParts int, zk *ZipfKey) *TxnGen {
 	txnGen := &TxnGen{
+		ID:          ID,
 		TXN:         TXN,
 		nKeys:       zk.nKeys,
 		nParts:      zk.nParts,
@@ -30,12 +32,12 @@ func NewTxnGen(TXN int, rr float64, txnLen int, maxParts int, zk *ZipfKey) *TxnG
 		rr:          rr,
 		txnLen:      txnLen,
 		maxParts:    maxParts,
-		isPartition: *SysType == PARTITION,
+		isPartition: zk.isPartition,
 		zk:          zk,
 	}
 
 	//txnGen.local_seed = uint32(rand.Intn(10000000))
-	txnGen.rnd = rand.New(rand.NewSource(time.Now().Unix()))
+	txnGen.rnd = rand.New(rand.NewSource(time.Now().Unix() / int64(ID+1)))
 
 	return txnGen
 }

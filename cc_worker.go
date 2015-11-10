@@ -9,6 +9,10 @@ import (
 
 const (
 	NABORTS = iota
+	NREADABORTS
+	NLOCKABORTS
+	NRCHANGEABORTS
+	NRWABORTS
 	NENOKEY
 	NTXN
 	NCROSSTXN
@@ -74,9 +78,6 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		w.NStats[NCROSSTXN]++
 	}
 
-	w.NStats[NREADKEYS] += int64(len(q.rKeys))
-	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
-
 	w.E.Reset(q)
 
 	x, err := w.txns[q.TXN](q, w.E)
@@ -89,27 +90,35 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		return nil, err
 	}
 
+	w.NStats[NREADKEYS] += int64(len(q.rKeys))
+	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
+
 	return x, err
 }
 
 func (w *Worker) One(q *Query) (*Result, error) {
-	s := w.store
+	if *SysType == PARTITION {
+		s := w.store
+		w.NLockAcquire += int64(len(q.accessParts))
+		tm := time.Now()
+		// Acquire all locks
+		for _, p := range q.accessParts {
+			s.store[p].Lock()
+		}
 
-	w.NLockAcquire += int64(len(q.accessParts))
-	tm := time.Now()
-	// Acquire all locks
-	for _, p := range q.accessParts {
-		s.store[p].Lock()
+		w.NWait += time.Since(tm)
+		if len(q.accessParts) > 1 {
+			w.NCrossWait += time.Since(tm)
+		}
 	}
 
-	w.NWait += time.Since(tm)
-	if len(q.accessParts) > 1 {
-		w.NCrossWait += time.Since(tm)
-	}
 	r, err := w.doTxn(q)
 
-	for _, p := range q.accessParts {
-		s.store[p].Unlock()
+	if *SysType == PARTITION {
+		s := w.store
+		for _, p := range q.accessParts {
+			s.store[p].Unlock()
+		}
 	}
 
 	return r, err

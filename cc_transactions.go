@@ -68,7 +68,7 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 		for i := range v.strVals {
 			v.strVals[i] = &StrAttr{
 				index: rnd.Intn(FIELDS),
-				value: Randstr(int(PERFIELD)),
+				//value: Randstr(int(PERFIELD)),
 			}
 		}
 
@@ -169,6 +169,7 @@ func UpdateStringTXN(q *Query, tx ETransaction) (*Result, error) {
 		if q.partitioner != nil {
 			partNum = q.partitioner.GetPartition(wk)
 		}
+		updateVals.strVals[i].value = Randstr(int(PERFIELD))
 		err := tx.WriteString(wk, updateVals.strVals[i], partNum)
 		if err != nil {
 			return nil, err
