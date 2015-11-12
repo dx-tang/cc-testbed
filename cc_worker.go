@@ -9,6 +9,10 @@ import (
 
 const (
 	NABORTS = iota
+	NREADABORTS
+	NLOCKABORTS
+	NRCHANGEABORTS
+	NRWABORTS
 	NENOKEY
 	NTXN
 	NCROSSTXN
@@ -22,6 +26,8 @@ type TransactionFunc func(*Query, ETransaction) (*Result, error)
 type Worker struct {
 	padding      [128]byte
 	ID           int
+	next         TID
+	epoch        TID
 	store        *Store
 	E            ETransaction
 	txns         []TransactionFunc
@@ -48,6 +54,8 @@ func NewWorker(id int, s *Store) *Worker {
 
 	if *SysType == PARTITION {
 		w.E = StartPTransaction(w)
+	} else if *SysType == OCC {
+		w.E = StartOTransaction(w)
 	} else {
 		clog.Error("OCC and 2PL not supported yet")
 	}
@@ -70,10 +78,7 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		w.NStats[NCROSSTXN]++
 	}
 
-	w.NStats[NREADKEYS] += int64(len(q.rKeys))
-	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
-
-	w.E.Reset()
+	w.E.Reset(q)
 
 	x, err := w.txns[q.TXN](q, w.E)
 
@@ -85,29 +90,35 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		return nil, err
 	}
 
-	w.E.Commit()
+	w.NStats[NREADKEYS] += int64(len(q.rKeys))
+	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
 
 	return x, err
 }
 
 func (w *Worker) One(q *Query) (*Result, error) {
-	s := w.store
+	if *SysType == PARTITION {
+		s := w.store
+		w.NLockAcquire += int64(len(q.accessParts))
+		tm := time.Now()
+		// Acquire all locks
+		for _, p := range q.accessParts {
+			s.store[p].Lock()
+		}
 
-	w.NLockAcquire += int64(len(q.accessParts))
-	tm := time.Now()
-	// Acquire all locks
-	for _, p := range q.accessParts {
-		s.store[p].Lock()
+		w.NWait += time.Since(tm)
+		if len(q.accessParts) > 1 {
+			w.NCrossWait += time.Since(tm)
+		}
 	}
 
-	w.NWait += time.Since(tm)
-	if len(q.accessParts) > 1 {
-		w.NCrossWait += time.Since(tm)
-	}
 	r, err := w.doTxn(q)
 
-	for _, p := range q.accessParts {
-		s.store[p].Unlock()
+	if *SysType == PARTITION {
+		s := w.store
+		for _, p := range q.accessParts {
+			s.store[p].Unlock()
+		}
 	}
 
 	return r, err
@@ -115,4 +126,22 @@ func (w *Worker) One(q *Query) (*Result, error) {
 
 func (w *Worker) Store() *Store {
 	return w.store
+}
+
+func (w *Worker) ResetTID(bigger TID) {
+	big := bigger >> 16
+	if big < w.next {
+		clog.Error("%v How is supposedly bigger TID %v smaller than %v\n", w.ID, big, w.next)
+	}
+	w.next = TID(big + 1)
+}
+
+func (w *Worker) nextTID() TID {
+	w.next++
+	x := uint64(w.next<<16) | uint64(w.ID)<<8 | uint64(w.next%CHUNKS)
+	return TID(x)
+}
+
+func (w *Worker) commitTID() TID {
+	return w.nextTID() | w.epoch
 }

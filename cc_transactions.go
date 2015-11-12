@@ -2,6 +2,8 @@ package testbed
 
 import (
 	"math/rand"
+
+	//"github.com/totemtang/cc-testbed/clog"
 )
 
 type WValue interface{}
@@ -66,7 +68,7 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 		for i := range v.strVals {
 			v.strVals[i] = &StrAttr{
 				index: rnd.Intn(FIELDS),
-				value: Randstr(int(PERFIELD)),
+				//value: Randstr(int(PERFIELD)),
 			}
 		}
 
@@ -75,10 +77,13 @@ func (q *Query) GenValue(rnd *rand.Rand) {
 }
 
 func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
+	var partNum int
 	// Apply Writes
 	for _, wk := range q.wKeys {
-		partNum := q.partitioner.GetPartition(wk)
-		v, err := tx.Read(wk, partNum)
+		if q.partitioner != nil {
+			partNum = q.partitioner.GetPartition(wk)
+		}
+		v, err := tx.Read(wk, partNum, false)
 		if err != nil {
 			return nil, err
 		}
@@ -97,8 +102,10 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 		intVals: make([]int64, len(q.rKeys)),
 	}
 	for i, rk := range q.rKeys {
-		partNum := q.partitioner.GetPartition(rk)
-		v, err := tx.Read(rk, partNum)
+		if q.partitioner != nil {
+			partNum = q.partitioner.GetPartition(rk)
+		}
+		v, err := tx.Read(rk, partNum, false)
 		if err != nil {
 			return nil, err
 		}
@@ -106,14 +113,22 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 	}
 
 	r.V = rValue
+
+	if tx.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return &r, nil
 }
 
 func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {
+	var partNum int
 	// Apply Writes
 	updateVals := q.wValue.(*SingleIntValue)
 	for i, wk := range q.wKeys {
-		partNum := q.partitioner.GetPartition(wk)
+		if q.partitioner != nil {
+			partNum = q.partitioner.GetPartition(wk)
+		}
 		err := tx.WriteInt64(wk, updateVals.intVals[i], partNum)
 		if err != nil {
 			return nil, err
@@ -126,8 +141,10 @@ func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {
 		intVals: make([]int64, len(q.rKeys)),
 	}
 	for i, rk := range q.rKeys {
-		partNum := q.partitioner.GetPartition(rk)
-		v, err := tx.Read(rk, partNum)
+		if q.partitioner != nil {
+			partNum = q.partitioner.GetPartition(rk)
+		}
+		v, err := tx.Read(rk, partNum, false)
 		if err != nil {
 			return nil, err
 		}
@@ -135,15 +152,24 @@ func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {
 	}
 
 	r.V = rValue
+
+	if tx.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return &r, nil
 
 }
 
 func UpdateStringTXN(q *Query, tx ETransaction) (*Result, error) {
+	var partNum int
 	// Apply Writes
 	updateVals := q.wValue.(*StringListValue)
 	for i, wk := range q.wKeys {
-		partNum := q.partitioner.GetPartition(wk)
+		if q.partitioner != nil {
+			partNum = q.partitioner.GetPartition(wk)
+		}
+		updateVals.strVals[i].value = Randstr(int(PERFIELD))
 		err := tx.WriteString(wk, updateVals.strVals[i], partNum)
 		if err != nil {
 			return nil, err
@@ -152,18 +178,35 @@ func UpdateStringTXN(q *Query, tx ETransaction) (*Result, error) {
 
 	// Read Results
 	var r Result
+	var ok bool
 	rValue := &RetStringValue{
 		strVals: make([][]string, len(q.rKeys)),
 	}
 	for i, rk := range q.rKeys {
-		partNum := q.partitioner.GetPartition(rk)
-		v, err := tx.Read(rk, partNum)
+		if q.partitioner != nil {
+			partNum = q.partitioner.GetPartition(rk)
+		}
+		v, err := tx.Read(rk, partNum, false)
 		if err != nil {
 			return nil, err
 		}
-		rValue.strVals[i] = v.Value().([]string)
+
+		if rValue.strVals[i], ok = v.Value().([]string); !ok {
+			tmpVal := v.Value().(*StrAttr)
+			v, err = tx.Read(rk, partNum, true)
+			if err != nil {
+				return nil, err
+			}
+			rValue.strVals[i] = v.Value().([]string)
+			rValue.strVals[i][tmpVal.index] = tmpVal.value
+		}
 	}
 
 	r.V = rValue
+
+	if tx.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return &r, nil
 }

@@ -23,13 +23,14 @@ var (
 	ENOKEY = errors.New("no entry")
 )
 
-type TID int64
+type TID uint64
 type Key int64
 type Value interface{}
 
 var NumPart = flag.Int("ncores", 2, "number of partitions; equals to the number of cores")
 var SysType = flag.Int("sys", PARTITION, "System Type we will use")
 var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
+var PhyPart = flag.Bool("p", false, "Indicate whether physically partition for OCC or 2PL")
 
 type Chunk struct {
 	padding1 [128]byte
@@ -69,7 +70,7 @@ type Store struct {
 }
 
 func NewStore() *Store {
-	if *SysType != PARTITION {
+	if *SysType != PARTITION && !*PhyPart {
 		*NumPart = 1
 	}
 	s := &Store{

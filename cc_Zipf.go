@@ -33,14 +33,14 @@ func NewZipfKey(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s fl
 		hp:         hp,
 	}
 
-	zk.isPartition = *SysType == PARTITION
+	zk.isPartition = (*SysType == PARTITION) || *PhyPart
 
-	zk.wholeUniform = rand.New(rand.NewSource(time.Now().Unix()))
+	zk.wholeUniform = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex+1)))
 
 	if zk.isPartition {
 		zk.partUniform = make([]*rand.Rand, nParts)
 		for i := 0; i < nParts; i++ {
-			zk.partUniform[i] = rand.New(rand.NewSource(time.Now().Unix()))
+			zk.partUniform[i] = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex*13+i*7+1)))
 		}
 	}
 

@@ -32,11 +32,22 @@ func main() {
 	clients := *testbed.NumPart
 	nworkers := *testbed.NumPart
 
-	if *contention < 0 || *contention > 1 {
-		clog.Error("Contention factor should be between 0 and 1")
+	if *contention < 1 {
+		clog.Error("Contention factor should be between no less than 1")
 	}
 
 	clog.Info("Number of clients %v, Number of workers %v \n", clients, nworkers)
+	if *testbed.SysType == testbed.PARTITION {
+		clog.Info("Using Partition-based CC\n")
+	} else if *testbed.SysType == testbed.OCC {
+		if *testbed.PhyPart {
+			clog.Info("Using OCC with partition\n")
+		} else {
+			clog.Info("Using OCC\n")
+		}
+	} else {
+		clog.Error("Not supported type %v CC\n", *testbed.SysType)
+	}
 
 	tt, dt := getTxn(*txntype)
 
@@ -47,7 +58,7 @@ func main() {
 	var pKeysArray []int64
 	var value interface{}
 
-	if *testbed.SysType == testbed.PARTITION {
+	if *testbed.SysType == testbed.PARTITION || *testbed.PhyPart {
 		nParts = *testbed.NumPart
 		pKeysArray = make([]int64, nParts)
 
@@ -84,9 +95,9 @@ func main() {
 
 	generators := make([]*testbed.TxnGen, nworkers)
 
-	for i := 0; i < nParts; i++ {
+	for i := 0; i < nworkers; i++ {
 		zk := testbed.NewZipfKey(i, *nKeys, nParts, pKeysArray, *contention, hp)
-		generators[i] = testbed.NewTxnGen(tt, *rr, *txnlen, *mp, zk)
+		generators[i] = testbed.NewTxnGen(i, tt, *rr, *txnlen, *mp, zk)
 	}
 
 	coord := testbed.NewCoordinator(nworkers, s)
@@ -134,7 +145,7 @@ func main() {
 		}
 		defer bs.Close()
 
-		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]))
+		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS]))
 	}
 
 }
