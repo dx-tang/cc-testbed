@@ -34,6 +34,7 @@ type Worker struct {
 	NStats       []int64
 	NGen         time.Duration
 	NExecute     time.Duration
+	NExecSqrt    time.Duration
 	NWait        time.Duration
 	NCrossWait   time.Duration
 	NLockAcquire int64
@@ -72,7 +73,7 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 		debug.PrintStack()
 		clog.Error("Unknown transaction number %v\n", q.TXN)
 	}
-	w.NStats[NTXN]++
+	//w.NStats[NTXN]++
 
 	if len(q.accessParts) > 1 {
 		w.NStats[NCROSSTXN]++

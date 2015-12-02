@@ -13,13 +13,15 @@ type Coordinator struct {
 	NStats       []int64
 	NGen         time.Duration
 	NExecute     time.Duration
+	NExecSqrt    time.Duration
 	NWait        time.Duration
 	NLockAcquire int64
 	padding1     [128]byte
 }
 
 const (
-	PERSEC = 1000000000
+	PERSEC      = 1000000000
+	PERMILLISEC = 1000000
 )
 
 func NewCoordinator(nWorkers int, store *Store) *Coordinator {
@@ -50,6 +52,7 @@ func (coord *Coordinator) gatherStats() {
 		coord.NStats[NWRITEKEYS] += worker.NStats[NWRITEKEYS]
 		coord.NGen += worker.NGen
 		coord.NExecute += worker.NExecute
+		coord.NExecSqrt += worker.NExecSqrt
 		coord.NWait += worker.NWait
 		coord.NLockAcquire += worker.NLockAcquire
 	}

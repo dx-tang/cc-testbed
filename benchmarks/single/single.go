@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -104,6 +105,8 @@ func main() {
 
 	clog.Info("Done with Initialization")
 
+	//var count []int = []int{1000, 1000}
+
 	var wg sync.WaitGroup
 	for i := 0; i < clients; i++ {
 		wg.Add(1)
@@ -119,12 +122,22 @@ func main() {
 				q := generators[n].GenOneQuery()
 				w.NGen += time.Since(tm)
 				tm = time.Now()
-				_, err := w.One(q)
-				w.NExecute += time.Since(tm)
-				if err == testbed.ENOKEY {
-					clog.Error("No Key Error")
-					break
+				for {
+					_, err := w.One(q)
+					if err == nil {
+						break
+					} else if err == testbed.ENOKEY {
+						clog.Error("No Key Error")
+					} else if err != testbed.EABORT {
+						clog.Error("Not Support Error Type %v", err)
+					}
 				}
+
+				p := time.Since(tm)
+				w.NStats[testbed.NTXN]++
+				w.NExecute += p
+				w.NExecSqrt += p * p
+
 			}
 			wg.Done()
 		}(i)
@@ -145,7 +158,14 @@ func main() {
 		}
 		defer bs.Close()
 
-		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS]))
+		exp := float64(coord.NExecute.Nanoseconds()) / float64(coord.NStats[testbed.NTXN])
+		va := float64(coord.NExecSqrt.Nanoseconds())/float64(coord.NStats[testbed.NTXN]) - exp*exp
+		//exp := float64(coord.NExecute.Nanoseconds()) / 2000
+		//va := float64(coord.NExecSqrt.Nanoseconds())/2000 - exp*exp
+
+		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, (float64)(coord.NStats[testbed.NTXN])/(float64(coord.NExecute.Nanoseconds())/(float64)(testbed.PERSEC))))
+		bs.WriteString(fmt.Sprintf("%v\t%.6f\n", *testbed.CrossPercent, exp))
+		bs.WriteString(fmt.Sprintf("%v\t%.6f\n", *testbed.CrossPercent, math.Sqrt(va)))
 	}
 
 }
