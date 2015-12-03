@@ -105,6 +105,7 @@ func (w *Worker) One(q *Query) (*Result, error) {
 		// Acquire all locks
 		for _, p := range q.accessParts {
 			s.store[p].Lock()
+
 		}
 
 		w.NWait += time.Since(tm)

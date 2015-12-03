@@ -69,12 +69,16 @@ func (tg *TxnGen) GenOneQuery() *Query {
 		if x < *CrossPercent {
 			// Generate how many partitions this txn will touch; more than 1
 			var numAccess int
-			if tg.maxParts < tg.txnLen {
-				numAccess = tg.maxParts
-			} else {
+			if *NumPart < tg.maxParts {
+				numAccess = *NumPart
+			} else if tg.txnLen < tg.maxParts {
 				numAccess = tg.txnLen
+			} else {
+				numAccess = tg.maxParts
 			}
-			numAccess = tg.rnd.Intn(numAccess-1) + 2
+			if numAccess > 2 {
+				numAccess = tg.rnd.Intn(numAccess-1) + 2
+			}
 			q.accessParts = make([]int, numAccess)
 
 			// Generate partitions this txn will touch

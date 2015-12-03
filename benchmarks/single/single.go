@@ -105,8 +105,6 @@ func main() {
 
 	clog.Info("Done with Initialization")
 
-	//var count []int = []int{1000, 1000}
-
 	var wg sync.WaitGroup
 	for i := 0; i < clients; i++ {
 		wg.Add(1)
@@ -123,7 +121,9 @@ func main() {
 				w.NGen += time.Since(tm)
 				tm = time.Now()
 				for {
+
 					_, err := w.One(q)
+
 					if err == nil {
 						break
 					} else if err == testbed.ENOKEY {
