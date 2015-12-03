@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math"
+	//"math"
 	"os"
 	"runtime"
 	"strings"
@@ -159,13 +159,11 @@ func main() {
 		defer bs.Close()
 
 		exp := float64(coord.NExecute.Nanoseconds()) / float64(coord.NStats[testbed.NTXN])
-		va := float64(coord.NExecSqrt.Nanoseconds())/float64(coord.NStats[testbed.NTXN]) - exp*exp
-		//exp := float64(coord.NExecute.Nanoseconds()) / 2000
-		//va := float64(coord.NExecSqrt.Nanoseconds())/2000 - exp*exp
+		//va := float64(coord.NExecSqrt.Nanoseconds())/float64(coord.NStats[testbed.NTXN]) - exp*exp
 
-		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, (float64)(coord.NStats[testbed.NTXN])/(float64(coord.NExecute.Nanoseconds())/(float64)(testbed.PERSEC))))
-		bs.WriteString(fmt.Sprintf("%v\t%.6f\n", *testbed.CrossPercent, exp))
-		bs.WriteString(fmt.Sprintf("%v\t%.6f\n", *testbed.CrossPercent, math.Sqrt(va)))
+		bs.WriteString(fmt.Sprintf("%v\t%.2f\n", *testbed.CrossPercent, (float64)(coord.NStats[testbed.NTXN])/(float64(coord.NExecute.Nanoseconds())/(float64)(testbed.PERSEC))))
+		bs.WriteString(fmt.Sprintf("%v\t%.2f\n", *testbed.CrossPercent, exp))
+		//bs.WriteString(fmt.Sprintf("%v\t%.6f\n", *testbed.CrossPercent, math.Sqrt(va)))
 	}
 
 }

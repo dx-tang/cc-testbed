@@ -20,7 +20,7 @@
 #do
     #for i in 0 1 2 3 4 5 6 7 8 9
     #do
-    single -nsec=10 -ncores=2 -txnlen=100 -rr=50 -mp=2 -cr=0 -nkeys=500000 -bs=benchstat -sys=0 -tt=addone -contention=1
+    single -nsec=10 -ncores=1 -txnlen=100 -rr=50 -mp=2 -cr=0 -nkeys=5000000 -bs=benchstat -sys=0 -tt=addone -contention=1
     #done
 #done
 
