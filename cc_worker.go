@@ -101,7 +101,7 @@ func (w *Worker) One(q *Query) (*Result, error) {
 	if *SysType == PARTITION {
 		s := w.store
 		w.NLockAcquire += int64(len(q.accessParts))
-		tm := time.Now()
+		//tm := time.Now()
 		// Acquire all locks
 
 		for _, p := range q.accessParts {
@@ -110,7 +110,7 @@ func (w *Worker) One(q *Query) (*Result, error) {
 			//s.locks[p].custLock.Lock()
 		}
 
-		w.NWait += time.Since(tm)
+		//w.NWait += time.Since(tm)
 		//if len(q.accessParts) > 1 {
 		//	w.NCrossWait += time.Since(tm)
 		//}

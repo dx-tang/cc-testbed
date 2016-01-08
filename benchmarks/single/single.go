@@ -112,7 +112,7 @@ func main() {
 	for i := 0; i < clients; i++ {
 		wg.Add(1)
 		go func(n int) {
-			var txn int64
+			//var txn int64
 			//var count int
 			w := coord.Workers[n]
 			end_time := time.Now().Add(time.Duration(*nsec) * time.Second)
@@ -133,9 +133,9 @@ func main() {
 					clog.Error("No Key Error")
 					break
 				}
-				txn++
+				//txn++
 			}
-			clog.Info("Worker %d issues %d transactions\n", n, txn)
+			//clog.Info("Worker %d issues %d transactions\n", n, txn)
 			wg.Done()
 		}(i)
 	}
