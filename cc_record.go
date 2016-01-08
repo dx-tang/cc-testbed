@@ -31,6 +31,7 @@ type Record interface {
 	UpdateValue(val Value) bool
 	GetTID() TID
 	SetTID(tid TID)
+	DoNothing()
 }
 
 func MakeRecord(k Key, v Value, rt RecType) Record {
@@ -85,12 +86,12 @@ func MakeRecord(k Key, v Value, rt RecType) Record {
 }
 
 type PRecord struct {
-	padding1  [128]byte
+	padding1  [64]byte
 	key       Key
 	intVal    int64
 	stringVal []string
 	recType   RecType
-	padding2  [128]byte
+	padding2  [64]byte
 }
 
 func (pr *PRecord) GetKey() Key {
@@ -112,22 +113,26 @@ func (pr *PRecord) IsUnlocked() (bool, TID) {
 }
 
 func (pr *PRecord) Value() Value {
+	//return nil
 	switch pr.recType {
 	case SINGLEINT:
-		return pr.intVal
+		return &pr.intVal
 	case STRINGLIST:
-		return pr.stringVal
+		return &pr.stringVal
 	}
 	return nil
 }
 
 func (pr *PRecord) UpdateValue(val Value) bool {
+	//intVal := val.(int64)
 	if val == nil {
 		return false
 	}
 	switch pr.recType {
 	case SINGLEINT:
-		pr.intVal = val.(int64)
+		pr.intVal = *val.(*int64)
+		//intVal := val.(int64)
+		//pr.intVal = intVal
 	case STRINGLIST:
 		strAttr := val.(*StrAttr)
 		if strAttr.index >= len(pr.stringVal) {
@@ -148,14 +153,17 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
+func (pr *PRecord) DoNothing() {
+}
+
 type ORecord struct {
-	padding1  [128]byte
+	padding1  [64]byte
 	key       Key
 	intVal    int64
 	stringVal []string
 	recType   RecType
 	last      wfmutex.WFMutex
-	padding2  [128]byte
+	padding2  [64]byte
 }
 
 func (or *ORecord) Lock() (bool, TID) {
@@ -178,9 +186,9 @@ func (or *ORecord) IsUnlocked() (bool, TID) {
 func (or *ORecord) Value() Value {
 	switch or.recType {
 	case SINGLEINT:
-		return or.intVal
+		return &or.intVal
 	case STRINGLIST:
-		return or.stringVal
+		return &or.stringVal
 	}
 	return nil
 }
@@ -195,7 +203,7 @@ func (or *ORecord) UpdateValue(val Value) bool {
 	}
 	switch or.recType {
 	case SINGLEINT:
-		or.intVal = val.(int64)
+		or.intVal = *val.(*int64)
 	case STRINGLIST:
 		strAttr := val.(*StrAttr)
 		if strAttr.index >= len(or.stringVal) {
@@ -213,6 +221,9 @@ func (or *ORecord) GetTID() TID {
 
 func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
+}
+
+func (or *ORecord) DoNothing() {
 }
 
 // Dummy Record
@@ -258,4 +269,7 @@ func (dr *DRecord) GetTID() TID {
 
 func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
+}
+
+func (dr *DRecord) DoNothing() {
 }

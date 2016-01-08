@@ -10,7 +10,9 @@ const (
 )
 
 type Spinlock struct {
-	state int32
+	padding1 [64]byte
+	state    int32
+	padding2 [64]byte
 }
 
 const (
@@ -21,7 +23,7 @@ const (
 // If the lock is already in use, the calling goroutine
 // spins until the mutex is available.
 func (s *Spinlock) Lock() {
-	done := false
+	/*done := false
 	i := PREEMPT
 	for !done {
 		if i == 0 {
@@ -30,6 +32,10 @@ func (s *Spinlock) Lock() {
 		}
 		done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
 		i--
+	}*/
+	done := false
+	for !done {
+		done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
 	}
 }
 

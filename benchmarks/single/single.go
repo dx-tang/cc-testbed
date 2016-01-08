@@ -96,7 +96,11 @@ func main() {
 	generators := make([]*testbed.TxnGen, nworkers)
 
 	for i := 0; i < nworkers; i++ {
-		zk := testbed.NewZipfKey(i, *nKeys, nParts, pKeysArray, *contention, hp)
+		p := &testbed.HashPartitioner{
+			NParts: int64(nParts),
+			NKeys:  int64(*nKeys),
+		}
+		zk := testbed.NewZipfKey(i, *nKeys, nParts, pKeysArray, *contention, p)
 		generators[i] = testbed.NewTxnGen(i, tt, *rr, *txnlen, *mp, zk)
 	}
 
@@ -108,6 +112,7 @@ func main() {
 	for i := 0; i < clients; i++ {
 		wg.Add(1)
 		go func(n int) {
+			var txn int64
 			//var count int
 			w := coord.Workers[n]
 			end_time := time.Now().Add(time.Duration(*nsec) * time.Second)
@@ -116,7 +121,10 @@ func main() {
 				if !end_time.After(tm) {
 					break
 				}
+
 				q := generators[n].GenOneQuery()
+
+				//q.DoNothing()
 				w.NGen += time.Since(tm)
 				tm = time.Now()
 				_, err := w.One(q)
@@ -125,7 +133,9 @@ func main() {
 					clog.Error("No Key Error")
 					break
 				}
+				txn++
 			}
+			clog.Info("Worker %d issues %d transactions\n", n, txn)
 			wg.Done()
 		}(i)
 	}
@@ -145,7 +155,8 @@ func main() {
 		}
 		defer bs.Close()
 
-		bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS]))
+		//bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS]))
+		bs.WriteString(fmt.Sprintf("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
 	}
 
 }

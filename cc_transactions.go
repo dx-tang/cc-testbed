@@ -37,15 +37,21 @@ type Result struct {
 }
 
 type Query struct {
+	padding1    [64]byte
 	TXN         int // The transaction to be executed
 	T           TID
 	txnLen      int
 	isPartition bool
-	partitioner Partitioner
+	partitioner *HashPartitioner
 	accessParts []int
 	rKeys       []Key
 	wKeys       []Key
 	wValue      WValue
+	padding2    [64]byte
+}
+
+func (q *Query) DoNothing() {
+
 }
 
 func (q *Query) GenValue(rnd *rand.Rand) {
@@ -88,7 +94,8 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 			return nil, err
 		}
 
-		newVal := (v.Value().(int64)) + 1
+		newVal := *(v.Value().(*int64)) + 1
+		//*(v.Value().(*int64))++
 
 		err = tx.WriteInt64(wk, newVal, partNum)
 		if err != nil {
@@ -97,28 +104,39 @@ func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
 	}
 
 	// Read Results
-	var r Result
-	rValue := &RetIntValue{
-		intVals: make([]int64, len(q.rKeys)),
-	}
-	for i, rk := range q.rKeys {
+	//var r Result
+	//rValue := &RetIntValue{
+	//	intVals: make([]int64, len(q.rKeys)),
+	//}
+	//for i, rk := range q.rKeys {
+	//for _, rk := range q.rKeys {
+	var val Value
+	for i := 0; i < len(q.rKeys); i++ {
 		if q.partitioner != nil {
-			partNum = q.partitioner.GetPartition(rk)
+			partNum = q.partitioner.GetPartition(q.rKeys[i])
 		}
-		v, err := tx.Read(rk, partNum, false)
+
+		v, err := tx.Read(q.rKeys[i], partNum, false)
 		if err != nil {
 			return nil, err
 		}
-		rValue.intVals[i] = v.Value().(int64)
-	}
 
-	r.V = rValue
+		//rValue.intVals[i] = v.Value().(int64)
+		val = v.Value()
+		intVal := *(val.(*int64))
+		intVal++
+	}
 
 	if tx.Commit() == 0 {
 		return nil, EABORT
 	}
 
-	return &r, nil
+	if val == nil {
+		return nil, nil
+	}
+
+	//return &r, nil
+	return nil, nil
 }
 
 func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {

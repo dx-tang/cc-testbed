@@ -14,7 +14,7 @@ type ZipfKey struct {
 	pKeysArray   []int64
 	isZipf       bool
 	isPartition  bool
-	hp           Partitioner
+	hp           *HashPartitioner
 	wholeZipf    *rand.Zipf
 	partZipf     []*rand.Zipf
 	wholeUniform *rand.Rand
@@ -23,7 +23,7 @@ type ZipfKey struct {
 
 // Index of partition starts from 0
 // Integer Key starts from 0 also
-func NewZipfKey(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s float64, hp Partitioner) *ZipfKey {
+func NewZipfKey(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s float64, hp *HashPartitioner) *ZipfKey {
 
 	zk := &ZipfKey{
 		partIndex:  partIndex,

@@ -8,13 +8,15 @@ type Partitioner interface {
 }
 
 type HashPartitioner struct {
-	NParts int64
-	NKeys  int64
+	padding1 [64]byte
+	NParts   int64
+	NKeys    int64
+	padding2 [64]byte
 }
 
 func (hp *HashPartitioner) GetPartition(key Key) int {
 	k := int64(key)
-	ret := (k % hp.NParts)
+	ret := k % hp.NParts
 	return int(ret)
 }
 

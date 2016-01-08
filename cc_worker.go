@@ -24,7 +24,7 @@ const (
 type TransactionFunc func(*Query, ETransaction) (*Result, error)
 
 type Worker struct {
-	padding      [128]byte
+	padding      [64]byte
 	ID           int
 	next         TID
 	epoch        TID
@@ -37,7 +37,7 @@ type Worker struct {
 	NWait        time.Duration
 	NCrossWait   time.Duration
 	NLockAcquire int64
-	padding2     [128]byte
+	padding2     [64]byte
 }
 
 func (w *Worker) Register(fn int, transaction TransactionFunc) {
@@ -94,6 +94,7 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
 
 	return x, err
+	//return nil, nil
 }
 
 func (w *Worker) One(q *Query) (*Result, error) {
@@ -102,14 +103,17 @@ func (w *Worker) One(q *Query) (*Result, error) {
 		w.NLockAcquire += int64(len(q.accessParts))
 		tm := time.Now()
 		// Acquire all locks
+
 		for _, p := range q.accessParts {
-			s.store[p].Lock()
+			//s.store[p].Lock()
+			s.locks[p].Lock()
+			//s.locks[p].custLock.Lock()
 		}
 
 		w.NWait += time.Since(tm)
-		if len(q.accessParts) > 1 {
-			w.NCrossWait += time.Since(tm)
-		}
+		//if len(q.accessParts) > 1 {
+		//	w.NCrossWait += time.Since(tm)
+		//}
 	}
 
 	r, err := w.doTxn(q)
@@ -117,7 +121,9 @@ func (w *Worker) One(q *Query) (*Result, error) {
 	if *SysType == PARTITION {
 		s := w.store
 		for _, p := range q.accessParts {
-			s.store[p].Unlock()
+			//s.store[p].Unlock()
+			s.locks[p].Unlock()
+			//s.locks[p].custLock.Unlock()
 		}
 	}
 

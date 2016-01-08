@@ -121,15 +121,15 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 	}
 
 	/*
-			var sum int64
-			for i := int64(0); i < coord.store.nKeys; i++ {
-				k := Key(i)
-				rec := coord.store.GetRecord(k, 0)
-				sum += rec.Value().(int64)
-			}
-
-		f.WriteString(fmt.Sprintf("Total Value %v\n", sum))
+		var sum int64
+		for i := int64(0); i < coord.store.nKeys; i++ {
+			k := Key(i)
+			rec := coord.store.GetRecord(k, 0)
+			sum += *rec.Value().(*int64)
+		}
 	*/
+
+	//f.WriteString(fmt.Sprintf("Total Value %v\n", sum))
 
 	f.WriteString("\n")
 

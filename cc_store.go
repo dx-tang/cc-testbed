@@ -32,18 +32,24 @@ var SysType = flag.Int("sys", PARTITION, "System Type we will use")
 var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
 var PhyPart = flag.Bool("p", false, "Indicate whether physically partition for OCC or 2PL")
 
+type CustLock struct {
+	padding1 [64]byte
+	custLock sync.Mutex
+	padding2 [64]byte
+}
+
 type Chunk struct {
-	padding1 [128]byte
+	padding1 [64]byte
 	rows     map[Key]Record
-	padding2 [128]byte
+	padding2 [64]byte
 }
 
 type Partition struct {
-	padding1  [128]byte
+	padding1  [64]byte
 	data      []*Chunk
 	mutexLock sync.RWMutex
 	spinLock  spinlock.RWSpinlock
-	padding2  [128]byte
+	padding2  [64]byte
 }
 
 func (p *Partition) Lock() {
@@ -63,10 +69,11 @@ func (p *Partition) Unlock() {
 }
 
 type Store struct {
-	padding1 [128]byte
+	padding1 [64]byte
 	store    []*Partition
+	locks    []*spinlock.Spinlock
 	nKeys    int64
-	padding2 [128]byte
+	padding2 [64]byte
 }
 
 func NewStore() *Store {
@@ -75,6 +82,8 @@ func NewStore() *Store {
 	}
 	s := &Store{
 		store: make([]*Partition, *NumPart),
+		locks: make([]*spinlock.Spinlock, *NumPart),
+		//locks: make([]*spinlock.Spinlock, *NumPart)
 	}
 
 	var bb1 byte
@@ -91,6 +100,9 @@ func NewStore() *Store {
 			part.data[bb1] = chunk
 		}
 		s.store[i] = part
+
+		//s.locks[i] = &CustLock{}
+		s.locks[i] = &spinlock.Spinlock{}
 	}
 	return s
 }
