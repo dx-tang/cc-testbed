@@ -24,6 +24,10 @@ var mp = flag.Int("mp", 1, "Max partitions cross-partition transactions will tou
 var benchStat = flag.String("bs", "", "Output file for benchmark statistics")
 var txntype = flag.String("tt", "addone", "set transaction type")
 
+const (
+	TRIAL = 5
+)
+
 func main() {
 	flag.Parse()
 
@@ -127,12 +131,24 @@ func main() {
 				//q.DoNothing()
 				w.NGen += time.Since(tm)
 				tm = time.Now()
-				_, err := w.One(q)
+				for j := 0; j < TRIAL; j++ {
+
+					_, err := w.One(q)
+
+					if err == nil {
+						break
+					} else if err == testbed.ENOKEY {
+						clog.Error("No Key Error")
+					} else if err != testbed.EABORT {
+						clog.Error("Not Support Error Type %v", err)
+					}
+				}
+				//_, err := w.One(q)
 				w.NExecute += time.Since(tm)
-				if err == testbed.ENOKEY {
+				/*if err == testbed.ENOKEY {
 					clog.Error("No Key Error")
 					break
-				}
+				}*/
 				//txn++
 			}
 			//clog.Info("Worker %d issues %d transactions\n", n, txn)

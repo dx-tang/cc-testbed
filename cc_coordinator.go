@@ -82,6 +82,10 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 
 	} else if *SysType == OCC {
 
+		if *PhyPart {
+			f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))
+		}
+
 		f.WriteString(fmt.Sprintf("Abort %v Transactions\n", coord.NStats[NABORTS]))
 
 		r := ((float64)(coord.NStats[NABORTS]) / (float64)(coord.NStats[NTXN])) * 100

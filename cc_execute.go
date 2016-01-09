@@ -245,13 +245,23 @@ func (o *OTransaction) WriteInt64(k Key, intValue int64, partNum int) error {
 			rec:     r,
 		}
 		o.wKeys[k] = writeKey*/
-	n := len(o.wKeys)
-	o.wKeys = o.wKeys[0 : n+1]
-	o.wKeys[n].k = k
-	o.wKeys[n].partNum = partNum
-	o.wKeys[n].intVal = intValue
-	o.wKeys[n].locked = false
-	o.wKeys[n].rec = r
+	ok = false
+	for j := 0; j < len(o.wKeys); j++ {
+		wk := &o.wKeys[j]
+		if wk.k == k {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		n := len(o.wKeys)
+		o.wKeys = o.wKeys[0 : n+1]
+		o.wKeys[n].k = k
+		o.wKeys[n].partNum = partNum
+		o.wKeys[n].intVal = intValue
+		o.wKeys[n].locked = false
+		o.wKeys[n].rec = r
+	}
 
 	return nil
 }
