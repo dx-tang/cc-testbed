@@ -1,230 +1,316 @@
 package testbed
 
-import (
-	"math/rand"
-
-	//"github.com/totemtang/cc-testbed/clog"
-)
-
-type WValue interface{}
-
 const (
-	ADD_ONE = iota
-	RANDOM_UPDATE_INT
-	RANDOM_UPDATE_STRING
+	// Smallbank Workload
+	SMALLBANKBASE = iota
+	AMALGAMATE
+	SENDPAYMENT
+	BALANCE
+	WRITECHECK
+	DEPOSITCHECKING
+	TRANSACTIONSAVINGS
 
 	LAST_TXN
 )
 
-type RetIntValue struct {
-	intVals []int64
+type Trans interface {
+	GetTXN() int
+	GetAccessParts() []int
+	DoNothing()
 }
 
-type RetStringValue struct {
-	strVals [][]string
+type TransGen interface {
+	GenOneTrans() Trans
 }
 
-type SingleIntValue struct {
-	intVals []int64
-}
+/*
+1. Get Records from ACCOUNTS to check the existence
+2. Get SAVINGS Balance of AcctID0
+3. Get CHECKING Balance of AcctID1
+4. Calculate Sum of Balance from AcctID0 and AcctID1
+5. Update CHECKING Balance of AcctID0 with Zero
+6. Update SAVINGS Balance of AcctID1 with its Balance minus Sum
+*/
+func Amalgamate(t Trans, exec ETransaction) (Value, error) {
+	sbTrnas := t.(*SBTrans)
 
-type StringListValue struct {
-	strVals []*StrAttr
-}
+	fv0 := &sbTrnas.fv[0]
+	fv1 := &sbTrnas.fv[1]
 
-type Result struct {
-	V Value
-}
-
-type Query struct {
-	padding1    [64]byte
-	TXN         int // The transaction to be executed
-	T           TID
-	txnLen      int
-	isPartition bool
-	partitioner *HashPartitioner
-	accessParts []int
-	rKeys       []Key
-	wKeys       []Key
-	wValue      WValue
-	padding2    [64]byte
-}
-
-func (q *Query) DoNothing() {
-
-}
-
-func (q *Query) GenValue(rnd *rand.Rand) {
-
-	if q.TXN == RANDOM_UPDATE_INT {
-		v := &SingleIntValue{
-			intVals: make([]int64, len(q.wKeys)),
-		}
-
-		for i := range v.intVals {
-			v.intVals[i] = rnd.Int63()
-		}
-
-		q.wValue = v
-	} else if q.TXN == RANDOM_UPDATE_STRING {
-		v := &StringListValue{
-			strVals: make([]*StrAttr, len(q.wKeys)),
-		}
-
-		for i := range v.strVals {
-			v.strVals[i] = &StrAttr{
-				index: rnd.Intn(FIELDS),
-				//value: Randstr(int(PERFIELD)),
-			}
-		}
-
-		q.wValue = v
-	}
-}
-
-func AddOneTXN(q *Query, tx ETransaction) (*Result, error) {
-	var partNum int
-	// Apply Writes
-	for _, wk := range q.wKeys {
-		if q.partitioner != nil {
-			partNum = q.partitioner.GetPartition(wk)
-		}
-		v, err := tx.Read(wk, partNum, false)
-		if err != nil {
-			return nil, err
-		}
-
-		newVal := *(v.Value().(*int64)) + 1
-		//*(v.Value().(*int64))++
-
-		err = tx.WriteInt64(wk, newVal, partNum)
-		if err != nil {
-			return nil, err
-		}
+	var part0, part1 int
+	if len(sbTrnas.accessParts) == 1 {
+		part0 = sbTrnas.accessParts[0]
+		part1 = sbTrnas.accessParts[0]
+	} else {
+		part0 = sbTrnas.accessParts[0]
+		part1 = sbTrnas.accessParts[1]
 	}
 
-	// Read Results
-	//var r Result
-	//rValue := &RetIntValue{
-	//	intVals: make([]int64, len(q.rKeys)),
-	//}
-	//for i, rk := range q.rKeys {
-	//for _, rk := range q.rKeys {
+	acctId0 := sbTrnas.accoutID[0]
+	acctId1 := sbTrnas.accoutID[1]
+
 	var val Value
-	for i := 0; i < len(q.rKeys); i++ {
-		if q.partitioner != nil {
-			partNum = q.partitioner.GetPartition(q.rKeys[i])
-		}
-
-		v, err := tx.Read(q.rKeys[i], partNum, false)
-		if err != nil {
-			return nil, err
-		}
-
-		//rValue.intVals[i] = v.Value().(int64)
-		val = v.Value()
-		intVal := *(val.(*int64))
-		intVal++
+	var err error
+	_, err = exec.ReadValue(ACCOUNTS, acctId0, part0, 0)
+	if err != nil {
+		return nil, err
 	}
 
-	if tx.Commit() == 0 {
-		return nil, EABORT
+	_, err = exec.ReadValue(ACCOUNTS, acctId1, part1, 0)
+	if err != nil {
+		return nil, err
 	}
 
-	if val == nil {
-		return nil, nil
+	val, err = exec.ReadValue(SAVINGS, acctId0, part0, 1)
+	if err != nil {
+		return nil, err
+	}
+	sum := val.(*FloatValue).floatVal
+
+	val, err = exec.ReadValue(CHECKING, acctId1, part1, 1)
+	if err != nil {
+		return nil, err
+	}
+	sum += val.(*FloatValue).floatVal
+
+	val, err = exec.ReadValue(SAVINGS, acctId1, part1, 1)
+	if err != nil {
+		return nil, err
+	}
+	sum = val.(*FloatValue).floatVal - sum
+
+	fv0.floatVal = float64(0)
+	fv1.floatVal = sum
+
+	err = exec.WriteValue(CHECKING, acctId0, part0, fv0, 1)
+	if err != nil {
+		return nil, err
 	}
 
-	//return &r, nil
+	err = exec.WriteValue(SAVINGS, acctId1, part1, fv1, 1)
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 
-func UpdateIntTXN(q *Query, tx ETransaction) (*Result, error) {
-	var partNum int
-	// Apply Writes
-	updateVals := q.wValue.(*SingleIntValue)
-	for i, wk := range q.wKeys {
-		if q.partitioner != nil {
-			partNum = q.partitioner.GetPartition(wk)
-		}
-		err := tx.WriteInt64(wk, updateVals.intVals[i], partNum)
-		if err != nil {
-			return nil, err
-		}
+/*
+1. Get Records from ACCOUNTS to check the existence
+2. Get CHECKING Balance from SendAcct
+3. If CHECKING Balance is smaller than Amount, Abort
+4. Deduct Amount from CHECKING Balance of SendAcct
+5. Add Amount to CHECKING Balance of DestAcct
+*/
+func SendPayment(t Trans, exec ETransaction) (Value, error) {
+	sbTrnas := t.(*SBTrans)
+
+	fv0 := &sbTrnas.fv[0]
+	fv1 := &sbTrnas.fv[1]
+	ammt := &sbTrnas.ammount
+
+	var part0, part1 int
+	if len(sbTrnas.accessParts) == 1 {
+		part0 = sbTrnas.accessParts[0]
+		part1 = sbTrnas.accessParts[0]
+	} else {
+		part0 = sbTrnas.accessParts[0]
+		part1 = sbTrnas.accessParts[1]
 	}
 
-	// Read Results
-	var r Result
-	rValue := &RetIntValue{
-		intVals: make([]int64, len(q.rKeys)),
-	}
-	for i, rk := range q.rKeys {
-		if q.partitioner != nil {
-			partNum = q.partitioner.GetPartition(rk)
-		}
-		v, err := tx.Read(rk, partNum, false)
-		if err != nil {
-			return nil, err
-		}
-		rValue.intVals[i] = v.Value().(int64)
+	send := sbTrnas.accoutID[0]
+	dest := sbTrnas.accoutID[1]
+
+	var val Value
+	var err error
+	_, err = exec.ReadValue(ACCOUNTS, send, part0, 0)
+	if err != nil {
+		return nil, err
 	}
 
-	r.V = rValue
-
-	if tx.Commit() == 0 {
-		return nil, EABORT
+	_, err = exec.ReadValue(ACCOUNTS, dest, part1, 0)
+	if err != nil {
+		return nil, err
 	}
 
-	return &r, nil
+	val, err = exec.ReadValue(CHECKING, send, part0, 1)
+	if err != nil {
+		return nil, err
+	}
+	bal := val.(*FloatValue).floatVal
 
+	if bal < ammt.floatVal {
+		return nil, ELACKBALANCE
+	}
+
+	fv0.floatVal = bal - ammt.floatVal
+
+	val, err = exec.ReadValue(CHECKING, dest, part1, 1)
+	if err != nil {
+		return nil, err
+	}
+	fv1.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
+
+	err = exec.WriteValue(CHECKING, send, part0, fv0, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	err = exec.WriteValue(CHECKING, dest, part1, fv1, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
-func UpdateStringTXN(q *Query, tx ETransaction) (*Result, error) {
-	var partNum int
-	// Apply Writes
-	updateVals := q.wValue.(*StringListValue)
-	for i, wk := range q.wKeys {
-		if q.partitioner != nil {
-			partNum = q.partitioner.GetPartition(wk)
-		}
-		updateVals.strVals[i].value = Randstr(int(PERFIELD))
-		err := tx.WriteString(wk, updateVals.strVals[i], partNum)
-		if err != nil {
-			return nil, err
-		}
+/*
+1. Get Records from ACCOUNTS to check the existence
+2. Get CHECKING and SAVINGS Balance of AcctID
+3. Return their Sum
+*/
+func Balance(t Trans, exec ETransaction) (Value, error) {
+	sbTrnas := t.(*SBTrans)
+
+	ret := &sbTrnas.ret
+	part := sbTrnas.accessParts[0]
+	acct := sbTrnas.accoutID[0]
+
+	var val Value
+	var err error
+	_, err = exec.ReadValue(ACCOUNTS, acct, part, 1)
+	if err != nil {
+		return nil, err
 	}
 
-	// Read Results
-	var r Result
-	var ok bool
-	rValue := &RetStringValue{
-		strVals: make([][]string, len(q.rKeys)),
+	val, err = exec.ReadValue(CHECKING, acct, part, 1)
+	if err != nil {
+		return nil, err
 	}
-	for i, rk := range q.rKeys {
-		if q.partitioner != nil {
-			partNum = q.partitioner.GetPartition(rk)
-		}
-		v, err := tx.Read(rk, partNum, false)
-		if err != nil {
-			return nil, err
-		}
+	ret.floatVal = val.(*FloatValue).floatVal
 
-		if rValue.strVals[i], ok = v.Value().([]string); !ok {
-			tmpVal := v.Value().(*StrAttr)
-			v, err = tx.Read(rk, partNum, true)
-			if err != nil {
-				return nil, err
-			}
-			rValue.strVals[i] = v.Value().([]string)
-			rValue.strVals[i][tmpVal.index] = tmpVal.value
-		}
+	val, err = exec.ReadValue(SAVINGS, acct, part, 1)
+	if err != nil {
+		return nil, err
 	}
 
-	r.V = rValue
+	ret.floatVal += val.(*FloatValue).floatVal
 
-	if tx.Commit() == 0 {
-		return nil, EABORT
+	return ret, nil
+}
+
+/*
+1. Get Records from ACCOUNTS to check the existence
+2. Get CHECKING and SAVINGS Balance of AcctID
+3. If Sum of them is smaller than Amount, Update CHECKING Balance with its Balance minus Amount plus 1
+4. Else Update CHECKING Balance with its Balance minus Amount
+*/
+func WriteCheck(t Trans, exec ETransaction) (Value, error) {
+	sbTrnas := t.(*SBTrans)
+
+	part := sbTrnas.accessParts[0]
+	acct := sbTrnas.accoutID[0]
+	ammt := &sbTrnas.ammount
+	fv0 := &sbTrnas.fv[0]
+
+	var val Value
+	var err error
+	_, err = exec.ReadValue(ACCOUNTS, acct, part, 1)
+	if err != nil {
+		return nil, err
 	}
 
-	return &r, nil
+	val, err = exec.ReadValue(CHECKING, acct, part, 1)
+	if err != nil {
+		return nil, err
+	}
+	checkBal := val.(*FloatValue).floatVal
+	sum := checkBal
+
+	val, err = exec.ReadValue(SAVINGS, acct, part, 1)
+	if err != nil {
+		return nil, err
+	}
+	sum += val.(*FloatValue).floatVal
+
+	if sum < ammt.floatVal {
+		fv0.floatVal = checkBal - ammt.floatVal + float64(1)
+		exec.WriteValue(CHECKING, acct, part, fv0, 1)
+	} else {
+		fv0.floatVal = checkBal - ammt.floatVal
+		exec.WriteValue(CHECKING, acct, part, fv0, 1)
+	}
+
+	return nil, nil
+}
+
+/*
+1. Get Records from ACCOUNTS to check the existence
+2. Update CHECKING Balance of AcctID with its Balance plus Amount
+*/
+func DepositChecking(t Trans, exec ETransaction) (Value, error) {
+	sbTrnas := t.(*SBTrans)
+
+	part := sbTrnas.accessParts[0]
+	acct := sbTrnas.accoutID[0]
+	ammt := &sbTrnas.ammount
+	fv0 := &sbTrnas.fv[0]
+
+	var val Value
+	var err error
+	_, err = exec.ReadValue(ACCOUNTS, acct, part, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err = exec.ReadValue(CHECKING, acct, part, 1)
+	if err != nil {
+		return nil, err
+	}
+	fv0.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
+
+	err = exec.WriteValue(CHECKING, acct, part, fv0, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+/*
+1. Get Records from ACCOUNTS to check the existence
+2. Get SAVINGS Balance of AcctID
+3. Calculate Sum of SAVING Balance and Amount
+4. If Sum is negative, Abort
+5. Else Update SAVINGS Balance of AcctID with Sum
+*/
+func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
+	sbTrnas := t.(*SBTrans)
+
+	part := sbTrnas.accessParts[0]
+	acct := sbTrnas.accoutID[0]
+	ammt := &sbTrnas.ammount
+	fv0 := &sbTrnas.fv[0]
+
+	var val Value
+	var err error
+	_, err = exec.ReadValue(ACCOUNTS, acct, part, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err = exec.ReadValue(SAVINGS, acct, part, 1)
+	if err != nil {
+		return nil, err
+	}
+	sum := val.(*FloatValue).floatVal + ammt.floatVal
+
+	if sum < 0 {
+		return nil, ENEGSAVINGS
+	} else {
+		fv0.floatVal = sum
+		err = exec.WriteValue(SAVINGS, acct, part, fv0, 1)
+	}
+
+	return nil, nil
 }

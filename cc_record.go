@@ -5,79 +5,99 @@ import (
 	"github.com/totemtang/cc-testbed/wfmutex"
 )
 
-type RecType int
-
 const (
-	SINGLEINT = iota
-	STRINGLIST
+	STRMAXLEN = 100
 )
 
-const (
-	FIELDS   = 10
-	PERFIELD = 100
-)
+type Value interface{}
 
-type StrAttr struct {
-	index int
-	value string
+type IntValue struct {
+	padding1 [PADDING]byte
+	intVal   int64
+	padding2 [PADDING]byte
+}
+
+type FloatValue struct {
+	padding1 [PADDING]byte
+	floatVal float64
+	padding2 [PADDING]byte
+}
+
+type StringValue struct {
+	stringVal []byte
 }
 
 type Record interface {
 	Lock() (bool, TID)
 	Unlock(tid TID)
 	IsUnlocked() (bool, TID)
-	Value() Value
+	GetValue(colNum int) Value
 	GetKey() Key
-	UpdateValue(val Value) bool
+	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
-	DoNothing()
 }
 
-func MakeRecord(k Key, v Value, rt RecType) Record {
+func allocStrVal() *StringValue {
+	sv := &StringValue{
+		stringVal: make([]byte, 0, STRMAXLEN+2*PADDINGBYTE),
+	}
+	sv.stringVal = sv.stringVal[PADDINGBYTE:PADDINGBYTE]
+	return sv
+}
+
+func allocAttr(valType BTYPE, val Value) Value {
+	switch valType {
+	case INTEGER:
+		ret := &IntValue{
+			intVal: val.(*IntValue).intVal,
+		}
+		return ret
+	case FLOAT:
+		ret := &FloatValue{
+			floatVal: val.(*FloatValue).floatVal,
+		}
+		return ret
+	case STRING:
+		input := val.(*StringValue).stringVal
+		ret := allocStrVal()
+		ret.stringVal = ret.stringVal[0:len(input)]
+		for i := 0; i < len(input); i++ {
+			ret.stringVal[i] = input[i]
+		}
+		return ret
+	default:
+		clog.Error("Value Type Not Supported")
+		return nil
+	}
+}
+
+func MakeRecord(table *Table, k Key, v []Value) Record {
+
 	if *SysType == PARTITION {
 		pr := &PRecord{
-			key:     k,
-			recType: rt,
+			table: table,
+			key:   k,
+			value: make([]Value, len(v)),
 		}
 
-		// Initiate Value according to different types
-		switch rt {
-		case SINGLEINT:
-			if v != nil {
-				pr.intVal = v.(int64)
-			}
-		case STRINGLIST:
-			if v != nil {
-				var inputStrList = v.([]string)
-				pr.stringVal = make([]string, len(inputStrList))
-				for i, _ := range inputStrList {
-					pr.stringVal[i] = inputStrList[i]
-				}
-			}
+		for i := 0; i < len(v); i++ {
+			pr.value[i] = allocAttr(table.valueSchema[i], v[i])
 		}
+
 		return pr
 	} else if *SysType == OCC {
 		or := &ORecord{
-			key:     k,
-			recType: rt,
-			last:    wfmutex.WFMutex{},
+			table: table,
+			key:   k,
+			value: make([]Value, len(v)),
+			last:  wfmutex.WFMutex{},
 		}
-		// Initiate Value according to different types
-		switch rt {
-		case SINGLEINT:
-			if v != nil {
-				or.intVal = v.(int64)
-			}
-		case STRINGLIST:
-			if v != nil {
-				var inputStrList = v.([]string)
-				or.stringVal = make([]string, len(inputStrList))
-				for i, _ := range inputStrList {
-					or.stringVal[i] = inputStrList[i]
-				}
-			}
+
+		for i := 0; i < len(v); i++ {
+			or.value[i] = allocAttr(table.valueSchema[i], v[i])
 		}
+
 		return or
 	} else {
 		clog.Error("System Type %v Not Supported Yet", *SysType)
@@ -86,12 +106,11 @@ func MakeRecord(k Key, v Value, rt RecType) Record {
 }
 
 type PRecord struct {
-	padding1  [64]byte
-	key       Key
-	intVal    int64
-	stringVal []string
-	recType   RecType
-	padding2  [64]byte
+	padding1 [PADDING]byte
+	key      Key
+	value    []Value
+	table    *Table
+	padding2 [PADDING]byte
 }
 
 func (pr *PRecord) GetKey() Key {
@@ -112,36 +131,14 @@ func (pr *PRecord) IsUnlocked() (bool, TID) {
 	return false, 0
 }
 
-func (pr *PRecord) Value() Value {
-	//return nil
-	switch pr.recType {
-	case SINGLEINT:
-		return &pr.intVal
-	case STRINGLIST:
-		return &pr.stringVal
-	}
-	return nil
+func (pr *PRecord) GetValue(colNum int) Value {
+	return pr.value[colNum]
 }
 
-func (pr *PRecord) UpdateValue(val Value) bool {
-	//intVal := val.(int64)
-	if val == nil {
-		return false
-	}
-	switch pr.recType {
-	case SINGLEINT:
-		pr.intVal = *val.(*int64)
-		//intVal := val.(int64)
-		//pr.intVal = intVal
-	case STRINGLIST:
-		strAttr := val.(*StrAttr)
-		if strAttr.index >= len(pr.stringVal) {
-			clog.Error("Index %v out of range array length %v",
-				strAttr.index, len(pr.stringVal))
-		}
-		pr.stringVal[strAttr.index] = strAttr.value
-	}
-	return true
+func (pr *PRecord) SetValue(val Value, colNum int) {
+	//pr.value[colNum] = val
+	bt := pr.table.valueSchema[colNum]
+	setVal(bt, pr.value[colNum], val)
 }
 
 func (pr *PRecord) GetTID() TID {
@@ -153,17 +150,13 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
-func (pr *PRecord) DoNothing() {
-}
-
 type ORecord struct {
-	padding1  [64]byte
-	key       Key
-	intVal    int64
-	stringVal []string
-	recType   RecType
-	last      wfmutex.WFMutex
-	padding2  [64]byte
+	padding1 [PADDING]byte
+	key      Key
+	value    []Value
+	last     wfmutex.WFMutex
+	table    *Table
+	padding2 [PADDING]byte
 }
 
 func (or *ORecord) Lock() (bool, TID) {
@@ -183,36 +176,17 @@ func (or *ORecord) IsUnlocked() (bool, TID) {
 	return true, TID(x)
 }
 
-func (or *ORecord) Value() Value {
-	switch or.recType {
-	case SINGLEINT:
-		return &or.intVal
-	case STRINGLIST:
-		return &or.stringVal
-	}
-	return nil
+func (or *ORecord) GetValue(colNum int) Value {
+	return or.value[colNum]
 }
 
 func (or *ORecord) GetKey() Key {
 	return or.key
 }
 
-func (or *ORecord) UpdateValue(val Value) bool {
-	if val == nil {
-		return false
-	}
-	switch or.recType {
-	case SINGLEINT:
-		or.intVal = *val.(*int64)
-	case STRINGLIST:
-		strAttr := val.(*StrAttr)
-		if strAttr.index >= len(or.stringVal) {
-			clog.Error("Index %v out of range array length %v",
-				strAttr.index, len(or.stringVal))
-		}
-		or.stringVal[strAttr.index] = strAttr.value
-	}
-	return true
+func (or *ORecord) SetValue(val Value, colNum int) {
+	bt := or.table.valueSchema[colNum]
+	setVal(bt, or.value[colNum], val)
 }
 
 func (or *ORecord) GetTID() TID {
@@ -223,15 +197,13 @@ func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
 }
 
-func (or *ORecord) DoNothing() {
-}
-
 // Dummy Record
 type DRecord struct {
-	padding1 [128]byte
+	padding1 [PADDING]byte
 	key      Key
 	value    Value
-	padding2 [128]byte
+	colNum   int
+	padding2 [PADDING]byte
 }
 
 func (dr *DRecord) GetKey() Key {
@@ -253,13 +225,13 @@ func (dr *DRecord) IsUnlocked() (bool, TID) {
 	return false, 0
 }
 
-func (dr *DRecord) Value() Value {
+func (dr *DRecord) GetValue(colNum int) Value {
 	return dr.value
 }
 
-func (dr *DRecord) UpdateValue(val Value) bool {
+func (dr *DRecord) SetValue(val Value, colNum int) {
 	dr.value = val
-	return true
+	dr.colNum = colNum
 }
 
 func (dr *DRecord) GetTID() TID {
@@ -271,5 +243,22 @@ func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
 }
 
-func (dr *DRecord) DoNothing() {
+func setVal(bt BTYPE, oldVal Value, newVal Value) {
+	switch bt {
+	case INTEGER:
+		old := oldVal.(*IntValue)
+		old.intVal = newVal.(*IntValue).intVal
+	case FLOAT:
+		old := oldVal.(*FloatValue)
+		old.floatVal = newVal.(*FloatValue).floatVal
+	case STRING:
+		old := oldVal.(*StringValue)
+		newOne := newVal.(*StringValue)
+		old.stringVal = old.stringVal[:len(newOne.stringVal)]
+		for i, b := range newOne.stringVal {
+			old.stringVal[i] = b
+		}
+	default:
+		clog.Error("Set Value Error; Not Support Value Type\n")
+	}
 }

@@ -1,31 +1,30 @@
 package testbed
 
 import (
-	"fmt"
+	"math/rand"
 	"testing"
 )
 
-func TestHashPartitioner(t *testing.T) {
-	fmt.Println("======================")
-	fmt.Println("Test Partitioner Begin")
-	fmt.Println("======================")
-	nParts := int64(100)
-	nKeys := int64(100000)
-	hp := &HashPartitioner{
-		NParts: nParts,
-	}
+func BenchmarkPartitioner(b *testing.B) {
+	NParts := int64(3)
+	keyRange := []int64{8, 10}
+	hp := NewHashPartitioner(NParts, keyRange)
 
-	for i := int64(0); i < nKeys; i++ {
-		k := Key(i)
-		p := i % nParts
-		testP := hp.GetPartition(k)
-		if testP != int(p) {
-			t.Errorf("Error Partition %v for %v", testP, p)
-		}
-	}
+	pKeysArray := hp.GetKeyArray()
+	/*for i, v := range pKeysArray {
+		fmt.Printf("Part %v: %v keys\n", i, v)
+	}*/
 
-	fmt.Printf("%v tests passed \n", nKeys)
-	fmt.Println("====================")
-	fmt.Println("Test Partitioner End")
-	fmt.Println("====================\n")
+	rnd := rand.New(rand.NewSource(1))
+
+	for n := 0; n < b.N; n++ {
+		//for i := 0; i < 10; i++ {
+		rndPart := rnd.Int63n(NParts)
+		rndRank := rnd.Int63n(pKeysArray[rndPart])
+		//fmt.Printf("part %v; rank %v\n", rndPart, rndRank)
+		key := hp.GetPartKey(int(rndPart), rndRank)
+		key[0] = 0
+		//fmt.Printf("Key: %v:%v\n", ParseKey(key, 0), ParseKey(key, 1))
+		//}
+	}
 }

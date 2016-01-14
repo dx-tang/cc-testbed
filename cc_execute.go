@@ -4,11 +4,16 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+const (
+	MAXTABLENUM    = 20
+	MAXCOLUMN      = 20
+	MAXTRACKINGKEY = 100
+)
+
 type ETransaction interface {
-	Reset(q *Query)
-	Read(k Key, partNum int, force bool) (Record, error)
-	WriteInt64(k Key, intValue int64, partNum int) error
-	WriteString(k Key, sa *StrAttr, partNum int) error
+	Reset(t Trans)
+	ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error)
+	WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error
 	Abort() TID
 	Commit() TID
 	Store() *Store
@@ -17,11 +22,10 @@ type ETransaction interface {
 
 // Partition Transaction Implementation
 type PTransaction struct {
-	padding0 [64]byte
+	padding0 [PADDING]byte
 	w        *Worker
 	s        *Store
-	newValue int64
-	padding  [64]byte
+	padding  [PADDING]byte
 }
 
 func StartPTransaction(w *Worker) *PTransaction {
@@ -32,33 +36,22 @@ func StartPTransaction(w *Worker) *PTransaction {
 	return tx
 }
 
-func (p *PTransaction) Reset(q *Query) {
+func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) Read(k Key, partNum int, force bool) (Record, error) {
-	r := p.s.GetRecord(k, partNum)
-	if r == nil {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error) {
+	s := p.s
+	v := s.GetValueByID(tableID, k, partNum, colNum)
+	if v == nil {
 		return nil, ENOKEY
 	}
-	return r, nil
+	return v, nil
 }
 
-func (p *PTransaction) WriteInt64(k Key, intValue int64, partNum int) error {
-	r := p.s.GetRecord(k, partNum)
-	pr := r.(*PRecord)
-	//success := s.SetRecord(k, intValue, partNum)
-	p.newValue = intValue
-	success := pr.UpdateValue(&p.newValue)
-	if !success {
-		return ENOKEY
-	}
-	return nil
-}
-
-func (p *PTransaction) WriteString(k Key, sa *StrAttr, partNum int) error {
+func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error {
 	s := p.s
-	success := s.SetRecord(k, sa, partNum)
+	success := s.SetValueByID(tableID, k, partNum, value, colNum)
 	if !success {
 		return ENOKEY
 	}
@@ -82,33 +75,38 @@ func (p *PTransaction) Worker() *Worker {
 }
 
 type WriteKey struct {
-	padding1 [64]byte
+	padding1 [PADDING]byte
 	k        Key
 	partNum  int
-	intVal   int64
-	v        Value
+	vals     []Value
+	cols     []int
 	locked   bool
 	rec      Record
-	padding2 [64]byte
+	padding2 [PADDING]byte
 }
 
 type ReadKey struct {
-	padding1 [64]byte
+	padding1 [PADDING]byte
 	k        Key
 	last     TID
 	rec      Record
-	padding2 [64]byte
+	padding2 [PADDING]byte
+}
+
+type TrackTable struct {
+	padding1 [PADDING]byte
+	tableID  int
+	rKeys    []ReadKey
+	wKeys    []WriteKey
+	padding2 [PADDING]byte
 }
 
 // Silo OCC Transaction Implementation
 type OTransaction struct {
-	padding0 [64]byte
-	w        *Worker
-	s        *Store
-	//rKeys       map[Key]*ReadKey
-	//wKeys       map[Key]*WriteKey
-	rKeys       []ReadKey
-	wKeys       []WriteKey
+	padding0    [64]byte
+	w           *Worker
+	s           *Store
+	tt          []TrackTable
 	dummyRecord *DRecord
 	maxSeen     TID
 	padding     [64]byte
@@ -118,37 +116,49 @@ func StartOTransaction(w *Worker) *OTransaction {
 	tx := &OTransaction{
 		w:           w,
 		s:           w.store,
-		rKeys:       make([]ReadKey, 0, 100),
-		wKeys:       make([]WriteKey, 0, 100),
+		tt:          make([]TrackTable, MAXTABLENUM),
 		dummyRecord: &DRecord{},
 	}
+
+	for j := 0; j < len(tx.tt); j++ {
+		t := &tx.tt[j]
+		t.rKeys = make([]ReadKey, 0, 100)
+		t.wKeys = make([]WriteKey, 100)
+		for i := 0; i < len(t.wKeys); i++ {
+			wk := &t.wKeys[i]
+			wk.vals = make([]Value, 0, 10+2*PADDINGINT64)
+			wk.vals = wk.vals[PADDINGINT64:PADDINGINT64]
+			wk.cols = make([]int, 0, 10+2*PADDINGINT)
+			wk.cols = wk.cols[PADDINGINT:PADDINGINT]
+		}
+		t.wKeys = t.wKeys[:0]
+	}
+
+	tx.tt = tx.tt[:0]
+
 	return tx
 }
 
-func (o *OTransaction) Reset(q *Query) {
-	//o.rKeys = make(map[Key]*ReadKey, len(q.rKeys)+len(q.wKeys))
-	//o.wKeys = make(map[Key]*WriteKey, len(q.wKeys))
-	o.rKeys = o.rKeys[:0]
-	o.wKeys = o.wKeys[:0]
-}
+func (o *OTransaction) Reset(t Trans) {
 
-func (o *OTransaction) Read(k Key, partNum int, force bool) (Record, error) {
-	if !force {
-		for i := 0; i < len(o.wKeys); i++ {
-			wk := &o.wKeys[i]
-			if wk.k == k {
-				ok, _ := wk.rec.IsUnlocked()
-				if !ok {
-					o.w.NStats[NREADABORTS]++
-					return nil, EABORT
-				}
-				o.dummyRecord.UpdateValue(&wk.intVal)
-				return o.dummyRecord, nil
-			}
+	for j := 0; j < len(o.tt); j++ {
+		t := &o.tt[j]
+		t.rKeys = t.rKeys[:0]
+		for i := 0; i < len(t.wKeys); i++ {
+			wk := &t.wKeys[i]
+			wk.vals = wk.vals[:0]
+			wk.cols = wk.cols[:0]
 		}
+		t.wKeys = t.wKeys[:0]
 	}
 
-	r := o.s.GetRecord(k, partNum)
+	o.tt = o.tt[:0]
+
+}
+
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error) {
+
+	r := o.s.GetRecByID(tableID, k, partNum)
 	if r == nil {
 		return nil, ENOKEY
 	}
@@ -162,39 +172,48 @@ func (o *OTransaction) Read(k Key, partNum int, force bool) (Record, error) {
 		return nil, EABORT
 	}
 
-	//_, ok = o.rKeys[k]
 	ok = false
-	for j := 0; j < len(o.rKeys); j++ {
-		rk := &o.rKeys[j]
-		if rk.k == k {
-			ok = true
-			break
+	for i := 0; i < len(o.tt); i++ {
+		t := &o.tt[i]
+		if t.tableID == tableID {
+			for j := 0; j < len(t.rKeys); j++ {
+				rk := &t.rKeys[j]
+				if rk.k == k {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				n := len(t.rKeys)
+				t.rKeys = t.rKeys[0 : n+1]
+				t.rKeys[n].k = k
+				t.rKeys[n].last = tid
+				t.rKeys[n].rec = r
+				ok = true
+			}
 		}
 	}
 
 	if !ok {
 		// Store this key
-		/*readKey := &ReadKey{
-			last: tid,
-			rec:  r,
-		}
-		o.rKeys[k] = readKey*/
-		n := len(o.rKeys)
-		o.rKeys = o.rKeys[0 : n+1]
-		o.rKeys[n].k = k
-		o.rKeys[n].last = tid
-		o.rKeys[n].rec = r
+		n := len(o.tt)
+		o.tt = o.tt[0 : n+1]
+		o.tt[n].tableID = tableID
+		o.tt[n].rKeys = o.tt[n].rKeys[0:1]
+		o.tt[n].rKeys[0].k = k
+		o.tt[n].rKeys[0].last = tid
+		o.tt[n].rKeys[0].rec = r
 	}
 
 	if tid > o.maxSeen {
 		o.maxSeen = tid
 	}
 
-	return r, nil
+	return r.GetValue(colNum), nil
 }
 
-func (o *OTransaction) WriteInt64(k Key, intValue int64, partNum int) error {
-	r := o.Store().GetRecord(k, partNum)
+func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error {
+	r := o.s.GetRecByID(tableID, k, partNum)
 
 	if r == nil {
 		return ENOKEY
@@ -208,121 +227,86 @@ func (o *OTransaction) WriteInt64(k Key, intValue int64, partNum int) error {
 		return EABORT
 	}
 
-	//_, ok = o.rKeys[k]
+	var t *TrackTable
 	ok = false
-	for j := 0; j < len(o.rKeys); j++ {
-		rk := &o.rKeys[j]
-		if rk.k == k {
-			ok = true
-			break
+	for i := 0; i < len(o.tt); i++ {
+		t = &o.tt[i]
+		if t.tableID == tableID {
+			for j := 0; j < len(t.rKeys); j++ {
+				rk := &t.rKeys[j]
+				if rk.k == k {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				n := len(t.rKeys)
+				t.rKeys = t.rKeys[0 : n+1]
+				t.rKeys[n].k = k
+				t.rKeys[n].last = tid
+				t.rKeys[n].rec = r
+				ok = true
+			}
 		}
 	}
 
 	if !ok {
 		// Store this key
-		/*readKey := &ReadKey{
-			last: tid,
-			rec:  r,
-		}
-		o.rKeys[k] = readKey*/
-		n := len(o.rKeys)
-		o.rKeys = o.rKeys[0 : n+1]
-		o.rKeys[n].k = k
-		o.rKeys[n].last = tid
-		o.rKeys[n].rec = r
+		n := len(o.tt)
+		o.tt = o.tt[0 : n+1]
+		t = &o.tt[n]
+		t.tableID = tableID
+		t.rKeys = t.rKeys[0:1]
+		t.rKeys[0].k = k
+		t.rKeys[0].last = tid
+		t.rKeys[0].rec = r
 	}
 
 	if tid > o.maxSeen {
 		o.maxSeen = tid
 	}
 
-	// Store this key
-	/*
-		writeKey := &WriteKey{
-			partNum: partNum,
-			v:       intValue,
-			locked:  false,
-			rec:     r,
-		}
-		o.wKeys[k] = writeKey*/
 	ok = false
-	for j := 0; j < len(o.wKeys); j++ {
-		wk := &o.wKeys[j]
+	for j := 0; j < len(t.wKeys); j++ {
+		wk := &t.wKeys[j]
 		if wk.k == k {
 			ok = true
+			n := len(wk.vals)
+			wk.vals = wk.vals[0 : n+1]
+			wk.vals[n] = value
+			wk.cols = wk.cols[0 : n+1]
+			wk.cols[n] = colNum
 			break
 		}
 	}
 	if !ok {
-		n := len(o.wKeys)
-		o.wKeys = o.wKeys[0 : n+1]
-		o.wKeys[n].k = k
-		o.wKeys[n].partNum = partNum
-		o.wKeys[n].intVal = intValue
-		o.wKeys[n].locked = false
-		o.wKeys[n].rec = r
+		n := len(t.wKeys)
+		t.wKeys = t.wKeys[0 : n+1]
+		t.wKeys[n].k = k
+		t.wKeys[n].partNum = partNum
+		t.wKeys[n].locked = false
+		t.wKeys[n].rec = r
+
+		t.wKeys[n].vals = t.wKeys[n].vals[0:1]
+		t.wKeys[n].vals[0] = value
+		t.wKeys[n].cols = t.wKeys[n].cols[0:1]
+		t.wKeys[n].cols[0] = colNum
 	}
 
 	return nil
-}
-
-func (o *OTransaction) WriteString(k Key, sa *StrAttr, partNum int) error {
-	return nil
-	/*
-		r := o.Store().GetRecord(k, partNum)
-
-		if r == nil {
-			return ENOKEY
-		}
-
-		// Read this record
-		ok, tid := r.IsUnlocked()
-
-		if !ok {
-			o.w.NStats[NREADABORTS]++
-			return EABORT
-		}
-
-		_, ok = o.rKeys[k]
-
-		if !ok {
-			// Store this key
-			readKey := &ReadKey{
-				last: tid,
-				rec:  r,
-			}
-			o.rKeys[k] = readKey
-		}
-
-		if tid > o.maxSeen {
-			o.maxSeen = tid
-		}
-
-		// Store this key
-		writeKey := &WriteKey{
-			partNum: partNum,
-			v:       sa,
-			locked:  false,
-			rec:     r,
-		}
-		o.wKeys[k] = writeKey
-
-		return nil
-	*/
 }
 
 func (o *OTransaction) Abort() TID {
-	/*for _, wk := range o.wKeys {
-		if wk.locked {
-			wk.rec.Unlock(0)
-		}
-	}*/
-	for i := 0; i < len(o.wKeys); i++ {
-		wk := &o.wKeys[i]
-		if wk.locked {
-			wk.rec.Unlock(0)
+	for j := 0; j < len(o.tt); j++ {
+		t := &o.tt[j]
+		for i := 0; i < len(t.wKeys); i++ {
+			wk := &t.wKeys[i]
+			if wk.locked {
+				wk.rec.Unlock(0)
+			}
 		}
 	}
+
 	return 0
 }
 
@@ -330,17 +314,20 @@ func (o *OTransaction) Commit() TID {
 
 	// Phase 1: Lock all write keys
 	//for _, wk := range o.wKeys {
-	for i := 0; i < len(o.wKeys); i++ {
-		wk := &o.wKeys[i]
-		var former TID
-		var ok bool
-		if ok, former = wk.rec.Lock(); !ok {
-			o.w.NStats[NLOCKABORTS]++
-			return o.Abort()
-		}
-		wk.locked = true
-		if former > o.maxSeen {
-			o.maxSeen = former
+	for j := 0; j < len(o.tt); j++ {
+		t := &o.tt[j]
+		for i := 0; i < len(t.wKeys); i++ {
+			wk := &t.wKeys[i]
+			var former TID
+			var ok bool
+			if ok, former = wk.rec.Lock(); !ok {
+				o.w.NStats[NLOCKABORTS]++
+				return o.Abort()
+			}
+			wk.locked = true
+			if former > o.maxSeen {
+				o.maxSeen = former
+			}
 		}
 	}
 
@@ -355,41 +342,48 @@ func (o *OTransaction) Commit() TID {
 
 	// Phase 2: Check conflicts
 	//for k, rk := range o.rKeys {
-	for i := 0; i < len(o.rKeys); i++ {
-		k := o.rKeys[i].k
-		rk := &o.rKeys[i]
-		//verify whether TID has changed
-		var ok1, ok2 bool
-		var tmpTID TID
-		ok1, tmpTID = rk.rec.IsUnlocked()
-		if tmpTID != rk.last {
-			o.w.NStats[NRCHANGEABORTS]++
-			return o.Abort()
-		}
-
-		// Check whether read key is not in wKeys
-		//_, ok2 = o.wKeys[k]
-		ok2 = false
-		for j := 0; j < len(o.wKeys); j++ {
-			wk := &o.wKeys[j]
-			if wk.k == k {
-				ok2 = true
-				break
+	for j := 0; j < len(o.tt); j++ {
+		t := &o.tt[j]
+		for i := 0; i < len(t.rKeys); i++ {
+			k := t.rKeys[i].k
+			rk := &t.rKeys[i]
+			//verify whether TID has changed
+			var ok1, ok2 bool
+			var tmpTID TID
+			ok1, tmpTID = rk.rec.IsUnlocked()
+			if tmpTID != rk.last {
+				o.w.NStats[NRCHANGEABORTS]++
+				return o.Abort()
 			}
-		}
 
-		if !ok1 && !ok2 {
-			o.w.NStats[NRWABORTS]++
-			return o.Abort()
+			// Check whether read key is not in wKeys
+			ok2 = false
+			for j := 0; j < len(t.wKeys); j++ {
+				wk := &t.wKeys[j]
+				if wk.k == k {
+					ok2 = true
+					break
+				}
+			}
+
+			if !ok1 && !ok2 {
+				o.w.NStats[NRWABORTS]++
+				return o.Abort()
+			}
 		}
 	}
 
 	// Phase 3: Apply all writes
-	for i, _ := range o.wKeys {
-		wk := &o.wKeys[i]
-		//wk.rec.UpdateValue(wk.v)
-		wk.rec.UpdateValue(&wk.intVal)
-		wk.rec.Unlock(tid)
+	for p := 0; p < len(o.tt); p++ {
+		t := &o.tt[p]
+		for i, _ := range t.wKeys {
+			wk := &t.wKeys[i]
+			for j := 0; j < len(wk.vals); j++ {
+				wk.rec.SetValue(wk.vals[j], wk.cols[j])
+			}
+
+			wk.rec.Unlock(tid)
+		}
 	}
 
 	return tid

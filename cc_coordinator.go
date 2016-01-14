@@ -7,7 +7,7 @@ import (
 )
 
 type Coordinator struct {
-	padding0     [128]byte
+	padding0     [PADDING]byte
 	Workers      []*Worker
 	store        *Store
 	NStats       []int64
@@ -15,7 +15,7 @@ type Coordinator struct {
 	NExecute     time.Duration
 	NWait        time.Duration
 	NLockAcquire int64
-	padding1     [128]byte
+	padding1     [PADDING]byte
 }
 
 const (
@@ -46,8 +46,6 @@ func (coord *Coordinator) gatherStats() {
 		coord.NStats[NENOKEY] += worker.NStats[NENOKEY]
 		coord.NStats[NTXN] += worker.NStats[NTXN]
 		coord.NStats[NCROSSTXN] += worker.NStats[NCROSSTXN]
-		coord.NStats[NREADKEYS] += worker.NStats[NREADKEYS]
-		coord.NStats[NWRITEKEYS] += worker.NStats[NWRITEKEYS]
 		coord.NGen += worker.NGen
 		coord.NExecute += worker.NExecute
 		coord.NWait += worker.NWait
@@ -65,8 +63,6 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 	f.WriteString(fmt.Sprintf("Issue %v Transactions in Total\n", coord.NStats[NTXN]))
 	f.WriteString(fmt.Sprintf("Transaction Generation Spends %v secs\n", float64(coord.NGen.Nanoseconds())/float64(PERSEC)))
 	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NExecute.Nanoseconds())/float64(PERSEC)))
-	f.WriteString(fmt.Sprintf("Read %v Keys\n", coord.NStats[NREADKEYS]))
-	f.WriteString(fmt.Sprintf("Write %v Keys\n", coord.NStats[NWRITEKEYS]))
 
 	if *SysType == PARTITION {
 		f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))

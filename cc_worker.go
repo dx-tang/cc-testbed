@@ -16,15 +16,13 @@ const (
 	NENOKEY
 	NTXN
 	NCROSSTXN
-	NREADKEYS
-	NWRITEKEYS
 	LAST_STAT
 )
 
-type TransactionFunc func(*Query, ETransaction) (*Result, error)
+type TransactionFunc func(Trans, ETransaction) (Value, error)
 
 type Worker struct {
-	padding      [64]byte
+	padding      [PADDING]byte
 	ID           int
 	next         TID
 	epoch        TID
@@ -37,7 +35,7 @@ type Worker struct {
 	NWait        time.Duration
 	NCrossWait   time.Duration
 	NLockAcquire int64
-	padding2     [64]byte
+	padding2     [PADDING]byte
 }
 
 func (w *Worker) Register(fn int, transaction TransactionFunc) {
@@ -60,27 +58,28 @@ func NewWorker(id int, s *Store) *Worker {
 		clog.Error("OCC and 2PL not supported yet")
 	}
 
-	w.Register(ADD_ONE, AddOneTXN)
-	w.Register(RANDOM_UPDATE_INT, UpdateIntTXN)
-	w.Register(RANDOM_UPDATE_STRING, UpdateStringTXN)
+	// SmallBank Workload
+	w.Register(AMALGAMATE, Amalgamate)
+	w.Register(SENDPAYMENT, SendPayment)
+	w.Register(BALANCE, Balance)
+	w.Register(WRITECHECK, WriteCheck)
+	w.Register(DEPOSITCHECKING, DepositChecking)
+	w.Register(TRANSACTIONSAVINGS, TransactionSavings)
 
 	return w
 }
 
-func (w *Worker) doTxn(q *Query) (*Result, error) {
-	if q.TXN >= LAST_TXN {
+func (w *Worker) doTxn(t Trans) (Value, error) {
+	txn := t.GetTXN()
+	if txn >= LAST_TXN {
 		debug.PrintStack()
-		clog.Error("Unknown transaction number %v\n", q.TXN)
+		clog.Error("Unknown transaction number %v\n", txn)
 	}
 	w.NStats[NTXN]++
 
-	if len(q.accessParts) > 1 {
-		w.NStats[NCROSSTXN]++
-	}
+	w.E.Reset(t)
 
-	w.E.Reset(q)
-
-	x, err := w.txns[q.TXN](q, w.E)
+	x, err := w.txns[txn](t, w.E)
 
 	if err == EABORT {
 		w.NStats[NABORTS]++
@@ -88,25 +87,34 @@ func (w *Worker) doTxn(q *Query) (*Result, error) {
 	} else if err == ENOKEY {
 		w.NStats[NENOKEY]++
 		return nil, err
+	} else if err == ELACKBALANCE {
+		w.NStats[NABORTS]++
+	} else if err == ENEGSAVINGS {
+		w.NStats[NABORTS]++
 	}
-
-	w.NStats[NREADKEYS] += int64(len(q.rKeys))
-	w.NStats[NWRITEKEYS] += int64(len(q.wKeys))
 
 	return x, err
 	//return nil, nil
 }
 
-func (w *Worker) One(q *Query) (*Result, error) {
+func (w *Worker) One(t Trans) (Value, error) {
+	var ap []int
 	if *SysType == PARTITION {
 		s := w.store
-		w.NLockAcquire += int64(len(q.accessParts))
 		//tm := time.Now()
 		// Acquire all locks
 
-		for _, p := range q.accessParts {
+		ap = t.GetAccessParts()
+		w.NLockAcquire += int64(len(ap))
+
+		if len(ap) > 1 {
+			w.NStats[NCROSSTXN]++
+		}
+
+		for _, p := range ap {
 			//s.store[p].Lock()
-			s.locks[p].Lock()
+			//s.locks[p].Lock()
+			s.spinLock[p].Lock()
 			//s.locks[p].custLock.Lock()
 		}
 
@@ -116,13 +124,14 @@ func (w *Worker) One(q *Query) (*Result, error) {
 		//}
 	}
 
-	r, err := w.doTxn(q)
+	r, err := w.doTxn(t)
 
 	if *SysType == PARTITION {
 		s := w.store
-		for _, p := range q.accessParts {
+		for _, p := range ap {
 			//s.store[p].Unlock()
-			s.locks[p].Unlock()
+			//s.locks[p].Unlock()
+			s.spinLock[p].Unlock()
 			//s.locks[p].custLock.Unlock()
 		}
 	}

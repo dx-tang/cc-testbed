@@ -1,18 +1,58 @@
 package testbed
 
-func CKey(x int64) Key {
-	/*
-		var b [16]byte
-		var i uint64
-		for i = 0; i < 8; i++ {
-			b[i] = byte(x >> (i * 8))
-		}
-		return Key(b)
-	*/
-	return Key(x)
+import (
+	"github.com/totemtang/cc-testbed/clog"
+)
+
+const (
+	ONEKEYWIDTH  = 8
+	KEYLENTH     = 4
+	KEYLENTHBYTE = 32
+)
+
+type Key [KEYLENTHBYTE]byte
+type OneKey int64
+
+// Composite Keys; Not Used Yet
+type CompKey struct {
+	keysArray []OneKey
 }
 
-func ParseKey(key Key) int64 {
-	//intKey := int64(key[0]) + int64(key[1])<<8 + int64(key[2])<<16 + int64(key[3])<<24 + int64(key[4])<<32 + int64(key[5])<<40 + int64(key[6])<<48 + int64(key[7])<<56
-	return int64(key)
+func CKey(x []OneKey) Key {
+	var k Key
+	var i, j uint64
+	for j = 0; j < uint64(len(x)); j++ {
+		for i = 0; i < ONEKEYWIDTH; i++ {
+			k[j*ONEKEYWIDTH+i] = byte(uint64(x[j]) >> (i * 8))
+		}
+	}
+	return k
+}
+
+// Update an existing key
+func UKey(x []OneKey, k *Key) {
+	var i, j uint64
+	for i := 0; i < KEYLENTHBYTE; i++ {
+		(*k)[i] = byte(0)
+	}
+	for j = 0; j < uint64(len(x)); j++ {
+		for i = 0; i < ONEKEYWIDTH; i++ {
+			(*k)[j*ONEKEYWIDTH+i] = byte(uint64(x[j]) >> (i * 8))
+		}
+	}
+}
+
+func ParseKey(key Key, index int) OneKey {
+	if index >= KEYLENTH {
+		clog.Error("Index %v out of range for key length %v\n", index, KEYLENTH)
+	}
+	var onekey int64
+	/*
+		for i := uint(0); i < ONEKEYWIDTH; i++ {
+			onekey += int64(key[index*ONEKEYWIDTH+int(i)]) << (i * 8)
+		}*/
+	for i := ONEKEYWIDTH - 1; i >= 0; i-- {
+		onekey += int64(key[index*ONEKEYWIDTH+i] << (uint(i) * 8))
+	}
+	return OneKey(onekey)
 }

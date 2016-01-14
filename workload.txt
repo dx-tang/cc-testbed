@@ -1,0 +1,11 @@
+Schema
+3
+ACCOUNTS:int:string
+SAVINGS:int:float
+CHECKING:int:float
+
+KeyRange
+3
+ACCOUNTS:10:10
+SAVINGS:10:10
+CHECKING:10:10
