@@ -142,8 +142,7 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 			} else if s > 1 {
 				kg = NewZipfRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), s, basic.isPartition)
 			} else {
-				s = 0 - s
-				kg = NewHotColdRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), s, basic.isPartition)
+				kg = NewHotColdRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), -s, basic.isPartition)
 			}
 			gen.keyGens[j] = kg
 			gen.partitioner[j] = p

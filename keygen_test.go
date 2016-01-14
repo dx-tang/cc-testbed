@@ -14,7 +14,7 @@ func BenchmarkHotColdRand(b *testing.B) {
 
 	var kg KeyGen
 
-	kg = NewHotColdRand(0, nKeys, int(NParts), pKeysArray, 1090, true)
+	kg = NewHotColdRand(0, nKeys, int(NParts), pKeysArray, 5050, true)
 
 	hotRange := int64(10) * pKeysArray[0] / 100
 
@@ -22,14 +22,15 @@ func BenchmarkHotColdRand(b *testing.B) {
 	hotRate := 0
 
 	for n := 0; n < b.N; n++ {
-		rk := kg.GetPartRank(0)
+		rk := kg.GetPartRank(1)
 		if rk < hotRange {
 			hotRate++
 		}
 		count++
 
-		key := hp.GetPartKey(0, rk)
-		key[0]++
+		key := hp.GetPartKey(1, rk)
+		key[0] = 0
+		//fmt.Printf("%v:%v\n", ParseKey(key, 0), ParseKey(key, 1))
 	}
 	fmt.Printf("%v Tests; %.2f Hot Data\n", count, float64(hotRate)/float64(count))
 }

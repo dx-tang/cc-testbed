@@ -49,6 +49,8 @@ func main() {
 
 	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
 	coor := testbed.NewCoordinator(nWorkers, sb.GetStore())
+	
+	clog.Info("Done with Populating Store\n")
 
 	var wg sync.WaitGroup
 	for i := 0; i < nWorkers; i++ {
