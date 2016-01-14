@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ var cr = flag.Float64("cr", 0, "percentage of cross-partition transactions")
 var wl = flag.String("wl", "", "workload to be used")
 var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
 var tp = flag.String("tp", "100:0:0:0:0:0", "Percetage of Each Transaction")
+var out = flag.String("out", "data.out", "output file path")
 
 const (
 	TRIAL = 5
@@ -48,8 +50,8 @@ func main() {
 	}
 
 	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
-	coor := testbed.NewCoordinator(nWorkers, sb.GetStore())
-	
+	coord := testbed.NewCoordinator(nWorkers, sb.GetStore())
+
 	clog.Info("Done with Populating Store\n")
 
 	var wg sync.WaitGroup
@@ -57,7 +59,7 @@ func main() {
 		wg.Add(1)
 		go func(n int) {
 			var txn int64
-			w := coor.Workers[n]
+			w := coord.Workers[n]
 			gen := sb.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
 			for {
@@ -83,5 +85,13 @@ func main() {
 		}(i)
 	}
 	wg.Wait()
+
+	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	defer f.Close()
+	coord.PrintStats(f)
+	//sb.PrintChecking()
 
 }

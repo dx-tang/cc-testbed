@@ -93,8 +93,8 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 		w.NStats[NABORTS]++
 	}
 
-	return x, err
-	//return nil, nil
+	//return x, err
+	return x, nil
 }
 
 func (w *Worker) One(t Trans) (Value, error) {

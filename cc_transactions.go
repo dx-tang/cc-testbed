@@ -92,6 +92,10 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
+	if exec.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return nil, nil
 }
 
@@ -161,6 +165,10 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
+	if exec.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return nil, nil
 }
 
@@ -195,6 +203,10 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 	}
 
 	ret.floatVal += val.(*FloatValue).floatVal
+
+	if exec.Commit() == 0 {
+		return nil, EABORT
+	}
 
 	return ret, nil
 }
@@ -241,6 +253,10 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 		exec.WriteValue(CHECKING, acct, part, fv0, 1)
 	}
 
+	if exec.Commit() == 0 {
+		return nil, EABORT
+	}
+
 	return nil, nil
 }
 
@@ -272,6 +288,10 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 	err = exec.WriteValue(CHECKING, acct, part, fv0, 1)
 	if err != nil {
 		return nil, err
+	}
+
+	if exec.Commit() == 0 {
+		return nil, EABORT
 	}
 
 	return nil, nil
@@ -310,6 +330,10 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 	} else {
 		fv0.floatVal = sum
 		err = exec.WriteValue(SAVINGS, acct, part, fv0, 1)
+	}
+
+	if exec.Commit() == 0 {
+		return nil, EABORT
 	}
 
 	return nil, nil

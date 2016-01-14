@@ -9,6 +9,11 @@ import (
 )
 
 const (
+	BAL  = 1000000
+	AMMT = 1
+)
+
+const (
 	ACCOUNTS = iota
 	SAVINGS
 	CHECKING
@@ -72,6 +77,7 @@ func (s *SBTransGen) GenOneTrans() Trans {
 
 	t.TXN = txn + SMALLBANKBASE
 
+	var tmpPi int
 	switch t.TXN {
 	case BALANCE: // Get Balance from One Account
 		t.accessParts = t.accessParts[:1]
@@ -83,15 +89,23 @@ func (s *SBTransGen) GenOneTrans() Trans {
 		t.accessParts[0] = pi
 		t.accoutID = t.accoutID[:1]
 		t.accoutID[0] = gen.GetKey(CHECKING, pi)
-		t.ammount.floatVal = float64(10.0)
+		t.ammount.floatVal = float64(AMMT)
 	case AMALGAMATE:
 		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			t.accessParts[0] = pi
-			t.accessParts[1] = (pi + rnd.Intn(nParts-1) + 1) % nParts
 			t.accoutID = t.accoutID[:2]
-			t.accoutID[0] = gen.GetKey(CHECKING, pi)
-			t.accoutID[1] = gen.GetKey(CHECKING, t.accessParts[1])
+			tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
+			if tmpPi > pi {
+				t.accessParts[0] = pi
+				t.accessParts[1] = tmpPi
+				t.accoutID[0] = gen.GetKey(CHECKING, pi)
+				t.accoutID[1] = gen.GetKey(CHECKING, tmpPi)
+			} else {
+				t.accessParts[0] = tmpPi
+				t.accessParts[1] = pi
+				t.accoutID[0] = gen.GetKey(CHECKING, tmpPi)
+				t.accoutID[1] = gen.GetKey(CHECKING, pi)
+			}
 		} else {
 			t.accessParts = t.accessParts[:1]
 			t.accessParts[0] = pi
@@ -108,11 +122,19 @@ func (s *SBTransGen) GenOneTrans() Trans {
 	case SENDPAYMENT:
 		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			t.accessParts[0] = pi
-			t.accessParts[1] = (pi + rnd.Intn(nParts-1) + 1) % nParts
 			t.accoutID = t.accoutID[:2]
-			t.accoutID[0] = gen.GetKey(CHECKING, pi)
-			t.accoutID[1] = gen.GetKey(CHECKING, t.accessParts[1])
+			tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
+			if tmpPi > pi {
+				t.accessParts[0] = pi
+				t.accessParts[1] = tmpPi
+				t.accoutID[0] = gen.GetKey(CHECKING, pi)
+				t.accoutID[1] = gen.GetKey(CHECKING, tmpPi)
+			} else {
+				t.accessParts[0] = tmpPi
+				t.accessParts[1] = pi
+				t.accoutID[0] = gen.GetKey(CHECKING, tmpPi)
+				t.accoutID[1] = gen.GetKey(CHECKING, pi)
+			}
 		} else {
 			t.accessParts = t.accessParts[:1]
 			t.accessParts[0] = pi
@@ -126,19 +148,19 @@ func (s *SBTransGen) GenOneTrans() Trans {
 				}
 			}
 		}
-		t.ammount.floatVal = 10.0
+		t.ammount.floatVal = float64(AMMT)
 	case DEPOSITCHECKING:
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
 		t.accoutID = t.accoutID[:1]
 		t.accoutID[0] = gen.GetKey(CHECKING, pi)
-		t.ammount.floatVal = float64(10.0)
+		t.ammount.floatVal = float64(AMMT)
 	case TRANSACTIONSAVINGS:
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
 		t.accoutID = t.accoutID[:1]
 		t.accoutID[0] = gen.GetKey(SAVINGS, pi)
-		t.ammount.floatVal = float64(10.0)
+		t.ammount.floatVal = float64(AMMT)
 	default:
 		clog.Error("SmallBank does not support transaction %v\n", t.TXN)
 	}
@@ -182,7 +204,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 	scVal := make([]Value, 2)
 
 	iv := &IntValue{}
-	fv := &FloatValue{floatVal: float64(100)}
+	fv := &FloatValue{floatVal: float64(BAL)}
 	sv := allocStrVal()
 	sv.stringVal = sv.stringVal[:4]
 	for i := 0; i < 4; i++ {
@@ -274,4 +296,38 @@ func (s *SBWorkload) GetTransGen(partIndex int) TransGen {
 
 func (s *SBWorkload) GetStore() *Store {
 	return s.basic.store
+}
+
+func (s *SBWorkload) PrintChecking() {
+	var total float64
+	nKeys := s.basic.nKeys[CHECKING]
+	gen := s.basic.generators[0]
+	keyRange := s.basic.IDToKeyRange[CHECKING]
+	keyLen := len(keyRange)
+	compKey := make([]OneKey, keyLen)
+	store := s.basic.store
+
+	var val Value
+	var k int = 0
+	for i := int64(0); i < nKeys; i++ {
+		key := CKey(compKey)
+		partNum := gen.GetPart(CHECKING, key)
+
+		val = store.GetValueByID(CHECKING, key, partNum, 1)
+		total += val.(*FloatValue).floatVal
+
+		for int64(compKey[k]+1) >= keyRange[k] {
+			compKey[k] = 0
+			k++
+			if k >= keyLen {
+				break
+			}
+		}
+		if k < keyLen {
+			compKey[k]++
+			k = 0
+		}
+	}
+
+	clog.Info("Total Checking Balance %v\n", total)
 }
