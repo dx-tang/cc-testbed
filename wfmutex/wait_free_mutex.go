@@ -55,8 +55,9 @@ func (rw *WFMutex) Unlock(t uint64) bool {
 		fmt.Printf("Bad TID %v\n", t)
 		return false
 	}
-	if t < locked_q {
-		t = locked_q
+	x = locked_q & (LOCKED - 1)
+	if t < x {
+		t = x
 	}
 	done := atomic.CompareAndSwapUint64(&rw.w, locked_q, t)
 	if !done {
