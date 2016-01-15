@@ -302,7 +302,7 @@ func (o *OTransaction) Abort() TID {
 		for i := 0; i < len(t.wKeys); i++ {
 			wk := &t.wKeys[i]
 			if wk.locked {
-				wk.rec.Unlock(0)
+				wk.rec.Unlock(o.maxSeen)
 			}
 		}
 	}
