@@ -314,13 +314,15 @@ func (o *OTransaction) Commit() TID {
 
 	// Phase 1: Lock all write keys
 	//for _, wk := range o.wKeys {
+
 	for j := 0; j < len(o.tt); j++ {
 		t := &o.tt[j]
 		for i := 0; i < len(t.wKeys); i++ {
 			wk := &t.wKeys[i]
 			var former TID
 			var ok bool
-			if ok, former = wk.rec.Lock(); !ok {
+			ok, former = wk.rec.Lock()
+			if !ok {
 				o.w.NStats[NLOCKABORTS]++
 				return o.Abort()
 			}
@@ -383,6 +385,7 @@ func (o *OTransaction) Commit() TID {
 			}
 
 			wk.rec.Unlock(tid)
+			wk.locked = false
 		}
 	}
 

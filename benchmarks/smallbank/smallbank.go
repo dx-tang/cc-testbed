@@ -92,6 +92,6 @@ func main() {
 	}
 	defer f.Close()
 	coord.PrintStats(f)
-	//sb.PrintChecking()
+	sb.PrintChecking()
 
 }

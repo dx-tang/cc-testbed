@@ -157,11 +157,9 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	}
 	bal := val.(*FloatValue).floatVal
 
-	/*
-		if bal < ammt.floatVal {
-			return nil, ELACKBALANCE
-		}
-	*/
+	if bal < ammt.floatVal {
+		return nil, ELACKBALANCE
+	}
 
 	fv0.floatVal = bal - ammt.floatVal
 
