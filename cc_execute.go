@@ -358,8 +358,8 @@ func (o *OTransaction) Commit() TID {
 
 			// Check whether read key is not in wKeys
 			ok2 = false
-			for j := 0; j < len(t.wKeys); j++ {
-				wk := &t.wKeys[j]
+			for p := 0; p < len(t.wKeys); p++ {
+				wk := &t.wKeys[p]
 				if wk.k == k {
 					ok2 = true
 					break
