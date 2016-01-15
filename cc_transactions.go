@@ -65,29 +65,43 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	sum := val.(*FloatValue).floatVal
+	//sum := val.(*FloatValue).floatVal
+	fv0.floatVal = val.(*FloatValue).floatVal
 
 	val, err = exec.ReadValue(CHECKING, acctId1, part1, 1)
 	if err != nil {
 		return nil, err
 	}
-	sum += val.(*FloatValue).floatVal
+	//sum += val.(*FloatValue).floatVal
+	fv1.floatVal = val.(*FloatValue).floatVal
 
-	val, err = exec.ReadValue(SAVINGS, acctId1, part1, 1)
+	/*val, err = exec.ReadValue(SAVINGS, acctId1, part1, 1)
 	if err != nil {
 		return nil, err
 	}
-	sum = val.(*FloatValue).floatVal - sum
+	sum = val.(*FloatValue).floatVal - sum*/
 
-	fv0.floatVal = float64(0)
-	fv1.floatVal = sum
+	//fv0.floatVal = float64(0)
+	//fv1.floatVal = sum
 
-	err = exec.WriteValue(CHECKING, acctId0, part0, fv0, 1)
+	/*
+		err = exec.WriteValue(CHECKING, acctId0, part0, fv0, 1)
+		if err != nil {
+			return nil, err
+		}
+
+		err = exec.WriteValue(SAVINGS, acctId1, part1, fv1, 1)
+		if err != nil {
+			return nil, err
+		}
+	*/
+
+	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, 1)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.WriteValue(SAVINGS, acctId1, part1, fv1, 1)
+	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, 1)
 	if err != nil {
 		return nil, err
 	}
