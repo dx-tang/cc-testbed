@@ -261,10 +261,16 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 
 	if sum < ammt.floatVal {
 		fv0.floatVal = checkBal - ammt.floatVal + float64(1)
-		exec.WriteValue(CHECKING, acct, part, fv0, 1)
+		err = exec.WriteValue(CHECKING, acct, part, fv0, 1)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		fv0.floatVal = checkBal - ammt.floatVal
-		exec.WriteValue(CHECKING, acct, part, fv0, 1)
+		err = exec.WriteValue(CHECKING, acct, part, fv0, 1)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if exec.Commit() == 0 {
@@ -344,6 +350,9 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 	} else {
 		fv0.floatVal = sum
 		err = exec.WriteValue(SAVINGS, acct, part, fv0, S_BAL)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if exec.Commit() == 0 {

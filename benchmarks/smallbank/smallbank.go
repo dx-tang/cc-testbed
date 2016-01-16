@@ -18,6 +18,7 @@ var wl = flag.String("wl", "", "workload to be used")
 var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
 var tp = flag.String("tp", "100:0:0:0:0:0", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
+var stat = flag.String("stat", "stat.out", "statistics")
 
 const (
 	TRIAL = 5
@@ -58,7 +59,7 @@ func main() {
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)
 		go func(n int) {
-			var txn int64
+			//var txn int64
 			w := coord.Workers[n]
 			gen := sb.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
@@ -68,6 +69,8 @@ func main() {
 					break
 				}
 				t := gen.GenOneTrans()
+				w.NGen += time.Since(tm)
+				tm = time.Now()
 				for j := 0; j < TRIAL; j++ {
 					_, err := w.One(t)
 					if err == nil {
@@ -78,9 +81,10 @@ func main() {
 						clog.Error("%s\n", err.Error())
 					}
 				}
-				txn++
+				w.NExecute += time.Since(tm)
+				//txn++
 			}
-			clog.Info("Worker %d issues %d transactions\n", n, txn)
+			//clog.Info("Worker %d issues %d transactions\n", n, txn)
 			wg.Done()
 		}(i)
 	}
@@ -92,6 +96,16 @@ func main() {
 	}
 	defer f.Close()
 	coord.PrintStats(f)
-	sb.PrintChecking()
+
+	if *stat != "" {
+		st, err := os.OpenFile(*stat, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+		defer st.Close()
+
+		//bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS]))
+		st.WriteString(fmt.Sprintf("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
+	}
 
 }
