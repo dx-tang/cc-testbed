@@ -213,6 +213,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 }
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error {
+
 	r := o.s.GetRecByID(tableID, k, partNum)
 
 	if r == nil {
@@ -247,6 +248,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 				t.rKeys[n].rec = r
 				ok = true
 			}
+			break
 		}
 	}
 

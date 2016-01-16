@@ -8,21 +8,134 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+// Transaction Parameters
 const (
 	BAL  = 1000000
 	AMMT = 1
 )
 
+// Table Reference Constants
 const (
 	ACCOUNTS = iota
 	SAVINGS
 	CHECKING
 )
 
+// Column Reference Constants
 const (
-	SBTRANSNUM = 6
-	SBMAXPARTS = 2
+	A_ID = iota
+	A_NAME
 )
+
+const (
+	C_ID = iota
+	C_BAL
+)
+
+const (
+	S_ID = iota
+	S_BAL
+)
+
+const (
+	SBTRANSNUM  = 6
+	SBMAXPARTS  = 2
+	SBSTRMAXLEN = 100
+)
+
+type AccoutsTuple struct {
+	padding1 [64]byte
+	accoutID int64
+	name     []byte
+	padding2 [64]byte
+}
+
+func (at *AccoutsTuple) GetValue(col int) Value {
+	switch col {
+	case 0:
+		return &at.accoutID
+	case 1:
+		return &at.name
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+	return nil
+}
+
+func (at *AccoutsTuple) SetValue(val Value, col int) {
+	switch col {
+	case 0:
+		at.accoutID = val.(*IntValue).intVal
+	case 1:
+		newOne := val.(*StringValue).stringVal
+		at.name = at.name[0:len(newOne)]
+		for i, b := range newOne {
+			at.name[i] = b
+		}
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+}
+
+type CheckingTuple struct {
+	padding1 [64]byte
+	accoutID int64
+	balance  float64
+	padding2 [64]byte
+}
+
+func (ct *CheckingTuple) GetValue(col int) Value {
+	switch col {
+	case 0:
+		return &ct.accoutID
+	case 1:
+		return &ct.balance
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+	return nil
+}
+
+func (ct *CheckingTuple) SetValue(val Value, col int) {
+	switch col {
+	case 0:
+		ct.accoutID = val.(*IntValue).intVal
+	case 1:
+		ct.balance = val.(*FloatValue).floatVal
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+}
+
+type SavingsTuple struct {
+	padding1 [64]byte
+	accoutID int64
+	balance  float64
+	padding2 [64]byte
+}
+
+func (st *SavingsTuple) GetValue(col int) Value {
+	switch col {
+	case 0:
+		return &st.accoutID
+	case 1:
+		return &st.balance
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+	return nil
+}
+
+func (st *SavingsTuple) SetValue(val Value, col int) {
+	switch col {
+	case 0:
+		st.accoutID = val.(*IntValue).intVal
+	case 1:
+		st.balance = val.(*FloatValue).floatVal
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+}
 
 type SBTrans struct {
 	padding1    [PADDING]byte
@@ -200,23 +313,6 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 	sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s)
 
 	// Populating the Store
-	accVal := make([]Value, 2)
-	scVal := make([]Value, 2)
-
-	iv := &IntValue{}
-	fv := &FloatValue{floatVal: float64(BAL)}
-	sv := allocStrVal()
-	sv.stringVal = sv.stringVal[:4]
-	for i := 0; i < 4; i++ {
-		sv.stringVal[i] = "name"[i]
-	}
-
-	accVal[0] = iv
-	accVal[1] = sv
-
-	scVal[0] = iv
-	scVal[1] = fv
-
 	hp := sbWorkload.basic.generators[0]
 	for i := 0; i < sbWorkload.basic.tableCount; i++ {
 		keyRange := sbWorkload.basic.IDToKeyRange[i]
@@ -232,13 +328,29 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 			partNum := hp.GetPart(i, key)
 
 			// Generate One Value
-			iv.intVal = int64(compKey[0])
 			if i == ACCOUNTS {
-				store.CreateRecByID(i, key, partNum, accVal)
+				at := &AccoutsTuple{
+					accoutID: int64(compKey[0]),
+					name:     make([]byte, 0, SBSTRMAXLEN+2*PADDINGBYTE),
+				}
+				at.name = at.name[PADDINGBYTE:PADDINGBYTE]
+				at.name = at.name[:4]
+				for p := 0; p < 4; p++ {
+					at.name[p] = "name"[p]
+				}
+				store.CreateRecByID(i, key, partNum, at)
 			} else if i == SAVINGS {
-				store.CreateRecByID(i, key, partNum, scVal)
+				st := &SavingsTuple{
+					accoutID: int64(compKey[0]),
+					balance:  float64(BAL),
+				}
+				store.CreateRecByID(i, key, partNum, st)
 			} else { // CHECKING
-				store.CreateRecByID(i, key, partNum, scVal)
+				ct := &CheckingTuple{
+					accoutID: int64(compKey[0]),
+					balance:  float64(BAL),
+				}
+				store.CreateRecByID(i, key, partNum, ct)
 			}
 
 			for int64(compKey[k]+1) >= keyRange[k] {
@@ -313,8 +425,8 @@ func (s *SBWorkload) PrintChecking() {
 		key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
 
-		val = store.GetValueByID(CHECKING, key, partNum, 1)
-		total += val.(*FloatValue).floatVal
+		val = store.GetValueByID(CHECKING, key, partNum, C_BAL)
+		total += *val.(*float64)
 
 		for int64(compKey[k]+1) >= keyRange[k] {
 			compKey[k] = 0

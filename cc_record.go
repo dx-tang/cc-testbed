@@ -5,9 +5,10 @@ import (
 	"github.com/totemtang/cc-testbed/wfmutex"
 )
 
-const (
-	STRMAXLEN = 100
-)
+type Tuple interface {
+	GetValue(col int) Value
+	SetValue(val Value, col int)
+}
 
 type Value interface{}
 
@@ -38,14 +39,7 @@ type Record interface {
 	SetTID(tid TID)
 }
 
-func allocStrVal() *StringValue {
-	sv := &StringValue{
-		stringVal: make([]byte, 0, STRMAXLEN+2*PADDINGBYTE),
-	}
-	sv.stringVal = sv.stringVal[PADDINGBYTE:PADDINGBYTE]
-	return sv
-}
-
+/*
 func allocAttr(valType BTYPE, val Value) Value {
 	switch valType {
 	case INTEGER:
@@ -70,19 +64,15 @@ func allocAttr(valType BTYPE, val Value) Value {
 		clog.Error("Value Type Not Supported")
 		return nil
 	}
-}
+}*/
 
-func MakeRecord(table *Table, k Key, v []Value) Record {
+func MakeRecord(table *Table, k Key, tuple Tuple) Record {
 
 	if *SysType == PARTITION {
 		pr := &PRecord{
 			table: table,
 			key:   k,
-			value: make([]Value, len(v)),
-		}
-
-		for i := 0; i < len(v); i++ {
-			pr.value[i] = allocAttr(table.valueSchema[i], v[i])
+			tuple: tuple,
 		}
 
 		return pr
@@ -90,12 +80,8 @@ func MakeRecord(table *Table, k Key, v []Value) Record {
 		or := &ORecord{
 			table: table,
 			key:   k,
-			value: make([]Value, len(v)),
+			tuple: tuple,
 			last:  wfmutex.WFMutex{},
-		}
-
-		for i := 0; i < len(v); i++ {
-			or.value[i] = allocAttr(table.valueSchema[i], v[i])
 		}
 
 		return or
@@ -108,7 +94,7 @@ func MakeRecord(table *Table, k Key, v []Value) Record {
 type PRecord struct {
 	padding1 [PADDING]byte
 	key      Key
-	value    []Value
+	tuple    Tuple
 	table    *Table
 	padding2 [PADDING]byte
 }
@@ -132,13 +118,14 @@ func (pr *PRecord) IsUnlocked() (bool, TID) {
 }
 
 func (pr *PRecord) GetValue(colNum int) Value {
-	return pr.value[colNum]
+	return pr.tuple.GetValue(colNum)
 }
 
 func (pr *PRecord) SetValue(val Value, colNum int) {
 	//pr.value[colNum] = val
-	bt := pr.table.valueSchema[colNum]
-	setVal(bt, pr.value[colNum], val)
+	//bt := pr.table.valueSchema[colNum]
+	//setVal(bt, pr.value[colNum], val)
+	pr.tuple.SetValue(val, colNum)
 }
 
 func (pr *PRecord) GetTID() TID {
@@ -153,7 +140,7 @@ func (pr *PRecord) SetTID(tid TID) {
 type ORecord struct {
 	padding1 [PADDING]byte
 	key      Key
-	value    []Value
+	tuple    Tuple
 	last     wfmutex.WFMutex
 	table    *Table
 	padding2 [PADDING]byte
@@ -177,7 +164,7 @@ func (or *ORecord) IsUnlocked() (bool, TID) {
 }
 
 func (or *ORecord) GetValue(colNum int) Value {
-	return or.value[colNum]
+	return or.tuple.GetValue(colNum)
 }
 
 func (or *ORecord) GetKey() Key {
@@ -185,8 +172,9 @@ func (or *ORecord) GetKey() Key {
 }
 
 func (or *ORecord) SetValue(val Value, colNum int) {
-	bt := or.table.valueSchema[colNum]
-	setVal(bt, or.value[colNum], val)
+	//bt := or.table.valueSchema[colNum]
+	//setVal(bt, or.value[colNum], val)
+	or.tuple.SetValue(val, colNum)
 }
 
 func (or *ORecord) GetTID() TID {

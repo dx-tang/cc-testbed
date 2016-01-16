@@ -201,7 +201,7 @@ func NewStore(schema string, nParts int) *Store {
 	return s
 }
 
-func (s *Store) CreateRecByName(tableName string, k Key, partNum int, value []Value) (Record, error) {
+func (s *Store) CreateRecByName(tableName string, k Key, partNum int, tuple Tuple) (Record, error) {
 	if partNum >= s.nParts {
 		clog.Error("Partition Number %v Out of Index", partNum)
 	}
@@ -211,10 +211,10 @@ func (s *Store) CreateRecByName(tableName string, k Key, partNum int, value []Va
 		clog.Error("Table %s, Not Recognized \n", tableName)
 	}
 
-	return s.CreateRecByID(tableID, k, partNum, value)
+	return s.CreateRecByID(tableID, k, partNum, tuple)
 }
 
-func (s *Store) CreateRecByID(tableID int, k Key, partNum int, value []Value) (Record, error) {
+func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Record, error) {
 	table := s.tables[tableID]
 	table.nKeys++
 
@@ -223,11 +223,7 @@ func (s *Store) CreateRecByID(tableID int, k Key, partNum int, value []Value) (R
 		return nil, EDUPKEY //One record with that key has existed;
 	}
 
-	if !checkSchema(value, table.valueSchema) {
-		clog.Error("Table %s Schema not Match \n", s.tables[tableID].name)
-	}
-
-	r := MakeRecord(table, k, value)
+	r := MakeRecord(table, k, tuple)
 	chunk.rows[k] = r
 	return r, nil
 }
