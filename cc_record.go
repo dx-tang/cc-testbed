@@ -1,6 +1,8 @@
 package testbed
 
 import (
+	"runtime/debug"
+
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/wdspinlock"
 	"github.com/totemtang/cc-testbed/wfmutex"
@@ -238,6 +240,7 @@ func (or *ORecord) WUnlock() {
 }
 
 func (or *ORecord) RLock() bool {
+	debug.PrintStack()
 	clog.Error("OCC mode does not support RLock Operation")
 	return false
 }

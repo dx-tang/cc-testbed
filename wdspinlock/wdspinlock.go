@@ -94,13 +94,14 @@ func (l *WDRWSpinlock) Unlock() {
 
 func (l *WDRWSpinlock) Upgrade() bool {
 	if !l.w.Lock() {
+		atomic.AddInt32(&l.readerCount, -1)
 		return false
 	}
-	r := atomic.AddInt32(&l.readerCount, -spinlockMaxReaders-1) + spinlockMaxReaders
+	r := atomic.AddInt32(&l.readerCount, -(spinlockMaxReaders+1)) + spinlockMaxReaders
 	i := l.w.trial
 	for r != 0 {
 		if i == 0 {
-			l.w.Unlock()
+			l.Unlock()
 			return false
 		}
 		r = atomic.LoadInt32(&l.readerCount) + spinlockMaxReaders

@@ -506,7 +506,9 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 		l.Abort()
 		return nil, ENOKEY
 	}
+
 	if !rec.RLock() {
+		//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 		/*
 			clog.Info("Current Table %v; Key %v; NTXN %v\n", tableID, ParseKey(k, 0), w.NStats[NTXN])
 			for i := 0; i < len(l.rt); i++ {
@@ -526,6 +528,8 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 		l.Abort()
 		return nil, EABORT
 	}
+
+	//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 
 	// Success, Record it
 	n := len(rt.rRecs)
@@ -577,6 +581,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	if ok {
 		rr.exist = false
 		if rr.rec.Upgrade() {
+			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
 			wr := &rt.wRecs[n]
@@ -589,6 +594,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			wr.cols[0] = colNum
 			return nil
 		} else {
+			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			w.NStats[NUPGRADEABORTS]++
 			l.Abort()
 			return EABORT
@@ -622,11 +628,13 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 }
 
 func (l *LTransaction) Abort() TID {
+	//w := l.w
 	for i := 0; i < len(l.rt); i++ {
 		t := &l.rt[i]
 		for j, _ := range t.rRecs {
 			rr := &t.rRecs[j]
 			if rr.exist {
+				//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
 				rr.rec.RUnlock()
 			}
 		}
@@ -635,6 +643,7 @@ func (l *LTransaction) Abort() TID {
 			wr := &t.wRecs[j]
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
+			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
 			wr.rec.WUnlock()
 		}
 		t.wRecs = t.wRecs[:0]
@@ -643,12 +652,14 @@ func (l *LTransaction) Abort() TID {
 }
 
 func (l *LTransaction) Commit() TID {
+	//w := l.w
 
 	for i := 0; i < len(l.rt); i++ {
 		t := &l.rt[i]
 		for j, _ := range t.rRecs {
 			rr := &t.rRecs[j]
 			if rr.exist {
+				//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
 				rr.rec.RUnlock()
 			}
 		}
@@ -660,6 +671,7 @@ func (l *LTransaction) Commit() TID {
 			}
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
+			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
 			wr.rec.WUnlock()
 		}
 		t.wRecs = t.wRecs[:0]

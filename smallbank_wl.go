@@ -428,7 +428,6 @@ func (s *SBWorkload) PrintChecking() {
 	for i := int64(0); i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
-
 		val = store.GetValueByID(CHECKING, key, partNum, C_BAL)
 		total += *val.(*float64)
 

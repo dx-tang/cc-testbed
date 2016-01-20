@@ -80,6 +80,7 @@ func main() {
 		wg.Add(1)
 		go func(n int) {
 			//var txn int64
+			//txn := 100000
 			w := coord.Workers[n]
 			gen := sb.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
@@ -88,6 +89,10 @@ func main() {
 				if !end_time.After(tm) {
 					break
 				}
+				//if txn <= 0 {
+				//	break
+				//}
+				//tm := time.Now()
 				t := gen.GenOneTrans()
 				w.NGen += time.Since(tm)
 				tm = time.Now()
@@ -102,7 +107,7 @@ func main() {
 					}
 				}
 				w.NExecute += time.Since(tm)
-				//txn++
+				//txn--
 			}
 			//clog.Info("Worker %d issues %d transactions\n", n, txn)
 			wg.Done()
