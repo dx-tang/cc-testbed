@@ -14,6 +14,10 @@ import (
 )
 
 const (
+	SLTRIAL = 500
+)
+
+const (
 	CHUNKS = 256
 )
 
@@ -79,7 +83,7 @@ type RWMutex struct {
 	padding2 [PADDING]byte
 }
 
-type RWSpinLock struct {
+type SpinLockPad struct {
 	padding1 [PADDING]byte
 	spinlock.Spinlock
 	padding2 [PADDING]byte
@@ -97,7 +101,7 @@ type Table struct {
 type Store struct {
 	padding1     [PADDING]byte
 	tables       []*Table
-	spinLock     []*RWSpinLock
+	spinLock     []*SpinLockPad
 	mutexLock    []*RWMutex
 	nParts       int
 	tableToIndex map[string]int
@@ -139,13 +143,14 @@ func NewStore(schema string, nParts int) *Store {
 		tables:       make([]*Table, tableCount),
 		tableToIndex: make(map[string]int),
 		mutexLock:    make([]*RWMutex, nParts),
-		spinLock:     make([]*RWSpinLock, nParts),
+		spinLock:     make([]*SpinLockPad, nParts),
 		nParts:       nParts,
 	}
 
 	for i := 0; i < nParts; i++ {
 		if *SpinLock {
-			s.spinLock[i] = &RWSpinLock{}
+			s.spinLock[i] = &SpinLockPad{}
+			s.spinLock[i].SetTrial(SLTRIAL)
 		} else {
 			s.mutexLock[i] = &RWMutex{}
 		}

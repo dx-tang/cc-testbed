@@ -22,7 +22,7 @@ const (
 	PERSEC = 1000000000
 )
 
-func NewCoordinator(nWorkers int, store *Store) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int) *Coordinator {
 	coordinator := &Coordinator{
 		Workers: make([]*Worker, nWorkers),
 		store:   store,
@@ -30,7 +30,7 @@ func NewCoordinator(nWorkers int, store *Store) *Coordinator {
 	}
 
 	for i := range coordinator.Workers {
-		coordinator.Workers[i] = NewWorker(i, store)
+		coordinator.Workers[i] = NewWorker(i, store, tableCount)
 	}
 
 	return coordinator
@@ -43,6 +43,9 @@ func (coord *Coordinator) gatherStats() {
 		coord.NStats[NLOCKABORTS] += worker.NStats[NLOCKABORTS]
 		coord.NStats[NRCHANGEABORTS] += worker.NStats[NRCHANGEABORTS]
 		coord.NStats[NRWABORTS] += worker.NStats[NRWABORTS]
+		coord.NStats[NRLOCKABORTS] += worker.NStats[NRLOCKABORTS]
+		coord.NStats[NWLOCKABORTS] += worker.NStats[NWLOCKABORTS]
+		coord.NStats[NUPGRADEABORTS] += worker.NStats[NUPGRADEABORTS]
 		coord.NStats[NENOKEY] += worker.NStats[NENOKEY]
 		coord.NStats[NTXN] += worker.NStats[NTXN]
 		coord.NStats[NCROSSTXN] += worker.NStats[NCROSSTXN]
@@ -131,6 +134,26 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 				r = ((float64)(worker.NStats[NRWABORTS]) / (float64)(worker.NStats[NABORTS])) * 100
 				f.WriteString(fmt.Sprintf("Worker %v Read Write Conflict Occupy %.4f%% Aborts \n", i, r))
 			}*/
+	} else if *SysType == LOCKING {
+		f.WriteString(fmt.Sprintf("Abort %v Transactions\n", coord.NStats[NABORTS]))
+		r := ((float64)(coord.NStats[NABORTS]) / (float64)(coord.NStats[NTXN])) * 100
+		f.WriteString(fmt.Sprintf("Abort Rate %.4f%% \n", r))
+
+		l := 100.0
+
+		r = ((float64)(coord.NStats[NRLOCKABORTS]) / (float64)(coord.NStats[NABORTS])) * 100
+		f.WriteString(fmt.Sprintf("Read Lock Occupy %.4f%% Aborts \n", r))
+		l -= r
+
+		r = ((float64)(coord.NStats[NWLOCKABORTS]) / (float64)(coord.NStats[NABORTS])) * 100
+		f.WriteString(fmt.Sprintf("Write Lock Occupy %.4f%% Aborts \n", r))
+		l -= r
+
+		r = ((float64)(coord.NStats[NUPGRADEABORTS]) / (float64)(coord.NStats[NABORTS])) * 100
+		f.WriteString(fmt.Sprintf("Upgrade Occupy %.4f%% Aborts \n", r))
+		l -= r
+
+		f.WriteString(fmt.Sprintf("Workload Occupy %.4f%% Aborts \n", l))
 	}
 
 	f.WriteString("\n")

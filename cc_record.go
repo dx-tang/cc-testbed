@@ -2,7 +2,12 @@ package testbed
 
 import (
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/wdspinlock"
 	"github.com/totemtang/cc-testbed/wfmutex"
+)
+
+const (
+	WDTRIAL = 10
 )
 
 type Tuple interface {
@@ -37,6 +42,11 @@ type Record interface {
 	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
+	WLock() bool
+	WUnlock()
+	RLock() bool
+	RUnlock()
+	Upgrade() bool
 }
 
 /*
@@ -85,6 +95,16 @@ func MakeRecord(table *Table, k Key, tuple Tuple) Record {
 		}
 
 		return or
+	} else if *SysType == LOCKING {
+		lr := &LRecord{
+			table:  table,
+			key:    k,
+			tuple:  tuple,
+			rwLock: wdspinlock.WDRWSpinlock{},
+		}
+		lr.rwLock.SetTrial(WDTRIAL)
+
+		return lr
 	} else {
 		clog.Error("System Type %v Not Supported Yet", *SysType)
 		return nil
@@ -137,6 +157,29 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
+func (pr *PRecord) WLock() bool {
+	clog.Error("Partition mode does not support WLock Operation")
+	return false
+}
+
+func (pr *PRecord) WUnlock() {
+	clog.Error("Partition mode does not support WUnlock Operation")
+}
+
+func (pr *PRecord) RLock() bool {
+	clog.Error("Partition mode does not support RLock Operation")
+	return false
+}
+
+func (pr *PRecord) RUnlock() {
+	clog.Error("Partition mode does not support RUnlock Operation")
+}
+
+func (pr *PRecord) Upgrade() bool {
+	clog.Error("Partition mode does not support Upgrade Operation")
+	return false
+}
+
 type ORecord struct {
 	padding1 [PADDING]byte
 	key      Key
@@ -185,6 +228,29 @@ func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
 }
 
+func (or *ORecord) WLock() bool {
+	clog.Error("OCC mode does not support WLock Operation")
+	return false
+}
+
+func (or *ORecord) WUnlock() {
+	clog.Error("OCC mode does not support WUnlock Operation")
+}
+
+func (or *ORecord) RLock() bool {
+	clog.Error("OCC mode does not support RLock Operation")
+	return false
+}
+
+func (or *ORecord) RUnlock() {
+	clog.Error("OCC mode does not support RUnlock Operation")
+}
+
+func (or *ORecord) Upgrade() bool {
+	clog.Error("OCC mode does not support Upgrade Operation")
+	return false
+}
+
 // Dummy Record
 type DRecord struct {
 	padding1 [PADDING]byte
@@ -231,6 +297,29 @@ func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
 }
 
+func (dr *DRecord) WLock() bool {
+	clog.Error("Dummy mode does not support WLock Operation")
+	return false
+}
+
+func (dr *DRecord) WUnlock() {
+	clog.Error("Dummy mode does not support WUnlock Operation")
+}
+
+func (dr *DRecord) RLock() bool {
+	clog.Error("Dummy mode does not support RLock Operation")
+	return false
+}
+
+func (dr *DRecord) RUnlock() {
+	clog.Error("Dummy mode does not support RUnlock Operation")
+}
+
+func (dr *DRecord) Upgrade() bool {
+	clog.Error("Dummy mode does not support Upgrade Operation")
+	return false
+}
+
 func setVal(bt BTYPE, oldVal Value, newVal Value) {
 	switch bt {
 	case INTEGER:
@@ -249,4 +338,72 @@ func setVal(bt BTYPE, oldVal Value, newVal Value) {
 	default:
 		clog.Error("Set Value Error; Not Support Value Type\n")
 	}
+}
+
+type LRecord struct {
+	padding1 [PADDING]byte
+	key      Key
+	tuple    Tuple
+	rwLock   wdspinlock.WDRWSpinlock
+	table    *Table
+	padding2 [PADDING]byte
+}
+
+func (lr *LRecord) Lock() (bool, TID) {
+	clog.Error("Lock mode does not support Lock Operation")
+	return false, TID(0)
+}
+
+func (lr *LRecord) Unlock(tid TID) {
+	clog.Error("Lock mode does not support Unlock Operation")
+}
+
+func (lr *LRecord) IsUnlocked() (bool, TID) {
+	clog.Error("Lock mode does not support IsUnlocked Operation")
+	return false, TID(0)
+}
+
+func (lr *LRecord) GetValue(colNum int) Value {
+	return lr.tuple.GetValue(colNum)
+}
+
+func (lr *LRecord) GetKey() Key {
+	return lr.key
+}
+
+func (lr *LRecord) SetValue(val Value, colNum int) {
+	lr.tuple.SetValue(val, colNum)
+}
+
+func (lr *LRecord) GetTID() TID {
+	clog.Error("Lock mode does not support GetTID Operation")
+	return TID(0)
+}
+
+func (lr *LRecord) SetTID(tid TID) {
+	clog.Error("Lock mode does not support SetTID Operation")
+}
+
+func (lr *LRecord) WLock() bool {
+	return lr.rwLock.Lock()
+	//return true
+}
+
+func (lr *LRecord) WUnlock() {
+	lr.rwLock.Unlock()
+}
+
+func (lr *LRecord) RLock() bool {
+	return lr.rwLock.RLock()
+	//return true
+}
+
+func (lr *LRecord) RUnlock() {
+	lr.rwLock.RUnlock()
+	//return
+}
+
+func (lr *LRecord) Upgrade() bool {
+	return lr.rwLock.Upgrade()
+	//return true
 }

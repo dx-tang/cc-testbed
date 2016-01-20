@@ -103,13 +103,13 @@ type TrackTable struct {
 
 // Silo OCC Transaction Implementation
 type OTransaction struct {
-	padding0    [64]byte
+	padding0    [PADDING]byte
 	w           *Worker
 	s           *Store
 	tt          []TrackTable
 	dummyRecord *DRecord
 	maxSeen     TID
-	padding     [64]byte
+	padding     [PADDING]byte
 }
 
 func StartOTransaction(w *Worker) *OTransaction {
@@ -400,4 +400,278 @@ func (o *OTransaction) Store() *Store {
 
 func (o *OTransaction) Worker() *Worker {
 	return o.w
+}
+
+type WriteRec struct {
+	padding1 [PADDING]byte
+	k        Key
+	partNum  int
+	rec      Record
+	vals     []Value
+	cols     []int
+	padding2 [PADDING]byte
+}
+
+type ReadRec struct {
+	padding1 [PADDING]byte
+	k        Key
+	rec      Record
+	exist    bool
+	padding2 [PADDING]byte
+}
+
+type RecTable struct {
+	padding1 [PADDING]byte
+	rRecs    []ReadRec
+	wRecs    []WriteRec
+	padding2 [PADDING]byte
+}
+
+type LTransaction struct {
+	padding0 [PADDING]byte
+	w        *Worker
+	s        *Store
+	rt       []RecTable
+	padding  [PADDING]byte
+}
+
+func StartLTransaction(w *Worker, nTables int) *LTransaction {
+	tx := &LTransaction{
+		w:  w,
+		s:  w.store,
+		rt: make([]RecTable, nTables),
+	}
+
+	for i := 0; i < len(tx.rt); i++ {
+		t := &tx.rt[i]
+		t.rRecs = make([]ReadRec, 0, MAXTRACKINGKEY)
+		t.wRecs = make([]WriteRec, MAXTRACKINGKEY)
+		for j, _ := range t.wRecs {
+			wr := &t.wRecs[j]
+			wr.vals = make([]Value, 0, MAXCOLUMN+2*PADDINGINT64)
+			wr.vals = wr.vals[PADDINGINT64:PADDINGINT64]
+			wr.cols = make([]int, 0, MAXCOLUMN+2*PADDINGINT)
+			wr.cols = wr.cols[PADDINGINT:PADDINGINT]
+		}
+		t.wRecs = t.wRecs[0:0]
+	}
+
+	return tx
+}
+
+func (l *LTransaction) getWriteRec() *WriteRec {
+	return nil
+}
+
+func (l *LTransaction) Reset(t Trans) {
+}
+
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error) {
+
+	var ok bool = false
+	var wr *WriteRec
+	var rr *ReadRec
+	w := l.w
+
+	rt := &l.rt[tableID]
+	for i, _ := range rt.wRecs {
+		if rt.wRecs[i].k == k {
+			wr = &rt.wRecs[i]
+			ok = true
+			break
+		}
+	}
+	// Has been Locked
+	if ok {
+		return wr.rec.GetValue(colNum), nil
+	}
+
+	var rec Record
+	ok = false
+	for i, _ := range rt.rRecs {
+		if rt.rRecs[i].k == k {
+			rr = &rt.rRecs[i]
+			ok = true
+			break
+		}
+	}
+	// Has been RLocked
+	if ok {
+		return rr.rec.GetValue(colNum), nil
+	}
+
+	// Try RLock
+	rec = l.s.GetRecByID(tableID, k, partNum)
+	if rec == nil {
+		l.Abort()
+		return nil, ENOKEY
+	}
+	if !rec.RLock() {
+		/*
+			clog.Info("Current Table %v; Key %v; NTXN %v\n", tableID, ParseKey(k, 0), w.NStats[NTXN])
+			for i := 0; i < len(l.rt); i++ {
+				t := &l.rt[i]
+				clog.Info("Read Records of %v\n", i)
+				for j := 0; j < len(t.rRecs); j++ {
+					clog.Info("%v", ParseKey(t.rRecs[j].k, 0))
+				}
+				clog.Info("Write Records of %v\n", i)
+				for j := 0; j < len(t.wRecs); j++ {
+					clog.Info("%v", ParseKey(t.wRecs[j].k, 0))
+				}
+			}
+			clog.Error("\n")
+		*/
+		w.NStats[NRLOCKABORTS]++
+		l.Abort()
+		return nil, EABORT
+	}
+
+	// Success, Record it
+	n := len(rt.rRecs)
+	rt.rRecs = rt.rRecs[:n+1]
+	rt.rRecs[n].k = k
+	rt.rRecs[n].rec = rec
+	rt.rRecs[n].exist = true
+
+	return rec.GetValue(colNum), nil
+}
+
+func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error {
+
+	var ok bool = false
+	var wr *WriteRec
+	var rr *ReadRec
+	w := l.w
+
+	rt := &l.rt[tableID]
+	//wr, ok = rt.wRecs[k]
+	for i, _ := range rt.wRecs {
+		if rt.wRecs[i].k == k {
+			wr = &rt.wRecs[i]
+			ok = true
+			break
+		}
+	}
+
+	// Has been Locked
+	if ok {
+		n := len(wr.vals)
+		wr.vals = wr.vals[0 : n+1]
+		wr.vals[n] = value
+		wr.cols = wr.cols[0 : n+1]
+		wr.cols[n] = colNum
+		return nil
+	}
+
+	var rec Record
+	ok = false
+	for i, _ := range rt.rRecs {
+		if rt.rRecs[i].k == k {
+			rr = &rt.rRecs[i]
+			ok = true
+			break
+		}
+	}
+	// Has been RLocked
+	if ok {
+		rr.exist = false
+		if rr.rec.Upgrade() {
+			n := len(rt.wRecs)
+			rt.wRecs = rt.wRecs[0 : n+1]
+			wr := &rt.wRecs[n]
+			wr.k = k
+			wr.partNum = partNum
+			wr.rec = rr.rec
+			wr.vals = wr.vals[0:1]
+			wr.vals[0] = value
+			wr.cols = wr.cols[0:1]
+			wr.cols[0] = colNum
+			return nil
+		} else {
+			w.NStats[NUPGRADEABORTS]++
+			l.Abort()
+			return EABORT
+		}
+	}
+
+	rec = l.s.GetRecByID(tableID, k, partNum)
+	if rec == nil {
+		l.Abort()
+		return ENOKEY
+	}
+
+	if rec.WLock() {
+		n := len(rt.wRecs)
+		rt.wRecs = rt.wRecs[0 : n+1]
+		wr := &rt.wRecs[n]
+		wr.k = k
+		wr.partNum = partNum
+		wr.rec = rec
+		wr.vals = wr.vals[0:1]
+		wr.vals[0] = value
+		wr.cols = wr.cols[0:1]
+		wr.cols[0] = colNum
+		return nil
+	} else {
+		w.NStats[NWLOCKABORTS]++
+		l.Abort()
+		return EABORT
+	}
+
+}
+
+func (l *LTransaction) Abort() TID {
+	for i := 0; i < len(l.rt); i++ {
+		t := &l.rt[i]
+		for j, _ := range t.rRecs {
+			rr := &t.rRecs[j]
+			if rr.exist {
+				rr.rec.RUnlock()
+			}
+		}
+		t.rRecs = t.rRecs[:0]
+		for j, _ := range t.wRecs {
+			wr := &t.wRecs[j]
+			wr.vals = wr.vals[:0]
+			wr.cols = wr.cols[:0]
+			wr.rec.WUnlock()
+		}
+		t.wRecs = t.wRecs[:0]
+	}
+	return 0
+}
+
+func (l *LTransaction) Commit() TID {
+
+	for i := 0; i < len(l.rt); i++ {
+		t := &l.rt[i]
+		for j, _ := range t.rRecs {
+			rr := &t.rRecs[j]
+			if rr.exist {
+				rr.rec.RUnlock()
+			}
+		}
+		t.rRecs = t.rRecs[:0]
+		for j, _ := range t.wRecs {
+			wr := &t.wRecs[j]
+			for j := 0; j < len(wr.vals); j++ {
+				wr.rec.SetValue(wr.vals[j], wr.cols[j])
+			}
+			wr.vals = wr.vals[:0]
+			wr.cols = wr.cols[:0]
+			wr.rec.WUnlock()
+		}
+		t.wRecs = t.wRecs[:0]
+	}
+
+	return 1
+}
+
+func (l *LTransaction) Store() *Store {
+	return l.s
+}
+
+func (l *LTransaction) Worker() *Worker {
+	return l.w
 }

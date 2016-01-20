@@ -141,8 +141,10 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 				kg = NewUniformRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), basic.isPartition)
 			} else if s > 1 {
 				kg = NewZipfRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), s, basic.isPartition)
-			} else {
+			} else if s < 0 {
 				kg = NewHotColdRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), -s, basic.isPartition)
+			} else {
+				clog.Error("Wrong Contention %v\n", s)
 			}
 			gen.keyGens[j] = kg
 			gen.partitioner[j] = p

@@ -410,6 +410,10 @@ func (s *SBWorkload) GetStore() *Store {
 	return s.basic.store
 }
 
+func (s *SBWorkload) GetTableCount() int {
+	return s.basic.tableCount
+}
+
 func (s *SBWorkload) PrintChecking() {
 	var total float64
 	nKeys := s.basic.nKeys[CHECKING]

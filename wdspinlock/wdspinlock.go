@@ -1,15 +1,10 @@
-package spinlock
+package wdspinlock
 
 import (
-	"runtime"
 	"sync/atomic"
 )
 
-const (
-	PREEMPT = 500
-)
-
-type Spinlock struct {
+type WDSpinlock struct {
 	state int32
 	trial int
 }
@@ -21,23 +16,17 @@ const (
 // Lock locks s.
 // If the lock is already in use, the calling goroutine
 // spins until the mutex is available.
-func (s *Spinlock) Lock() {
+func (s *WDSpinlock) Lock() bool {
 	done := false
 	i := s.trial
 	for !done {
 		if i == 0 {
-			runtime.Gosched()
-			i = s.trial
+			return false
 		}
 		done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
 		i--
 	}
-	/*
-		done := false
-		for !done {
-			done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
-		}
-	*/
+	return true
 }
 
 // Unlock unlocks s.
@@ -45,60 +34,81 @@ func (s *Spinlock) Lock() {
 // A locked Spinlock is not associated with a particular goroutine.
 // It is allowed for one goroutine to lock a Spinlock and then
 // arrange for another goroutine to unlock it.
-func (s *Spinlock) Unlock() {
+func (s *WDSpinlock) Unlock() {
 	new := atomic.AddInt32(&s.state, -mutexLocked)
 	if (new+mutexLocked)&mutexLocked == 0 {
 		panic("sync: unlock of unlocked mutex")
 	}
 }
 
-func (s *Spinlock) SetTrial(trial int) {
+func (s *WDSpinlock) SetTrial(trial int) {
 	s.trial = trial
 }
 
-type RWSpinlock struct {
-	w           Spinlock
+type WDRWSpinlock struct {
+	w           WDSpinlock
 	readerCount int32
 }
 
 const spinlockMaxReaders = 1 << 30
 
-func (l *RWSpinlock) RLock() {
+func (l *WDRWSpinlock) RLock() bool {
 	if atomic.AddInt32(&l.readerCount, 1) < 0 {
 		i := l.w.trial
 		for atomic.LoadInt32(&l.readerCount) < 0 {
 			if i == 0 {
-				runtime.Gosched()
-				i = l.w.trial
+				atomic.AddInt32(&l.readerCount, -1)
+				return false
 			}
 			i--
 		}
 	}
+	return true
 }
 
-func (l *RWSpinlock) RUnlock() {
+func (l *WDRWSpinlock) RUnlock() {
 	atomic.AddInt32(&l.readerCount, -1)
 }
 
-func (l *RWSpinlock) Lock() {
-	l.w.Lock()
+func (l *WDRWSpinlock) Lock() bool {
+	if !l.w.Lock() {
+		return false
+	}
 	r := atomic.AddInt32(&l.readerCount, -spinlockMaxReaders) + spinlockMaxReaders
 	i := l.w.trial
 	for r != 0 {
 		if i == 0 {
-			runtime.Gosched()
-			i = l.w.trial
+			l.w.Unlock()
+			return false
 		}
 		r = atomic.LoadInt32(&l.readerCount) + spinlockMaxReaders
 		i--
 	}
+	return true
 }
 
-func (l *RWSpinlock) Unlock() {
+func (l *WDRWSpinlock) Unlock() {
 	atomic.AddInt32(&l.readerCount, spinlockMaxReaders)
 	l.w.Unlock()
 }
 
-func (l *RWSpinlock) SetTrial(trial int) {
+func (l *WDRWSpinlock) Upgrade() bool {
+	if !l.w.Lock() {
+		return false
+	}
+	r := atomic.AddInt32(&l.readerCount, -spinlockMaxReaders-1) + spinlockMaxReaders
+	i := l.w.trial
+	for r != 0 {
+		if i == 0 {
+			l.w.Unlock()
+			return false
+		}
+		r = atomic.LoadInt32(&l.readerCount) + spinlockMaxReaders
+		i--
+	}
+	return true
+}
+
+func (l *WDRWSpinlock) SetTrial(trial int) {
 	l.w.trial = trial
 }

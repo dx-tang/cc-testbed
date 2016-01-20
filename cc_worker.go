@@ -13,6 +13,9 @@ const (
 	NLOCKABORTS
 	NRCHANGEABORTS
 	NRWABORTS
+	NRLOCKABORTS
+	NWLOCKABORTS
+	NUPGRADEABORTS
 	NENOKEY
 	NTXN
 	NCROSSTXN
@@ -42,7 +45,7 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 	w.txns[fn] = transaction
 }
 
-func NewWorker(id int, s *Store) *Worker {
+func NewWorker(id int, s *Store, tableCount int) *Worker {
 	w := &Worker{
 		ID:     id,
 		store:  s,
@@ -54,6 +57,8 @@ func NewWorker(id int, s *Store) *Worker {
 		w.E = StartPTransaction(w)
 	} else if *SysType == OCC {
 		w.E = StartOTransaction(w)
+	} else if *SysType == LOCKING {
+		w.E = StartLTransaction(w, tableCount)
 	} else {
 		clog.Error("OCC and 2PL not supported yet")
 	}

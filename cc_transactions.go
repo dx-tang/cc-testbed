@@ -1,5 +1,9 @@
 package testbed
 
+/*import (
+	"github.com/totemtang/cc-testbed/clog"
+)*/
+
 const (
 	// Smallbank Workload
 	SMALLBANKBASE = iota
@@ -158,6 +162,7 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	bal := *val.(*float64)
 
 	if bal < ammt.floatVal {
+		exec.Abort()
 		return nil, ELACKBALANCE
 	}
 

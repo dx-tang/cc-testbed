@@ -14,9 +14,9 @@ func BenchmarkHotColdRand(b *testing.B) {
 
 	var kg KeyGen
 
-	kg = NewHotColdRand(0, nKeys, int(NParts), pKeysArray, 5050, true)
+	kg = NewHotColdRand(0, nKeys, int(NParts), pKeysArray, 180, true)
 
-	hotRange := int64(10) * pKeysArray[0] / 100
+	hotRange := int64(1) * pKeysArray[0] / 100
 
 	count := 0
 	hotRate := 0
