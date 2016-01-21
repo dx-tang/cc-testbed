@@ -19,6 +19,7 @@ const (
 func (s *WDSpinlock) Lock() bool {
 	done := false
 	i := s.trial
+	done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
 	for !done {
 		if i == 0 {
 			return false

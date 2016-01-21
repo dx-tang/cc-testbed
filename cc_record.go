@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	WDTRIAL = 10
+	WDTRIAL = 0
 )
 
 type Tuple interface {
