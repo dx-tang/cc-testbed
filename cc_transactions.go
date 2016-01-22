@@ -119,6 +119,16 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
+	err = exec.MayWrite(SAVINGS, acctId0, part0)
+	if err != nil {
+		return nil, err
+	}
+
+	err = exec.MayWrite(CHECKING, acctId1, part1)
+	if err != nil {
+		return nil, err
+	}
+
 	val, err = exec.ReadValue(SAVINGS, acctId0, part0, S_BAL)
 	if err != nil {
 		return nil, err
@@ -205,6 +215,16 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	}
 
 	_, err = exec.ReadValue(ACCOUNTS, dest, part1, A_ID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = exec.MayWrite(CHECKING, send, part0)
+	if err != nil {
+		return nil, err
+	}
+
+	err = exec.MayWrite(CHECKING, dest, part1)
 	if err != nil {
 		return nil, err
 	}

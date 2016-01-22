@@ -1,8 +1,11 @@
 package testbed
 
 import (
+	"flag"
 	"github.com/totemtang/cc-testbed/clog"
 )
+
+var Spec = flag.Bool("spec", false, "Whether Speculatively Indicate MayWrite")
 
 const (
 	MAXTABLENUM    = 20
@@ -14,6 +17,7 @@ type ETransaction interface {
 	Reset(t Trans)
 	ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error)
 	WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error
+	MayWrite(tableID int, k Key, partNum int) error
 	Abort() TID
 	Commit() TID
 	Store() *Store
@@ -55,6 +59,10 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	if !success {
 		return ENOKEY
 	}
+	return nil
+}
+
+func (p *PTransaction) MayWrite(tableID int, k Key, partNum int) error {
 	return nil
 }
 
@@ -295,6 +303,10 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		t.wKeys[n].cols[0] = colNum
 	}
 
+	return nil
+}
+
+func (o *OTransaction) MayWrite(tableID int, k Key, partNum int) error {
 	return nil
 }
 
@@ -625,6 +637,73 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		return EABORT
 	}
 
+}
+
+func (l *LTransaction) MayWrite(tableID int, k Key, partNum int) error {
+	if !*Spec {
+		return nil
+	}
+	var ok bool = false
+	var rr *ReadRec
+	w := l.w
+
+	rt := &l.rt[tableID]
+	//wr, ok = rt.wRecs[k]
+	for i, _ := range rt.wRecs {
+		if rt.wRecs[i].k == k {
+			ok = true
+			return nil
+		}
+	}
+
+	var rec Record
+	ok = false
+	for i, _ := range rt.rRecs {
+		if rt.rRecs[i].k == k {
+			rr = &rt.rRecs[i]
+			ok = true
+			break
+		}
+	}
+	// Has been RLocked
+	if ok {
+		rr.exist = false
+		if rr.rec.Upgrade() {
+			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
+			n := len(rt.wRecs)
+			rt.wRecs = rt.wRecs[0 : n+1]
+			wr := &rt.wRecs[n]
+			wr.k = k
+			wr.partNum = partNum
+			wr.rec = rr.rec
+			return nil
+		} else {
+			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
+			w.NStats[NUPGRADEABORTS]++
+			l.Abort()
+			return EABORT
+		}
+	}
+
+	rec = l.s.GetRecByID(tableID, k, partNum)
+	if rec == nil {
+		l.Abort()
+		return ENOKEY
+	}
+
+	if rec.WLock() {
+		n := len(rt.wRecs)
+		rt.wRecs = rt.wRecs[0 : n+1]
+		wr := &rt.wRecs[n]
+		wr.k = k
+		wr.partNum = partNum
+		wr.rec = rec
+		return nil
+	} else {
+		w.NStats[NWLOCKABORTS]++
+		l.Abort()
+		return EABORT
+	}
 }
 
 func (l *LTransaction) Abort() TID {
