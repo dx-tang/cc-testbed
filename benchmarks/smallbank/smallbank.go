@@ -82,7 +82,7 @@ func main() {
 			//var txn int64
 			//txn := 100000
 			var t testbed.Trans
-			tq := testbed.NewTransQueue(BUFSIZE)
+			//tq := testbed.NewTransQueue(BUFSIZE)
 			w := coord.Workers[n]
 			gen := sb.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
@@ -95,17 +95,18 @@ func main() {
 				//	break
 				//}
 				//tm := time.Now()
-				if tq.IsFull() {
-					t = tq.Dequeue()
-				} else {
+				//if tq.IsFull() {
+				//	t = tq.Dequeue()
+				//} else {
 					t = gen.GenOneTrans()
-				}
+				//}
 				w.NGen += time.Since(tm)
 
 				tm = time.Now()
-				_, err := w.One(t)
+				//_, err := w.One(t)
+				w.One(t)
 				w.NExecute += time.Since(tm)
-
+				/*
 				if err != nil {
 					if err == testbed.EABORT {
 						tq.Enqueue(t)
@@ -114,7 +115,7 @@ func main() {
 					} else if err != testbed.EABORT {
 						clog.Error("%s\n", err.Error())
 					}
-				}
+				}*/
 				//txn--
 			}
 			//clog.Info("Worker %d issues %d transactions\n", n, txn)
