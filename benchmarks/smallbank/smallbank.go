@@ -123,7 +123,7 @@ func main() {
 	}
 	wg.Wait()
 
-	//sb.PrintChecking()
+	sb.PrintChecking()
 
 	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {

@@ -4,12 +4,12 @@ import (
 	"runtime/debug"
 
 	"github.com/totemtang/cc-testbed/clog"
-	"github.com/totemtang/cc-testbed/wdspinlock"
+	"github.com/totemtang/cc-testbed/spinlockopt"
 	"github.com/totemtang/cc-testbed/wfmutex"
 )
 
 const (
-	WDTRIAL = 0
+	WDTRIAL = 10
 )
 
 type Tuple interface {
@@ -102,7 +102,7 @@ func MakeRecord(table *Table, k Key, tuple Tuple) Record {
 			table:  table,
 			key:    k,
 			tuple:  tuple,
-			rwLock: wdspinlock.WDRWSpinlock{},
+			rwLock: spinlockopt.WDRWSpinlock{},
 		}
 		lr.rwLock.SetTrial(WDTRIAL)
 
@@ -347,7 +347,7 @@ type LRecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
-	rwLock   wdspinlock.WDRWSpinlock
+	rwLock   spinlockopt.WDRWSpinlock
 	table    *Table
 	padding2 [PADDING]byte
 }
