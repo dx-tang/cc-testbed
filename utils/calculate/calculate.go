@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 )
 
 var input = flag.String("input", "", "Input File to Calculate")
@@ -32,7 +31,6 @@ func main() {
 	}
 	defer o.Close()
 
-	var strSlice []string
 	var sum int
 
 	for {
@@ -49,18 +47,13 @@ func main() {
 			} else {
 				line = string(bytes)
 			}
-			strSlice = strings.Split(line, "\t")
-			if len(strSlice) != 2 {
-				fmt.Printf("Error Format\n")
-				return
-			}
-			tmp, intErr := strconv.Atoi(strSlice[1])
+			tmp, intErr := strconv.Atoi(line)
 			if intErr != nil {
-				fmt.Printf("String %s to Int Error\n", strSlice[1])
+				fmt.Printf("String %s to Int Error\n", line)
 				return
 			}
 			sum += tmp
 		}
-		o.WriteString(fmt.Sprintf("%s \t %v\n", strSlice[0], sum/(*period)))
+		o.WriteString(fmt.Sprintf("%v\n", sum/(*period)))
 	}
 }
