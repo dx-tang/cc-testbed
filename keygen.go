@@ -32,23 +32,30 @@ func NewHotColdRand(partIndex int, nKeys int64, nParts int, pKeysArray []int64, 
 	hcr := &HotColdRand{}
 	hcr.accessRate = int(s) % 100
 
-	hotPercent := int(s) / 100
+	//hotPercent := int(s) / 100
 
-	hcr.hcRnd = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex+3)))
+	hcr.hcRnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex+3)))
 
-	hcr.hotKeys = int64(hotPercent) * nKeys / 100
+	//hcr.hotKeys = int64(hotPercent) * nKeys / 100
+	hcr.hotKeys = int64(int(s) / 100)
 	hcr.coldKeys = nKeys - hcr.hotKeys
-	hcr.wholeHotRd = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex+1)))
+	hcr.wholeHotRd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex+1)))
 	hcr.isPartition = isPartition
 
 	if isPartition {
+		perHotKeys := hcr.hotKeys / int64(nParts)
+		numExtraHot := int(hcr.hotKeys % int64(nParts))
 		hcr.hotKeysArray = make([]int64, nParts)
 		hcr.coldKeysArray = make([]int64, nParts)
 		hcr.partHotRd = make([]*rand.Rand, nParts)
 		for i := 0; i < nParts; i++ {
-			hcr.hotKeysArray[i] = int64(hotPercent) * pKeysArray[i] / 100
+			//hcr.hotKeysArray[i] = int64(hotPercent) * pKeysArray[i] / 100
+			hcr.hotKeysArray[i] = perHotKeys
+			if i < numExtraHot {
+				hcr.hotKeysArray[i]++
+			}
 			hcr.coldKeysArray[i] = pKeysArray[i] - hcr.hotKeysArray[i]
-			hcr.partHotRd[i] = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex*13+i*7+1)))
+			hcr.partHotRd[i] = rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex*13+i*7+1)))
 		}
 	}
 
@@ -81,7 +88,7 @@ func (hr *HotColdRand) GetPartRank(pi int) int64 {
 	}
 }
 
-type ZipfRand struct {
+type ZipfRandLarge struct {
 	isPartition bool
 	partIndex   int
 	nParts      int
@@ -93,17 +100,17 @@ type ZipfRand struct {
 
 // Index of partition starts from 0
 // Integer Key starts from 0 also
-// s should be larger than 1
-func NewZipfRand(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s float64, isPartition bool) *ZipfRand {
+// s should be larger 1
+func NewZipfRandLarge(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s float64, isPartition bool) *ZipfRandLarge {
 
-	zr := &ZipfRand{
+	zr := &ZipfRandLarge{
 		isPartition: isPartition,
 		partIndex:   partIndex,
 		nParts:      nParts,
 		nKeys:       nKeys,
 	}
 
-	rnd := rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex+1)))
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex+1)))
 	zr.wholeZipf = rand.NewZipf(rnd, s, 1, uint64(nKeys-1))
 
 	if zr.isPartition {
@@ -113,7 +120,7 @@ func NewZipfRand(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s f
 		}
 		zr.partZipf = make([]*rand.Zipf, nParts)
 		for i := 0; i < nParts; i++ {
-			rnd = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex*13+i*7+1)))
+			rnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex*13+i*7+1)))
 			zr.partZipf[i] = rand.NewZipf(rnd, s, 1, uint64(pKeysArray[i]-1))
 		}
 	}
@@ -121,15 +128,68 @@ func NewZipfRand(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s f
 	return zr
 }
 
-func (zr *ZipfRand) GetWholeRank() int64 {
+func (zr *ZipfRandLarge) GetWholeRank() int64 {
 	return int64(zr.wholeZipf.Uint64())
 }
 
-func (zr *ZipfRand) GetPartRank(pi int) int64 {
+func (zr *ZipfRandLarge) GetPartRank(pi int) int64 {
 	if !zr.isPartition {
 		return zr.GetWholeRank()
 	}
 	return int64(zr.partZipf[pi].Uint64())
+}
+
+type ZipfRandSmall struct {
+	isPartition bool
+	partIndex   int
+	nParts      int
+	nKeys       int64
+	wholeZipf   *ZipfGenerator
+	pKeysArray  []int64
+	partZipf    []*ZipfGenerator
+}
+
+// Index of partition starts from 0
+// Integer Key starts from 0 also
+// s should be smaller 1
+func NewZipfRandSmall(partIndex int, nKeys int64, nParts int, pKeysArray []int64, s float64, isPartition bool) *ZipfRandSmall {
+
+	zr := &ZipfRandSmall{
+		isPartition: isPartition,
+		partIndex:   partIndex,
+		nParts:      nParts,
+		nKeys:       nKeys,
+	}
+
+	//rnd := rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex+1)))
+	//zr.wholeZipf = rand.NewZipf(rnd, s, 1, uint64(nKeys-1))
+	zr.wholeZipf = NewZipfGenerator(nKeys, s, partIndex)
+
+	if zr.isPartition {
+		zr.pKeysArray = make([]int64, nParts)
+		for i, k := range pKeysArray {
+			zr.pKeysArray[i] = k
+		}
+		zr.partZipf = make([]*ZipfGenerator, nParts)
+		for i := 0; i < nParts; i++ {
+			//rnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex*13+i*7+1)))
+			//zr.partZipf[i] = rand.NewZipf(rnd, s, 1, uint64(pKeysArray[i]-1))
+			zr.partZipf[i] = NewZipfGenerator(pKeysArray[i], s, partIndex)
+		}
+	}
+
+	return zr
+}
+
+func (zr *ZipfRandSmall) GetWholeRank() int64 {
+	return zr.wholeZipf.NextInt()
+}
+
+func (zr *ZipfRandSmall) GetPartRank(pi int) int64 {
+	if !zr.isPartition {
+		return zr.GetWholeRank()
+	}
+	return zr.partZipf[pi].NextInt()
 }
 
 type UniformRand struct {
@@ -150,7 +210,7 @@ func NewUniformRand(partIndex int, nKeys int64, nParts int, pKeysArray []int64, 
 		nKeys:       nKeys,
 	}
 
-	ur.wholeUniform = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex+1)))
+	ur.wholeUniform = rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex+1)))
 
 	if ur.isPartition {
 		ur.pKeysArray = make([]int64, nParts)
@@ -159,7 +219,7 @@ func NewUniformRand(partIndex int, nKeys int64, nParts int, pKeysArray []int64, 
 		}
 		ur.partUniform = make([]*rand.Rand, nParts)
 		for i := 0; i < nParts; i++ {
-			ur.partUniform[i] = rand.New(rand.NewSource(time.Now().Unix() / int64(partIndex*13+i*7+1)))
+			ur.partUniform[i] = rand.New(rand.NewSource(time.Now().UnixNano() / int64(partIndex*13+i*7+1)))
 		}
 	}
 

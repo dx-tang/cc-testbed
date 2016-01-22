@@ -6,7 +6,7 @@ import (
 )
 
 func BenchmarkHotColdRand(b *testing.B) {
-	NParts := int64(13)
+	NParts := int64(10)
 	keyRange := []int64{100, 1000}
 	hp := NewHashPartitioner(NParts, keyRange)
 	pKeysArray := hp.GetKeyArray()
@@ -14,9 +14,9 @@ func BenchmarkHotColdRand(b *testing.B) {
 
 	var kg KeyGen
 
-	kg = NewHotColdRand(0, nKeys, int(NParts), pKeysArray, 180, true)
+	kg = NewHotColdRand(0, nKeys, int(NParts), pKeysArray, 20080, true)
 
-	hotRange := int64(1) * pKeysArray[0] / 100
+	hotRange := int64(20)
 
 	count := 0
 	hotRate := 0
@@ -44,7 +44,7 @@ func BenchmarkZipfRand(b *testing.B) {
 
 	var kg KeyGen
 
-	kg = NewZipfRand(0, nKeys, int(NParts), pKeysArray, 1.01, true)
+	kg = NewZipfRandLarge(0, nKeys, int(NParts), pKeysArray, 1.01, true)
 
 	hotRange := int64(20) * pKeysArray[0] / 100
 

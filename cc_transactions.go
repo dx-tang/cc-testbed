@@ -1,8 +1,8 @@
 package testbed
 
-/*import (
+import (
 	"github.com/totemtang/cc-testbed/clog"
-)*/
+)
 
 const (
 	// Smallbank Workload
@@ -25,6 +25,60 @@ type Trans interface {
 
 type TransGen interface {
 	GenOneTrans() Trans
+}
+
+type TransQueue struct {
+	queue []Trans
+	head  int
+	tail  int
+	count int
+	size  int
+}
+
+func NewTransQueue(size int) *TransQueue {
+	tq := &TransQueue{
+		queue: make([]Trans, size),
+		size:  size,
+		head:  -1,
+		tail:  0,
+		count: 0,
+	}
+	return tq
+}
+
+func (tq *TransQueue) IsFull() bool {
+	if tq.size == tq.count {
+		return true
+	}
+	return false
+}
+
+func (tq *TransQueue) IsEmpty() bool {
+	if tq.count == 0 {
+		return true
+	}
+	return false
+}
+
+func (tq *TransQueue) Enqueue(t Trans) {
+	if tq.count == tq.size {
+		clog.Error("Queue Full\n")
+	}
+	next := (tq.head + 1) % tq.size
+	tq.queue[next] = t
+	tq.head = next
+	tq.count++
+}
+
+func (tq *TransQueue) Dequeue() Trans {
+	if tq.count == 0 {
+		clog.Error("Queue Empty\n")
+	}
+	next := (tq.tail + 1) % tq.size
+	t := tq.queue[tq.tail]
+	tq.tail = next
+	tq.count--
+	return t
 }
 
 /*
