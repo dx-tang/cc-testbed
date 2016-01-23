@@ -14,6 +14,10 @@ const (
 	DEPOSITCHECKING
 	TRANSACTIONSAVINGS
 
+	SINGLEBASE = iota
+	ADDONE
+	UPDATEINT
+
 	LAST_TXN
 )
 
@@ -432,6 +436,70 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if exec.Commit() == 0 {
+		return nil, EABORT
+	}
+
+	return nil, nil
+}
+
+func AddOne(t Trans, exec ETransaction) (Value, error) {
+	singleTrans := t.(*SingleTrans)
+	iv := &singleTrans.iv
+
+	var k Key
+	var part int
+	var val Value
+	var err error
+	for i := 0; i < len(singleTrans.keys); i++ {
+		k = singleTrans.keys[i]
+		part = singleTrans.parts[i]
+
+		err = exec.MayWrite(SINGLE, k, part)
+		if err != nil {
+			return nil, err
+		}
+
+		val, err = exec.ReadValue(SINGLE, k, part, SINGLE_VAL)
+		if err != nil {
+			return nil, err
+		}
+
+		iv.intVal = *val.(*int64) + 1
+
+		err = exec.WriteValue(SINGLE, k, part, iv, SINGLE_VAL)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	if exec.Commit() == 0 {
+		return nil, EABORT
+	}
+
+	return nil, nil
+}
+
+func UpdateInt(t Trans, exec ETransaction) (Value, error) {
+	singleTrans := t.(*SingleTrans)
+	iv := &singleTrans.iv
+
+	var k Key
+	var part int
+	var err error
+	for i := 0; i < len(singleTrans.keys); i++ {
+		k = singleTrans.keys[i]
+		part = singleTrans.parts[i]
+
+		iv.intVal = int64(i)
+		err = exec.WriteValue(SINGLE, k, part, iv, SINGLE_VAL)
+		if err != nil {
+			return nil, err
+		}
+
 	}
 
 	if exec.Commit() == 0 {

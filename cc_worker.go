@@ -70,6 +70,8 @@ func NewWorker(id int, s *Store, tableCount int) *Worker {
 	w.Register(WRITECHECK, WriteCheck)
 	w.Register(DEPOSITCHECKING, DepositChecking)
 	w.Register(TRANSACTIONSAVINGS, TransactionSavings)
+	w.Register(ADDONE, AddOne)
+	w.Register(UPDATEINT, UpdateInt)
 
 	return w
 }
