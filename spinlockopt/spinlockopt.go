@@ -11,8 +11,8 @@ type WDRWSpinlock struct {
 
 const spinlockMaxReaders = 1 << 30
 
-func (l *WDRWSpinlock) RLock() bool {
-	i := l.trial
+func (l *WDRWSpinlock) RLock(trial int) bool {
+	i := trial
 	for atomic.LoadInt32(&l.readerCount) < 0 {
 		if i == 0 {
 			return false
@@ -32,8 +32,8 @@ func (l *WDRWSpinlock) RUnlock() {
 	atomic.AddInt32(&l.readerCount, -1)
 }
 
-func (l *WDRWSpinlock) Lock() bool {
-	i := l.trial
+func (l *WDRWSpinlock) Lock(trial int) bool {
+	i := trial
 	for atomic.LoadInt32(&l.readerCount) > 0 {
 		if i == 0 {
 			return false
@@ -54,8 +54,8 @@ func (l *WDRWSpinlock) Unlock() {
 	atomic.AddInt32(&l.readerCount, spinlockMaxReaders)
 }
 
-func (l *WDRWSpinlock) Upgrade() bool {
-	i := l.trial
+func (l *WDRWSpinlock) Upgrade(trial int) bool {
+	i := trial
 	for atomic.LoadInt32(&l.readerCount) > 1 {
 		if i == 0 {
 			atomic.AddInt32(&l.readerCount, -1)

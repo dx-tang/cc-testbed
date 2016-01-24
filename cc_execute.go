@@ -15,9 +15,9 @@ const (
 
 type ETransaction interface {
 	Reset(t Trans)
-	ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error)
-	WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error
-	MayWrite(tableID int, k Key, partNum int) error
+	ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error)
+	WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error
+	MayWrite(tableID int, k Key, partNum int, trial int) error
 	Abort() TID
 	Commit() TID
 	Store() *Store
@@ -44,7 +44,7 @@ func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error) {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error) {
 	s := p.s
 	v := s.GetValueByID(tableID, k, partNum, colNum)
 	if v == nil {
@@ -53,7 +53,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 	return v, nil
 }
 
-func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error {
+func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
 	s := p.s
 	success := s.SetValueByID(tableID, k, partNum, value, colNum)
 	if !success {
@@ -62,7 +62,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	return nil
 }
 
-func (p *PTransaction) MayWrite(tableID int, k Key, partNum int) error {
+func (p *PTransaction) MayWrite(tableID int, k Key, partNum int, trial int) error {
 	return nil
 }
 
@@ -165,7 +165,7 @@ func (o *OTransaction) Reset(t Trans) {
 
 }
 
-func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error) {
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error) {
 
 	r := o.s.GetRecByID(tableID, k, partNum)
 	if r == nil {
@@ -206,7 +206,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 	return r.GetValue(colNum), nil
 }
 
-func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error {
+func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
 
 	r := o.s.GetRecByID(tableID, k, partNum)
 
@@ -295,7 +295,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	return nil
 }
 
-func (o *OTransaction) MayWrite(tableID int, k Key, partNum int) error {
+func (o *OTransaction) MayWrite(tableID int, k Key, partNum int, trial int) error {
 	return nil
 }
 
@@ -467,7 +467,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 func (l *LTransaction) Reset(t Trans) {
 }
 
-func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (Value, error) {
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error) {
 
 	var ok bool = false
 	var wr *WriteRec
@@ -508,7 +508,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 		return nil, ENOKEY
 	}
 
-	if !rec.RLock() {
+	if !rec.RLock(trial) {
 		//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 		/*
 			clog.Info("Current Table %v; Key %v; NTXN %v\n", tableID, ParseKey(k, 0), w.NStats[NTXN])
@@ -542,7 +542,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 	return rec.GetValue(colNum), nil
 }
 
-func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int) error {
+func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
 
 	var ok bool = false
 	var wr *WriteRec
@@ -581,7 +581,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	// Has been RLocked
 	if ok {
 		rr.exist = false
-		if rr.rec.Upgrade() {
+		if rr.rec.Upgrade(trial) {
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -608,7 +608,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		return ENOKEY
 	}
 
-	if rec.WLock() {
+	if rec.WLock(trial) {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -628,7 +628,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 }
 
-func (l *LTransaction) MayWrite(tableID int, k Key, partNum int) error {
+func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) error {
 	if !*Spec {
 		return nil
 	}
@@ -657,7 +657,7 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int) error {
 	// Has been RLocked
 	if ok {
 		rr.exist = false
-		if rr.rec.Upgrade() {
+		if rr.rec.Upgrade(trial) {
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -680,7 +680,7 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int) error {
 		return ENOKEY
 	}
 
-	if rec.WLock() {
+	if rec.WLock(trial) {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]

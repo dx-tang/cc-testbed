@@ -145,6 +145,7 @@ type SBTrans struct {
 	ammount     FloatValue
 	fv          []FloatValue
 	ret         FloatValue
+	trial       int
 	padding2    [PADDING]byte
 }
 
@@ -277,6 +278,11 @@ func (s *SBTransGen) GenOneTrans() Trans {
 	default:
 		clog.Error("SmallBank does not support transaction %v\n", t.TXN)
 	}
+
+	if WDTRIAL > 0 {
+		t.trial = rnd.Intn(WDTRIAL)
+	}
+
 	return t
 }
 

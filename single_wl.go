@@ -65,6 +65,7 @@ type SingleTrans struct {
 	keys        []Key
 	parts       []int
 	iv          IntValue
+	trial       int
 	padding2    [PADDING]byte
 }
 
@@ -135,6 +136,10 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 		t.parts[i] = t.accessParts[j]
 		t.keys[i] = gen.GetKey(SINGLE, t.parts[i])
 		j = (j + 1) % len(t.accessParts)
+	}
+
+	if WDTRIAL > 0 {
+		t.trial = rnd.Intn(WDTRIAL)
 	}
 
 	return t

@@ -44,11 +44,11 @@ type Record interface {
 	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
-	WLock() bool
+	WLock(trial int) bool
 	WUnlock()
-	RLock() bool
+	RLock(trial int) bool
 	RUnlock()
-	Upgrade() bool
+	Upgrade(trial int) bool
 }
 
 /*
@@ -159,7 +159,7 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
-func (pr *PRecord) WLock() bool {
+func (pr *PRecord) WLock(trial int) bool {
 	clog.Error("Partition mode does not support WLock Operation")
 	return false
 }
@@ -168,7 +168,7 @@ func (pr *PRecord) WUnlock() {
 	clog.Error("Partition mode does not support WUnlock Operation")
 }
 
-func (pr *PRecord) RLock() bool {
+func (pr *PRecord) RLock(trial int) bool {
 	clog.Error("Partition mode does not support RLock Operation")
 	return false
 }
@@ -177,7 +177,7 @@ func (pr *PRecord) RUnlock() {
 	clog.Error("Partition mode does not support RUnlock Operation")
 }
 
-func (pr *PRecord) Upgrade() bool {
+func (pr *PRecord) Upgrade(trial int) bool {
 	clog.Error("Partition mode does not support Upgrade Operation")
 	return false
 }
@@ -230,7 +230,7 @@ func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
 }
 
-func (or *ORecord) WLock() bool {
+func (or *ORecord) WLock(trial int) bool {
 	clog.Error("OCC mode does not support WLock Operation")
 	return false
 }
@@ -239,7 +239,7 @@ func (or *ORecord) WUnlock() {
 	clog.Error("OCC mode does not support WUnlock Operation")
 }
 
-func (or *ORecord) RLock() bool {
+func (or *ORecord) RLock(trial int) bool {
 	debug.PrintStack()
 	clog.Error("OCC mode does not support RLock Operation")
 	return false
@@ -249,7 +249,7 @@ func (or *ORecord) RUnlock() {
 	clog.Error("OCC mode does not support RUnlock Operation")
 }
 
-func (or *ORecord) Upgrade() bool {
+func (or *ORecord) Upgrade(trial int) bool {
 	clog.Error("OCC mode does not support Upgrade Operation")
 	return false
 }
@@ -300,7 +300,7 @@ func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
 }
 
-func (dr *DRecord) WLock() bool {
+func (dr *DRecord) WLock(trial int) bool {
 	clog.Error("Dummy mode does not support WLock Operation")
 	return false
 }
@@ -309,7 +309,7 @@ func (dr *DRecord) WUnlock() {
 	clog.Error("Dummy mode does not support WUnlock Operation")
 }
 
-func (dr *DRecord) RLock() bool {
+func (dr *DRecord) RLock(trial int) bool {
 	clog.Error("Dummy mode does not support RLock Operation")
 	return false
 }
@@ -318,7 +318,7 @@ func (dr *DRecord) RUnlock() {
 	clog.Error("Dummy mode does not support RUnlock Operation")
 }
 
-func (dr *DRecord) Upgrade() bool {
+func (dr *DRecord) Upgrade(trial int) bool {
 	clog.Error("Dummy mode does not support Upgrade Operation")
 	return false
 }
@@ -387,8 +387,8 @@ func (lr *LRecord) SetTID(tid TID) {
 	clog.Error("Lock mode does not support SetTID Operation")
 }
 
-func (lr *LRecord) WLock() bool {
-	return lr.rwLock.Lock()
+func (lr *LRecord) WLock(trial int) bool {
+	return lr.rwLock.Lock(trial)
 	//return true
 }
 
@@ -396,8 +396,8 @@ func (lr *LRecord) WUnlock() {
 	lr.rwLock.Unlock()
 }
 
-func (lr *LRecord) RLock() bool {
-	return lr.rwLock.RLock()
+func (lr *LRecord) RLock(trial int) bool {
+	return lr.rwLock.RLock(trial)
 	//return true
 }
 
@@ -406,7 +406,7 @@ func (lr *LRecord) RUnlock() {
 	//return
 }
 
-func (lr *LRecord) Upgrade() bool {
-	return lr.rwLock.Upgrade()
+func (lr *LRecord) Upgrade(trial int) bool {
+	return lr.rwLock.Upgrade(trial)
 	//return true
 }
