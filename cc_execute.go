@@ -238,54 +238,61 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 	var t *TrackTable
 	ok = false
-	for i := 0; i < len(o.tt); i++ {
-		t = &o.tt[i]
-		if t.tableID == tableID {
-			for j := 0; j < len(t.rKeys); j++ {
-				rk := &t.rKeys[j]
-				if rk.k == k {
-					ok = true
-					break
+	/*
+		for i := 0; i < len(o.tt); i++ {
+			t = &o.tt[i]
+			if t.tableID == tableID {
+				for j := 0; j < len(t.rKeys); j++ {
+					rk := &t.rKeys[j]
+					if rk.k == k {
+						ok = true
+						break
+					}
 				}
+				if !ok {
+					n := len(t.rKeys)
+					t.rKeys = t.rKeys[0 : n+1]
+					t.rKeys[n].k = k
+					t.rKeys[n].last = tid
+					t.rKeys[n].rec = r
+					ok = true
+				}
+				break
 			}
-			if !ok {
-				n := len(t.rKeys)
-				t.rKeys = t.rKeys[0 : n+1]
-				t.rKeys[n].k = k
-				t.rKeys[n].last = tid
-				t.rKeys[n].rec = r
-				ok = true
-			}
-			break
 		}
-	}
 
-	if !ok {
-		// Store this key
-		n := len(o.tt)
-		o.tt = o.tt[0 : n+1]
-		t = &o.tt[n]
-		t.tableID = tableID
-		t.rKeys = t.rKeys[0:1]
-		t.rKeys[0].k = k
-		t.rKeys[0].last = tid
-		t.rKeys[0].rec = r
-	}
+		if !ok {
+			// Store this key
+			n := len(o.tt)
+			o.tt = o.tt[0 : n+1]
+			t = &o.tt[n]
+			t.tableID = tableID
+			t.rKeys = t.rKeys[0:1]
+			t.rKeys[0].k = k
+			t.rKeys[0].last = tid
+			t.rKeys[0].rec = r
+		}*/
 
 	if tid > o.maxSeen {
 		o.maxSeen = tid
 	}
 
-	ok = false
-	for j := 0; j < len(t.wKeys); j++ {
-		wk := &t.wKeys[j]
-		if wk.k == k {
-			ok = true
-			n := len(wk.vals)
-			wk.vals = wk.vals[0 : n+1]
-			wk.vals[n] = value
-			wk.cols = wk.cols[0 : n+1]
-			wk.cols[n] = colNum
+	//ok = false
+	for i := 0; i < len(o.tt); i++ {
+		t = &o.tt[i]
+		if t.tableID == tableID {
+			for j := 0; j < len(t.wKeys); j++ {
+				wk := &t.wKeys[j]
+				if wk.k == k {
+					ok = true
+					n := len(wk.vals)
+					wk.vals = wk.vals[0 : n+1]
+					wk.vals[n] = value
+					wk.cols = wk.cols[0 : n+1]
+					wk.cols[n] = colNum
+					break
+				}
+			}
 			break
 		}
 	}

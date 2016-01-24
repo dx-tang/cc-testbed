@@ -98,7 +98,7 @@ func main() {
 				//if tq.IsFull() {
 				//	t = tq.Dequeue()
 				//} else {
-					t = gen.GenOneTrans()
+				t = gen.GenOneTrans()
 				//}
 				w.NGen += time.Since(tm)
 
@@ -107,15 +107,15 @@ func main() {
 				w.One(t)
 				w.NExecute += time.Since(tm)
 				/*
-				if err != nil {
-					if err == testbed.EABORT {
-						tq.Enqueue(t)
-					} else if err == testbed.ENOKEY {
-						clog.Error("%s\n", err.Error())
-					} else if err != testbed.EABORT {
-						clog.Error("%s\n", err.Error())
-					}
-				}*/
+					if err != nil {
+						if err == testbed.EABORT {
+							tq.Enqueue(t)
+						} else if err == testbed.ENOKEY {
+							clog.Error("%s\n", err.Error())
+						} else if err != testbed.EABORT {
+							clog.Error("%s\n", err.Error())
+						}
+					}*/
 				//txn--
 			}
 			//clog.Info("Worker %d issues %d transactions\n", n, txn)
@@ -141,7 +141,10 @@ func main() {
 		defer st.Close()
 
 		//bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS]))
-		st.WriteString(fmt.Sprintf("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
+		//st.WriteString(fmt.Sprintf("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
+		st.WriteString(fmt.Sprintf("%.f", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
+		st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
+
 	}
 	clog.Info("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds())
 
