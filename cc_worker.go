@@ -56,7 +56,7 @@ func NewWorker(id int, s *Store, tableCount int) *Worker {
 	if *SysType == PARTITION {
 		w.E = StartPTransaction(w)
 	} else if *SysType == OCC {
-		w.E = StartOTransaction(w)
+		w.E = StartOTransaction(w, tableCount)
 	} else if *SysType == LOCKING {
 		w.E = StartLTransaction(w, tableCount)
 	} else {

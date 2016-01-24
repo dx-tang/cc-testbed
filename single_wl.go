@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	INITVAL = 100
+	INITVAL = 0
 )
 
 const (

@@ -120,16 +120,17 @@ type OTransaction struct {
 	padding     [PADDING]byte
 }
 
-func StartOTransaction(w *Worker) *OTransaction {
+func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 	tx := &OTransaction{
 		w:           w,
 		s:           w.store,
-		tt:          make([]TrackTable, MAXTABLENUM),
+		tt:          make([]TrackTable, tableCount),
 		dummyRecord: &DRecord{},
 	}
 
 	for j := 0; j < len(tx.tt); j++ {
 		t := &tx.tt[j]
+		t.tableID = j
 		t.rKeys = make([]ReadKey, 0, 100)
 		t.wKeys = make([]WriteKey, 100)
 		for i := 0; i < len(t.wKeys); i++ {
@@ -142,7 +143,7 @@ func StartOTransaction(w *Worker) *OTransaction {
 		t.wKeys = t.wKeys[:0]
 	}
 
-	tx.tt = tx.tt[:0]
+	//tx.tt = tx.tt[:0]
 
 	return tx
 }
@@ -160,7 +161,7 @@ func (o *OTransaction) Reset(t Trans) {
 		t.wKeys = t.wKeys[:0]
 	}
 
-	o.tt = o.tt[:0]
+	//o.tt = o.tt[:0]
 
 }
 
@@ -181,36 +182,21 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int) (V
 	}
 
 	ok = false
-	for i := 0; i < len(o.tt); i++ {
-		t := &o.tt[i]
-		if t.tableID == tableID {
-			for j := 0; j < len(t.rKeys); j++ {
-				rk := &t.rKeys[j]
-				if rk.k == k {
-					ok = true
-					break
-				}
-			}
-			if !ok {
-				n := len(t.rKeys)
-				t.rKeys = t.rKeys[0 : n+1]
-				t.rKeys[n].k = k
-				t.rKeys[n].last = tid
-				t.rKeys[n].rec = r
-				ok = true
-			}
+	t := &o.tt[tableID]
+
+	for j := 0; j < len(t.rKeys); j++ {
+		rk := &t.rKeys[j]
+		if rk.k == k {
+			ok = true
+			break
 		}
 	}
-
 	if !ok {
-		// Store this key
-		n := len(o.tt)
-		o.tt = o.tt[0 : n+1]
-		o.tt[n].tableID = tableID
-		o.tt[n].rKeys = o.tt[n].rKeys[0:1]
-		o.tt[n].rKeys[0].k = k
-		o.tt[n].rKeys[0].last = tid
-		o.tt[n].rKeys[0].rec = r
+		n := len(t.rKeys)
+		t.rKeys = t.rKeys[0 : n+1]
+		t.rKeys[n].k = k
+		t.rKeys[n].last = tid
+		t.rKeys[n].rec = r
 	}
 
 	if tid > o.maxSeen {
@@ -278,25 +264,21 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 
 	//ok = false
-	for i := 0; i < len(o.tt); i++ {
-		t = &o.tt[i]
-		if t.tableID == tableID {
-			for j := 0; j < len(t.wKeys); j++ {
-				wk := &t.wKeys[j]
-				if wk.k == k {
-					ok = true
-					n := len(wk.vals)
-					wk.vals = wk.vals[0 : n+1]
-					wk.vals[n] = value
-					wk.cols = wk.cols[0 : n+1]
-					wk.cols[n] = colNum
-					break
-				}
-			}
+	t = &o.tt[tableID]
+	for j := 0; j < len(t.wKeys); j++ {
+		wk := &t.wKeys[j]
+		if wk.k == k {
+			ok = true
+			n := len(wk.vals)
+			wk.vals = wk.vals[0 : n+1]
+			wk.vals[n] = value
+			wk.cols = wk.cols[0 : n+1]
+			wk.cols[n] = colNum
 			break
 		}
 	}
 	if !ok {
+		ok = true
 		n := len(t.wKeys)
 		t.wKeys = t.wKeys[0 : n+1]
 		t.wKeys[n].k = k
