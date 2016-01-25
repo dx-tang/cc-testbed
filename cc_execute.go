@@ -187,9 +187,19 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 		}
 	}
 
-	r = o.s.GetRecByID(tableID, k, partNum)
+	for j := 0; j < len(t.wKeys); j++ {
+		wk := &t.wKeys[j]
+		if wk.k == k {
+			r = wk.rec
+			break
+		}
+	}
+
 	if r == nil {
-		return nil, ENOKEY
+		r = o.s.GetRecByID(tableID, k, partNum)
+		if r == nil {
+			return nil, ENOKEY
+		}
 	}
 
 	ok, tid = r.IsUnlocked()
@@ -236,10 +246,20 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 
 	if !ok {
-		r = o.s.GetRecByID(tableID, k, partNum)
+		for j := 0; j < len(t.rKeys); j++ {
+			rk := &t.rKeys[j]
+			if rk.k == k {
+				r = rk.rec
+				break
+			}
+		}
 
 		if r == nil {
-			return ENOKEY
+			r = o.s.GetRecByID(tableID, k, partNum)
+
+			if r == nil {
+				return ENOKEY
+			}
 		}
 
 		n := len(t.wKeys)
