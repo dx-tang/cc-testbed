@@ -178,23 +178,18 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	for j := 0; j < len(t.rKeys); j++ {
 		rk := &t.rKeys[j]
 		if rk.k == k {
-			ok = true
-			r = rk.rec
-			break
+			ok, _ = rk.rec.IsUnlocked()
+			if !ok {
+				o.w.NStats[NREADABORTS]++
+				return nil, EABORT
+			}
+			return rk.rec.GetValue(colNum), nil
 		}
 	}
 
-	if !ok {
-		r = o.s.GetRecByID(tableID, k, partNum)
-		if r == nil {
-			return nil, ENOKEY
-		}
-
-		n := len(t.rKeys)
-		t.rKeys = t.rKeys[0 : n+1]
-		t.rKeys[n].k = k
-		t.rKeys[n].last = tid
-		t.rKeys[n].rec = r
+	r = o.s.GetRecByID(tableID, k, partNum)
+	if r == nil {
+		return nil, ENOKEY
 	}
 
 	ok, tid = r.IsUnlocked()
@@ -207,6 +202,12 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 		o.w.NStats[NREADABORTS]++
 		return nil, EABORT
 	}
+
+	n := len(t.rKeys)
+	t.rKeys = t.rKeys[0 : n+1]
+	t.rKeys[n].k = k
+	t.rKeys[n].last = tid
+	t.rKeys[n].rec = r
 
 	return r.GetValue(colNum), nil
 }
