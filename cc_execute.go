@@ -185,7 +185,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	}
 
 	if !ok {
-		r := o.s.GetRecByID(tableID, k, partNum)
+		r = o.s.GetRecByID(tableID, k, partNum)
 		if r == nil {
 			return nil, ENOKEY
 		}
