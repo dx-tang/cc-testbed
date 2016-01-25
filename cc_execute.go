@@ -167,31 +167,29 @@ func (o *OTransaction) Reset(t Trans) {
 
 func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error) {
 
-	r := o.s.GetRecByID(tableID, k, partNum)
-	if r == nil {
-		return nil, ENOKEY
-	}
-
 	var ok bool
 	var tid TID
-	ok, tid = r.IsUnlocked()
-
-	if !ok {
-		o.w.NStats[NREADABORTS]++
-		return nil, EABORT
-	}
+	var t *TrackTable
+	var r Record
 
 	ok = false
-	t := &o.tt[tableID]
+	t = &o.tt[tableID]
 
 	for j := 0; j < len(t.rKeys); j++ {
 		rk := &t.rKeys[j]
 		if rk.k == k {
 			ok = true
+			r = rk.rec
 			break
 		}
 	}
+
 	if !ok {
+		r := o.s.GetRecByID(tableID, k, partNum)
+		if r == nil {
+			return nil, ENOKEY
+		}
+
 		n := len(t.rKeys)
 		t.rKeys = t.rKeys[0 : n+1]
 		t.rKeys[n].k = k
@@ -199,8 +197,15 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 		t.rKeys[n].rec = r
 	}
 
+	ok, tid = r.IsUnlocked()
+
 	if tid > o.maxSeen {
 		o.maxSeen = tid
+	}
+
+	if !ok {
+		o.w.NStats[NREADABORTS]++
+		return nil, EABORT
 	}
 
 	return r.GetValue(colNum), nil
@@ -208,67 +213,18 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
 
-	r := o.s.GetRecByID(tableID, k, partNum)
-
-	if r == nil {
-		return ENOKEY
-	}
-
-	// Read this record
-	ok, tid := r.IsUnlocked()
-
-	if !ok {
-		o.w.NStats[NREADABORTS]++
-		return EABORT
-	}
-
+	var ok bool
+	var tid TID
 	var t *TrackTable
+	var r Record
+
 	ok = false
-	/*
-		for i := 0; i < len(o.tt); i++ {
-			t = &o.tt[i]
-			if t.tableID == tableID {
-				for j := 0; j < len(t.rKeys); j++ {
-					rk := &t.rKeys[j]
-					if rk.k == k {
-						ok = true
-						break
-					}
-				}
-				if !ok {
-					n := len(t.rKeys)
-					t.rKeys = t.rKeys[0 : n+1]
-					t.rKeys[n].k = k
-					t.rKeys[n].last = tid
-					t.rKeys[n].rec = r
-					ok = true
-				}
-				break
-			}
-		}
-
-		if !ok {
-			// Store this key
-			n := len(o.tt)
-			o.tt = o.tt[0 : n+1]
-			t = &o.tt[n]
-			t.tableID = tableID
-			t.rKeys = t.rKeys[0:1]
-			t.rKeys[0].k = k
-			t.rKeys[0].last = tid
-			t.rKeys[0].rec = r
-		}*/
-
-	if tid > o.maxSeen {
-		o.maxSeen = tid
-	}
-
-	//ok = false
 	t = &o.tt[tableID]
 	for j := 0; j < len(t.wKeys); j++ {
 		wk := &t.wKeys[j]
 		if wk.k == k {
 			ok = true
+			r = wk.rec
 			n := len(wk.vals)
 			wk.vals = wk.vals[0 : n+1]
 			wk.vals[n] = value
@@ -277,8 +233,14 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			break
 		}
 	}
+
 	if !ok {
-		ok = true
+		r = o.s.GetRecByID(tableID, k, partNum)
+
+		if r == nil {
+			return ENOKEY
+		}
+
 		n := len(t.wKeys)
 		t.wKeys = t.wKeys[0 : n+1]
 		t.wKeys[n].k = k
@@ -290,6 +252,18 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		t.wKeys[n].vals[0] = value
 		t.wKeys[n].cols = t.wKeys[n].cols[0:1]
 		t.wKeys[n].cols[0] = colNum
+	}
+
+	// Read this record
+	ok, tid = r.IsUnlocked()
+
+	if !ok {
+		o.w.NStats[NREADABORTS]++
+		return EABORT
+	}
+
+	if tid > o.maxSeen {
+		o.maxSeen = tid
 	}
 
 	return nil
