@@ -18,7 +18,7 @@ const (
 )
 
 const (
-	SINGLETRANSNUM = 2
+	SINGLETRANSNUM = 3
 	SINGLEMAXPARTS = 2
 	SINGLEMAXKEYS  = 100
 )
@@ -66,6 +66,7 @@ type SingleTrans struct {
 	parts       []int
 	iv          IntValue
 	trial       int
+	readNum     int
 	padding2    [PADDING]byte
 }
 
@@ -91,6 +92,7 @@ type SingleTransGen struct {
 	nParts          int
 	isPartition     bool
 	tlen            int
+	rr              int
 }
 
 func (s *SingleTransGen) GenOneTrans() Trans {
@@ -142,6 +144,8 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 		t.trial = rnd.Intn(WDTRIAL)
 	}
 
+	t.readNum = (s.rr * s.tlen) / 100
+
 	return t
 }
 
@@ -151,7 +155,7 @@ type SingelWorkload struct {
 	transGen        []*SingleTransGen
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -222,6 +226,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			nParts:          nParts,
 			isPartition:     isPartition,
 			tlen:            tlen,
+			rr:              rr,
 		}
 		if isPartition {
 			tg.partIndex = i

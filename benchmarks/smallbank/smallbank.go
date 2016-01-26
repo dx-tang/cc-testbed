@@ -80,21 +80,21 @@ func main() {
 		wg.Add(1)
 		go func(n int) {
 			//var txn int64
-			//txn := 100000
+			txn := 1000000
 			var t testbed.Trans
 			//tq := testbed.NewTransQueue(BUFSIZE)
 			w := coord.Workers[n]
 			gen := sb.GetTransGen(n)
-			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+			//end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
 			for {
-				tm := time.Now()
-				if !end_time.After(tm) {
-					break
-				}
-				//if txn <= 0 {
+				//tm := time.Now()
+				//if !end_time.After(tm) {
 				//	break
 				//}
-				//tm := time.Now()
+				if txn <= 0 {
+					break
+				}
+				tm := time.Now()
 				//if tq.IsFull() {
 				//	t = tq.Dequeue()
 				//} else {
@@ -116,7 +116,7 @@ func main() {
 							clog.Error("%s\n", err.Error())
 						}
 					}*/
-				//txn--
+				txn--
 			}
 			//clog.Info("Worker %d issues %d transactions\n", n, txn)
 			wg.Done()

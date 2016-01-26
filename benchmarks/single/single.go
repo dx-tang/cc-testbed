@@ -23,6 +23,7 @@ var stat = flag.String("stat", "stat.out", "statistics")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var tlen = flag.Int("len", 10, "number of operations per transaction")
 var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
+var rr = flag.Int("rr", 0, "Rate Percentage From 0 to 100")
 
 const (
 	BUFSIZE = 5
@@ -72,7 +73,7 @@ func main() {
 	}
 
 	//sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
-	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen)
+	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr)
 	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount())
 
 	clog.Info("Done with Populating Store\n")

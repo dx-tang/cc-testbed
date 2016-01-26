@@ -498,7 +498,21 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 	var k Key
 	var part int
 	var err error
-	for i := 0; i < len(singleTrans.keys); i++ {
+	var val Value
+	for i := 0; i < singleTrans.readNum; i++ {
+		k = singleTrans.keys[i]
+		part = singleTrans.parts[i]
+
+		val, err = exec.ReadValue(SINGLE, k, part, SINGLE_VAL, trial)
+		if err != nil {
+			return nil, err
+		}
+		if val == nil {
+			return nil, ENOKEY
+		}
+	}
+
+	for i := singleTrans.readNum; i < len(singleTrans.keys); i++ {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
 

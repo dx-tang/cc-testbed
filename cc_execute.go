@@ -111,36 +111,34 @@ type TrackTable struct {
 
 // Silo OCC Transaction Implementation
 type OTransaction struct {
-	padding0    [PADDING]byte
-	w           *Worker
-	s           *Store
-	tt          []TrackTable
-	dummyRecord *DRecord
-	maxSeen     TID
-	padding     [PADDING]byte
+	padding0 [PADDING]byte
+	w        *Worker
+	s        *Store
+	tt       []TrackTable
+	maxSeen  TID
+	padding  [PADDING]byte
 }
 
 func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 	tx := &OTransaction{
-		w:           w,
-		s:           w.store,
-		tt:          make([]TrackTable, tableCount),
-		dummyRecord: &DRecord{},
+		w:  w,
+		s:  w.store,
+		tt: make([]TrackTable, tableCount, MAXTABLENUM),
 	}
 
 	for j := 0; j < len(tx.tt); j++ {
 		t := &tx.tt[j]
 		t.tableID = j
-		t.rKeys = make([]ReadKey, 0, 100)
-		t.wKeys = make([]WriteKey, 100)
+		t.rKeys = make([]ReadKey, 0, MAXTRACKINGKEY)
+		t.wKeys = make([]WriteKey, MAXTRACKINGKEY)
 		for i := 0; i < len(t.wKeys); i++ {
 			wk := &t.wKeys[i]
-			wk.vals = make([]Value, 0, 10+2*PADDINGINT64)
+			wk.vals = make([]Value, 0, MAXCOLUMN+2*PADDINGINT64)
 			wk.vals = wk.vals[PADDINGINT64:PADDINGINT64]
-			wk.cols = make([]int, 0, 10+2*PADDINGINT)
+			wk.cols = make([]int, 0, MAXCOLUMN+2*PADDINGINT)
 			wk.cols = wk.cols[PADDINGINT:PADDINGINT]
 		}
-		t.wKeys = t.wKeys[:0]
+		t.wKeys = t.wKeys[0:0]
 	}
 
 	//tx.tt = tx.tt[:0]
@@ -435,7 +433,7 @@ func StartLTransaction(w *Worker, nTables int) *LTransaction {
 	tx := &LTransaction{
 		w:  w,
 		s:  w.store,
-		rt: make([]RecTable, nTables),
+		rt: make([]RecTable, nTables, MAXTABLENUM),
 	}
 
 	for i := 0; i < len(tx.rt); i++ {
