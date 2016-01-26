@@ -127,7 +127,7 @@ func main() {
 	}
 	wg.Wait()
 
-	single.PrintSum()
+	//single.PrintSum()
 
 	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
