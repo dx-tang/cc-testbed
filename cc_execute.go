@@ -15,7 +15,7 @@ const (
 
 type ETransaction interface {
 	Reset(t Trans)
-	ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error)
+	ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error)
 	WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error
 	MayWrite(tableID int, k Key, partNum int, trial int) error
 	Abort() TID
@@ -24,19 +24,41 @@ type ETransaction interface {
 	Worker() *Worker
 }
 
+type PTrackTable struct {
+	padding1 [PADDING]byte
+	wRecs    []WriteRec
+	padding2 [PADDING]byte
+}
+
 // Partition Transaction Implementation
 type PTransaction struct {
 	padding0 [PADDING]byte
 	w        *Worker
 	s        *Store
+	tt       []PTrackTable
 	padding  [PADDING]byte
 }
 
-func StartPTransaction(w *Worker) *PTransaction {
+func StartPTransaction(w *Worker, tableCount int) *PTransaction {
 	tx := &PTransaction{
-		w: w,
-		s: w.store,
+		w:  w,
+		s:  w.store,
+		tt: make([]PTrackTable, tableCount, MAXTABLENUM),
 	}
+
+	for i := 0; i < len(tx.tt); i++ {
+		t := &tx.tt[i]
+		t.wRecs = make([]WriteRec, MAXTRACKINGKEY)
+		for j, _ := range t.wRecs {
+			wr := &t.wRecs[j]
+			wr.vals = make([]Value, 0, MAXCOLUMN+2*PADDINGINT64)
+			wr.vals = wr.vals[PADDINGINT64:PADDINGINT64]
+			wr.cols = make([]int, 0, MAXCOLUMN+2*PADDINGINT)
+			wr.cols = wr.cols[PADDINGINT:PADDINGINT]
+		}
+		t.wRecs = t.wRecs[0:0]
+	}
+
 	return tx
 }
 
@@ -44,22 +66,59 @@ func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error) {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
+	t := &p.tt[tableID]
+	for i := 0; i < len(t.wRecs); i++ {
+		wr := &t.wRecs[i]
+		if wr.k == k {
+			for p := len(wr.cols) - 1; p >= 0; p-- {
+				if colNum == wr.cols[p] {
+					return wr.vals[p], false, nil
+				}
+			}
+			break
+		}
+	}
+
 	s := p.s
 	v := s.GetValueByID(tableID, k, partNum, colNum)
 	if v == nil {
-		return nil, ENOKEY
+		return nil, true, ENOKEY
 	}
-	return v, nil
+	return v, true, nil
 }
 
 func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
+	t := &p.tt[tableID]
+	for i := 0; i < len(t.wRecs); i++ {
+		wr := &t.wRecs[i]
+		if wr.k == k {
+			n := len(wr.cols)
+			wr.cols = wr.cols[0 : n+1]
+			wr.cols[n] = colNum
+			wr.vals = wr.vals[0 : n+1]
+			wr.vals[n] = value
+			return nil
+		}
+	}
+
 	s := p.s
-	success := s.SetValueByID(tableID, k, partNum, value, colNum)
-	if !success {
+	r := s.GetRecByID(tableID, k, partNum)
+	if r == nil {
 		return ENOKEY
 	}
+
+	n := len(t.wRecs)
+	t.wRecs = t.wRecs[0 : n+1]
+	t.wRecs[n].k = k
+	t.wRecs[n].partNum = partNum
+	t.wRecs[n].rec = r
+	t.wRecs[n].cols = t.wRecs[n].cols[0:1]
+	t.wRecs[n].cols[0] = colNum
+	t.wRecs[n].vals = t.wRecs[n].vals[0:1]
+	t.wRecs[n].vals[0] = value
 	return nil
+
 }
 
 func (p *PTransaction) MayWrite(tableID int, k Key, partNum int, trial int) error {
@@ -67,10 +126,31 @@ func (p *PTransaction) MayWrite(tableID int, k Key, partNum int, trial int) erro
 }
 
 func (p *PTransaction) Abort() TID {
+	for i := 0; i < len(p.tt); i++ {
+		t := &p.tt[i]
+		for j := 0; j < len(t.wRecs); j++ {
+			wr := &t.wRecs[j]
+			wr.vals = wr.vals[:0]
+			wr.cols = wr.cols[:0]
+		}
+		t.wRecs = t.wRecs[0:0]
+	}
 	return 0
 }
 
 func (p *PTransaction) Commit() TID {
+	for i := 0; i < len(p.tt); i++ {
+		t := &p.tt[i]
+		for j := 0; j < len(t.wRecs); j++ {
+			wr := &t.wRecs[j]
+			for p := 0; p < len(wr.cols); p++ {
+				wr.rec.SetValue(wr.vals[p], wr.cols[p])
+			}
+			wr.vals = wr.vals[:0]
+			wr.cols = wr.cols[:0]
+		}
+		t.wRecs = t.wRecs[0:0]
+	}
 	return 1
 }
 
@@ -163,40 +243,45 @@ func (o *OTransaction) Reset(t Trans) {
 
 }
 
-func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error) {
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
 
 	var ok bool
 	var tid TID
 	var t *TrackTable
 	var r Record
 
-	ok = false
 	t = &o.tt[tableID]
 
+	for j := 0; j < len(t.wKeys); j++ {
+		wk := &t.wKeys[j]
+		if wk.k == k {
+			r = wk.rec
+			for p := len(wk.cols) - 1; p >= 0; p-- {
+				if colNum == wk.cols[p] {
+					return wk.vals[p], false, nil
+				}
+			}
+			break
+		}
+	}
+
+	ok = false
 	for j := 0; j < len(t.rKeys); j++ {
 		rk := &t.rKeys[j]
 		if rk.k == k {
 			ok, _ = rk.rec.IsUnlocked()
 			if !ok {
 				o.w.NStats[NREADABORTS]++
-				return nil, EABORT
+				return nil, true, EABORT
 			}
-			return rk.rec.GetValue(colNum), nil
-		}
-	}
-
-	for j := 0; j < len(t.wKeys); j++ {
-		wk := &t.wKeys[j]
-		if wk.k == k {
-			r = wk.rec
-			break
+			return rk.rec.GetValue(colNum), true, nil
 		}
 	}
 
 	if r == nil {
 		r = o.s.GetRecByID(tableID, k, partNum)
 		if r == nil {
-			return nil, ENOKEY
+			return nil, true, ENOKEY
 		}
 	}
 
@@ -208,7 +293,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 
 	if !ok {
 		o.w.NStats[NREADABORTS]++
-		return nil, EABORT
+		return nil, true, EABORT
 	}
 
 	n := len(t.rKeys)
@@ -217,7 +302,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	t.rKeys[n].last = tid
 	t.rKeys[n].rec = r
 
-	return r.GetValue(colNum), nil
+	return r.GetValue(colNum), true, nil
 }
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
@@ -460,7 +545,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 func (l *LTransaction) Reset(t Trans) {
 }
 
-func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, error) {
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
 
 	var ok bool = false
 	var wr *WriteRec
@@ -472,12 +557,17 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 		if rt.wRecs[i].k == k {
 			wr = &rt.wRecs[i]
 			ok = true
+			for p := len(wr.cols) - 1; p >= 0; p-- {
+				if colNum == wr.cols[p] {
+					return wr.vals[p], false, nil
+				}
+			}
 			break
 		}
 	}
 	// Has been Locked
 	if ok {
-		return wr.rec.GetValue(colNum), nil
+		return wr.rec.GetValue(colNum), true, nil
 	}
 
 	var rec Record
@@ -491,14 +581,14 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	}
 	// Has been RLocked
 	if ok {
-		return rr.rec.GetValue(colNum), nil
+		return rr.rec.GetValue(colNum), true, nil
 	}
 
 	// Try RLock
 	rec = l.s.GetRecByID(tableID, k, partNum)
 	if rec == nil {
 		l.Abort()
-		return nil, ENOKEY
+		return nil, true, ENOKEY
 	}
 
 	if !rec.RLock(trial) {
@@ -520,7 +610,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 		*/
 		w.NStats[NRLOCKABORTS]++
 		l.Abort()
-		return nil, EABORT
+		return nil, true, EABORT
 	}
 
 	//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
@@ -532,7 +622,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	rt.rRecs[n].rec = rec
 	rt.rRecs[n].exist = true
 
-	return rec.GetValue(colNum), nil
+	return rec.GetValue(colNum), true, nil
 }
 
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
@@ -727,8 +817,8 @@ func (l *LTransaction) Commit() TID {
 		t.rRecs = t.rRecs[:0]
 		for j, _ := range t.wRecs {
 			wr := &t.wRecs[j]
-			for j := 0; j < len(wr.vals); j++ {
-				wr.rec.SetValue(wr.vals[j], wr.cols[j])
+			for p := 0; p < len(wr.vals); p++ {
+				wr.rec.SetValue(wr.vals[p], wr.cols[p])
 			}
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]

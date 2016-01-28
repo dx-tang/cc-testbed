@@ -64,7 +64,7 @@ type SingleTrans struct {
 	accessParts []int
 	keys        []Key
 	parts       []int
-	iv          IntValue
+	iv          []IntValue
 	trial       int
 	readNum     int
 	padding2    [PADDING]byte
@@ -237,6 +237,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			accessParts: make([]int, 0, SINGLEMAXPARTS+2*PADDINGINT),
 			keys:        make([]Key, 0, SINGLEMAXKEYS+2*PADDINGKEY),
 			parts:       make([]int, 0, SINGLEMAXKEYS+2*PADDINGINT),
+			iv:          make([]IntValue, SINGLEMAXKEYS),
 		}
 		trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
 		trans.keys = trans.keys[PADDINGKEY:PADDINGKEY]
