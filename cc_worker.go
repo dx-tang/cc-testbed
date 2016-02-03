@@ -30,6 +30,7 @@ type Worker struct {
 	next         TID
 	epoch        TID
 	store        *Store
+	coord        *Coordinator
 	E            ETransaction
 	txns         []TransactionFunc
 	NStats       []int64
@@ -38,6 +39,8 @@ type Worker struct {
 	NWait        time.Duration
 	NCrossWait   time.Duration
 	NLockAcquire int64
+	start        time.Time
+	end          time.Time
 	padding2     [PADDING]byte
 }
 
@@ -45,10 +48,11 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 	w.txns[fn] = transaction
 }
 
-func NewWorker(id int, s *Store, tableCount int) *Worker {
+func NewWorker(id int, s *Store, c *Coordinator, tableCount int) *Worker {
 	w := &Worker{
 		ID:     id,
 		store:  s,
+		coord:  c,
 		txns:   make([]TransactionFunc, LAST_TXN),
 		NStats: make([]int64, LAST_STAT),
 	}
@@ -74,6 +78,15 @@ func NewWorker(id int, s *Store, tableCount int) *Worker {
 	w.Register(UPDATEINT, UpdateInt)
 
 	return w
+}
+
+func (w *Worker) Start() {
+	w.start = time.Now()
+	w.end = w.start.Add(time.Duration(REPORTLENGTH) * time.Millisecond)
+}
+
+func (w *Worker) Finish() {
+	close(w.coord.reports[w.ID])
 }
 
 func (w *Worker) doTxn(t Trans) (Value, error) {
@@ -105,6 +118,16 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 }
 
 func (w *Worker) One(t Trans) (Value, error) {
+	w.start = time.Now()
+	if !w.end.After(w.start) {
+		w.coord.reports[w.ID] <- w.NStats[NTXN]
+		mode := <-w.coord.mode[w.ID]
+		if mode == LOCKING {
+			clog.Info("Locking\n")
+		}
+		w.start = time.Now()
+		w.end = w.start.Add(time.Duration(REPORTLENGTH) * time.Millisecond)
+	}
 	var ap []int
 	if *SysType == PARTITION {
 		s := w.store
@@ -142,6 +165,8 @@ func (w *Worker) One(t Trans) (Value, error) {
 			//s.locks[p].custLock.Unlock()
 		}
 	}
+
+	w.NExecute += time.Since(w.start)
 
 	return r, err
 }

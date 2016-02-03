@@ -89,6 +89,7 @@ func main() {
 			w := coord.Workers[n]
 			gen := single.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+			w.Start()
 			for {
 				tm := time.Now()
 				if !end_time.After(tm) {
@@ -105,10 +106,10 @@ func main() {
 				//}
 				w.NGen += time.Since(tm)
 
-				tm = time.Now()
+				//tm = time.Now()
 				//_, err := w.One(t)
 				w.One(t)
-				w.NExecute += time.Since(tm)
+				//w.NExecute += time.Since(tm)
 				/*
 					if err != nil {
 						if err == testbed.EABORT {
@@ -122,10 +123,13 @@ func main() {
 				//txn--
 			}
 			//clog.Info("Worker %d issues %d transactions\n", n, txn)
+			w.Finish()
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
+
+	coord.Finish()
 
 	//single.PrintSum()
 

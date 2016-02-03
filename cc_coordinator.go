@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/totemtang/cc-testbed/clog"
 )
 
 type Coordinator struct {
@@ -15,25 +17,102 @@ type Coordinator struct {
 	NExecute     time.Duration
 	NWait        time.Duration
 	NLockAcquire int64
+	padding2     [PADDING]byte
+	done         chan bool
+	reports      []chan int64
+	mode         []chan int
+	current      chan int64
+	curIndex     int
+	finished     []bool
+	allDone      bool
 	padding1     [PADDING]byte
 }
 
 const (
-	PERSEC = 1000000000
+	PERSEC       = 1000000000
+	REPORTLENGTH = 1000
 )
 
 func NewCoordinator(nWorkers int, store *Store, tableCount int) *Coordinator {
 	coordinator := &Coordinator{
-		Workers: make([]*Worker, nWorkers),
-		store:   store,
-		NStats:  make([]int64, LAST_STAT),
+		Workers:  make([]*Worker, nWorkers),
+		store:    store,
+		NStats:   make([]int64, LAST_STAT),
+		done:     make(chan bool),
+		reports:  make([]chan int64, nWorkers),
+		mode:     make([]chan int, nWorkers),
+		finished: make([]bool, nWorkers),
+		allDone:  false,
 	}
 
 	for i := range coordinator.Workers {
-		coordinator.Workers[i] = NewWorker(i, store, tableCount)
+		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount)
+		coordinator.reports[i] = make(chan int64)
+		coordinator.mode[i] = make(chan int)
+		coordinator.finished[i] = false
 	}
 
+	go coordinator.process()
+
 	return coordinator
+}
+
+func (coord *Coordinator) process() {
+	var tp int64
+	var succ bool
+	var allFinished bool
+	var tmp int64
+	var tmpIndex int
+
+	coord.current = coord.reports[0]
+	coord.curIndex = 0
+
+	for {
+		select {
+		case tmp, succ = <-coord.current:
+			tmpIndex = coord.curIndex
+			if !succ {
+				close(coord.mode[coord.curIndex])
+				coord.finished[coord.curIndex] = true
+				allFinished = true
+			} else {
+				tp = tmp
+			}
+
+			for i := 0; i < len(coord.reports); i++ {
+				if !coord.finished[i] && tmpIndex != i {
+					tmp, succ = <-coord.reports[i]
+					if !succ {
+						close(coord.mode[i])
+						coord.finished[i] = true
+					} else {
+						if allFinished {
+							allFinished = false
+							coord.current = coord.reports[i]
+							coord.curIndex = i
+						}
+						tp += tmp
+					}
+				}
+			}
+			if !allFinished {
+				clog.Info("ThroughPut: %.f\n", float64(tp)/float64(len(coord.reports)))
+				for i := 0; i < len(coord.mode); i++ {
+					if !coord.finished[i] {
+						coord.mode[i] <- PARTITION
+					}
+				}
+			} else {
+				coord.allDone = true
+				return
+			}
+		case <-coord.done:
+			return
+		}
+	}
+}
+
+func (coord *Coordinator) Finish() {
 }
 
 func (coord *Coordinator) gatherStats() {

@@ -102,7 +102,7 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 	cr := int(s.cr)
 	pi := s.partIndex
 	nParts := s.nParts
-	isPart := s.isPartition
+	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1
 	tlen := s.tlen
 
 	txn := rnd.Intn(100)
@@ -116,7 +116,7 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 	t.TXN = txn + SINGLEBASE
 
 	var tmpPi int
-	if tlen > 1 && isPart && rnd.Intn(100) < cr {
+	if isPart && rnd.Intn(100) < cr {
 		t.accessParts = t.accessParts[:2]
 		tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
 		if tmpPi > pi {
