@@ -107,6 +107,17 @@ func MakeRecord(table *Table, k Key, tuple Tuple) Record {
 		lr.rwLock.SetTrial(WDTRIAL)
 
 		return lr
+	} else if *SysType == ADAPTIVE {
+		ar := &ARecord{
+			table:  table,
+			key:    k,
+			tuple:  tuple,
+			last:   wfmutex.WFMutex{},
+			rwLock: spinlockopt.WDRWSpinlock{},
+		}
+		ar.rwLock.SetTrial(WDTRIAL)
+
+		return ar
 	} else {
 		clog.Error("System Type %v Not Supported Yet", *SysType)
 		return nil
@@ -408,5 +419,75 @@ func (lr *LRecord) RUnlock() {
 
 func (lr *LRecord) Upgrade(trial int) bool {
 	return lr.rwLock.Upgrade(trial)
+	//return true
+}
+
+type ARecord struct {
+	padding1 [PADDING]byte
+	key      Key
+	tuple    Tuple
+	rwLock   spinlockopt.WDRWSpinlock
+	last     wfmutex.WFMutex
+	table    *Table
+	padding2 [PADDING]byte
+}
+
+func (ar *ARecord) Lock() (bool, TID) {
+	b, x := ar.last.Lock()
+	return b, TID(x)
+}
+
+func (ar *ARecord) Unlock(tid TID) {
+	ar.last.Unlock(uint64(tid))
+}
+
+func (ar *ARecord) IsUnlocked() (bool, TID) {
+	x := ar.last.Read()
+	if x&wfmutex.LOCKED != 0 {
+		return false, TID(x & wfmutex.TIDMASK)
+	}
+	return true, TID(x)
+}
+
+func (ar *ARecord) GetValue(colNum int) Value {
+	return ar.tuple.GetValue(colNum)
+}
+
+func (ar *ARecord) GetKey() Key {
+	return ar.key
+}
+
+func (ar *ARecord) SetValue(val Value, colNum int) {
+	ar.tuple.SetValue(val, colNum)
+}
+
+func (ar *ARecord) GetTID() TID {
+	return TID(ar.last.Read())
+}
+func (ar *ARecord) SetTID(tid TID) {
+	clog.Error("Adaptive mode does not support SetTID Operation")
+}
+
+func (ar *ARecord) WLock(trial int) bool {
+	return ar.rwLock.Lock(trial)
+	//return true
+}
+
+func (ar *ARecord) WUnlock() {
+	ar.rwLock.Unlock()
+}
+
+func (ar *ARecord) RLock(trial int) bool {
+	return ar.rwLock.RLock(trial)
+	//return true
+}
+
+func (ar *ARecord) RUnlock() {
+	ar.rwLock.RUnlock()
+	//return
+}
+
+func (ar *ARecord) Upgrade(trial int) bool {
+	return ar.rwLock.Upgrade(trial)
 	//return true
 }

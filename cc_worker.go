@@ -32,6 +32,7 @@ type Worker struct {
 	store        *Store
 	coord        *Coordinator
 	E            ETransaction
+	ExecPool     []ETransaction
 	txns         []TransactionFunc
 	NStats       []int64
 	NGen         time.Duration
@@ -41,6 +42,8 @@ type Worker struct {
 	NLockAcquire int64
 	start        time.Time
 	end          time.Time
+	mode         int
+	reportInfo   ReportInfo
 	padding2     [PADDING]byte
 }
 
@@ -48,13 +51,15 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 	w.txns[fn] = transaction
 }
 
-func NewWorker(id int, s *Store, c *Coordinator, tableCount int) *Worker {
+func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int) *Worker {
 	w := &Worker{
-		ID:     id,
-		store:  s,
-		coord:  c,
-		txns:   make([]TransactionFunc, LAST_TXN),
-		NStats: make([]int64, LAST_STAT),
+		ID:         id,
+		store:      s,
+		coord:      c,
+		txns:       make([]TransactionFunc, LAST_TXN),
+		NStats:     make([]int64, LAST_STAT),
+		mode:       mode,
+		reportInfo: ReportInfo{},
 	}
 
 	if *SysType == PARTITION {
@@ -63,8 +68,14 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int) *Worker {
 		w.E = StartOTransaction(w, tableCount)
 	} else if *SysType == LOCKING {
 		w.E = StartLTransaction(w, tableCount)
+	} else if *SysType == ADAPTIVE {
+		w.ExecPool = make([]ETransaction, ADAPTIVE-PARTITION)
+		w.ExecPool[PARTITION] = StartPTransaction(w, tableCount)
+		w.ExecPool[OCC] = StartOTransaction(w, tableCount)
+		w.ExecPool[LOCKING] = StartLTransaction(w, tableCount)
+		w.E = w.ExecPool[mode]
 	} else {
-		clog.Error("OCC and 2PL not supported yet")
+		clog.Error("System Type %v Not Supported Yet\n", *SysType)
 	}
 
 	// SmallBank Workload
@@ -82,7 +93,7 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int) *Worker {
 
 func (w *Worker) Start() {
 	w.start = time.Now()
-	w.end = w.start.Add(time.Duration(REPORTLENGTH) * time.Millisecond)
+	w.end = w.start.Add(time.Duration(REPORTPERIOD) * time.Millisecond)
 }
 
 func (w *Worker) Finish() {
@@ -119,19 +130,42 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 
 func (w *Worker) One(t Trans) (Value, error) {
 	w.start = time.Now()
-	if !w.end.After(w.start) {
-		w.coord.reports[w.ID] <- w.NStats[NTXN]
-		mode := <-w.coord.mode[w.ID]
-		if mode == LOCKING {
-			clog.Info("Locking\n")
-		}
-		w.start = time.Now()
-		w.end = w.start.Add(time.Duration(REPORTLENGTH) * time.Millisecond)
-	}
 	var ap []int
-	if *SysType == PARTITION {
+	if !w.end.After(w.start) {
+		if *SysType == ADAPTIVE {
+			/*w.reportInfo.NExecute = w.NExecute - w.reportInfo.NExecute
+			w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.txn
+			w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.aborts*/
+			w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
+			w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
+			w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
+
+			w.reportInfo.prevExec = w.NExecute
+			w.reportInfo.prevTxn = w.NStats[NTXN]
+			w.reportInfo.prevAborts = w.NStats[NABORTS]
+
+			//clog.Info("Sys Type %v aborts %v total %v\n", w.E.GetType(), w.reportInfo.aborts, w.NStats[NABORTS])
+
+			w.coord.reports[w.ID] <- &w.reportInfo
+			w.mode = <-w.coord.mode[w.ID]
+			w.E = w.ExecPool[w.mode]
+
+		} else {
+			w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
+			w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
+			w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
+
+			w.reportInfo.prevExec = w.NExecute
+			w.reportInfo.prevTxn = w.NStats[NTXN]
+			w.reportInfo.prevAborts = w.NStats[NABORTS]
+			w.coord.reports[w.ID] <- &w.reportInfo
+		}
+
+		w.end = time.Now().Add(time.Duration(REPORTPERIOD) * time.Millisecond)
+	}
+
+	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
 		s := w.store
-		//tm := time.Now()
 		// Acquire all locks
 
 		ap = t.GetAccessParts()
@@ -142,27 +176,16 @@ func (w *Worker) One(t Trans) (Value, error) {
 		}
 
 		for _, p := range ap {
-			//s.store[p].Lock()
-			//s.locks[p].Lock()
 			s.spinLock[p].Lock()
-			//s.locks[p].custLock.Lock()
 		}
-
-		//w.NWait += time.Since(tm)
-		//if len(q.accessParts) > 1 {
-		//	w.NCrossWait += time.Since(tm)
-		//}
 	}
 
 	r, err := w.doTxn(t)
 
-	if *SysType == PARTITION {
+	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
 		s := w.store
 		for _, p := range ap {
-			//s.store[p].Unlock()
-			//s.locks[p].Unlock()
 			s.spinLock[p].Unlock()
-			//s.locks[p].custLock.Unlock()
 		}
 	}
 

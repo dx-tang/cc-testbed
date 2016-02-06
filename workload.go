@@ -154,3 +154,16 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 
 	return basic
 }
+
+func (basicWL *BasicWorkload) Reset(gens []*Generator) {
+	if len(basicWL.generators) != len(gens) {
+		clog.Error("Key Generators Length not Match\n")
+	}
+
+	for i := 0; i < len(basicWL.generators); i++ {
+		if len(basicWL.generators[i].keyGens) != len(gens[i].keyGens) {
+			clog.Error("Key Generators Table Count not Match\n")
+		}
+		basicWL.generators[i].keyGens = gens[i].keyGens
+	}
+}

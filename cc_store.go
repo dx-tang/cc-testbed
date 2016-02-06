@@ -25,6 +25,9 @@ const (
 	PARTITION = iota
 	OCC
 	LOCKING
+	ADAPTIVE
+
+	LAST_MODE
 )
 
 const (

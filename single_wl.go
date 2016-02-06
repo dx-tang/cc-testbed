@@ -296,3 +296,66 @@ func (s *SingelWorkload) PrintSum() {
 
 	clog.Info("Sum: %v\n", total)
 }
+
+func (singleWL *SingelWorkload) ResetConf(gens []*Generator, transPercentage string, cr float64, tlen int, rr int) {
+	tp := strings.Split(transPercentage, ":")
+	if len(tp) != SINGLETRANSNUM {
+		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
+	}
+	for i, str := range tp {
+		per, err := strconv.Atoi(str)
+		if err != nil {
+			clog.Error("TransPercentage Format Error %s\n", str)
+		}
+		if i != 0 {
+			singleWL.transPercentage[i] = singleWL.transPercentage[i-1] + per
+		} else {
+			singleWL.transPercentage[i] = per
+		}
+	}
+
+	if singleWL.transPercentage[SINGLETRANSNUM-1] != 100 {
+		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
+	}
+
+	singleWL.basic.Reset(gens)
+
+	for i := 0; i < len(singleWL.transGen); i++ {
+		tg := singleWL.transGen[i]
+		tg.gen = singleWL.basic.generators[i]
+		tg.transPercentage = singleWL.transPercentage
+		tg.cr = cr
+		tg.tlen = tlen
+		tg.rr = rr
+	}
+}
+
+func (singleWL *SingelWorkload) ResetData() {
+	nKeys := singleWL.basic.nKeys[SINGLE]
+	gen := singleWL.basic.generators[0]
+	keyRange := singleWL.basic.IDToKeyRange[SINGLE]
+	keyLen := len(keyRange)
+	compKey := make([]OneKey, keyLen)
+	store := singleWL.basic.store
+	iv := &IntValue{
+		intVal: INITVAL,
+	}
+	var k int = 0
+	for i := int64(0); i < nKeys; i++ {
+		key := CKey(compKey)
+		partNum := gen.GetPart(SINGLE, key)
+		store.SetValueByID(SINGLE, key, partNum, iv, SINGLE_VAL)
+
+		for int64(compKey[k]+1) >= keyRange[k] {
+			compKey[k] = 0
+			k++
+			if k >= keyLen {
+				break
+			}
+		}
+		if k < keyLen {
+			compKey[k]++
+			k = 0
+		}
+	}
+}

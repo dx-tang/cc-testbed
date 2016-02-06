@@ -22,6 +22,7 @@ type ETransaction interface {
 	Commit() TID
 	Store() *Store
 	Worker() *Worker
+	GetType() int
 }
 
 type PTrackTable struct {
@@ -160,6 +161,10 @@ func (p *PTransaction) Store() *Store {
 
 func (p *PTransaction) Worker() *Worker {
 	return p.w
+}
+
+func (p *PTransaction) GetType() int {
+	return PARTITION
 }
 
 type WriteKey struct {
@@ -479,6 +484,10 @@ func (o *OTransaction) Store() *Store {
 
 func (o *OTransaction) Worker() *Worker {
 	return o.w
+}
+
+func (o *OTransaction) GetType() int {
+	return OCC
 }
 
 type WriteRec struct {
@@ -837,4 +846,8 @@ func (l *LTransaction) Store() *Store {
 
 func (l *LTransaction) Worker() *Worker {
 	return l.w
+}
+
+func (l *LTransaction) GetType() int {
+	return LOCKING
 }

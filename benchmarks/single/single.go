@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	//"fmt"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -68,13 +68,17 @@ func main() {
 			isPartition = false
 			clog.Info("Using 2PL\n")
 		}
+	} else if *testbed.SysType == testbed.ADAPTIVE {
+		clog.Info("Using Adaptive CC\n")
+		*testbed.PhyPart = true
+		isPartition = true
 	} else {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
 	//sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
 	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr)
-	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount())
+	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *stat)
 
 	clog.Info("Done with Populating Store\n")
 
@@ -140,7 +144,7 @@ func main() {
 	defer f.Close()
 	coord.PrintStats(f)
 
-	if *stat != "" {
+	/*if *stat != "" {
 		st, err := os.OpenFile(*stat, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			clog.Error("Open File Error %s\n", err.Error())
@@ -150,7 +154,8 @@ func main() {
 		//st.WriteString(fmt.Sprintf("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
 		st.WriteString(fmt.Sprintf("%.f", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
 		st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
-	}
+	}*/
+
 	clog.Info("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds())
 
 }

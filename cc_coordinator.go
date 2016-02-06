@@ -8,6 +8,17 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+type ReportInfo struct {
+	padding0   [PADDING]byte
+	execTime   time.Duration
+	prevExec   time.Duration
+	txn        int64
+	aborts     int64
+	prevTxn    int64
+	prevAborts int64
+	padding1   [PADDING]byte
+}
+
 type Coordinator struct {
 	padding0     [PADDING]byte
 	Workers      []*Worker
@@ -17,11 +28,13 @@ type Coordinator struct {
 	NExecute     time.Duration
 	NWait        time.Duration
 	NLockAcquire int64
+	stat         *os.File
 	padding2     [PADDING]byte
 	done         chan bool
-	reports      []chan int64
+	reports      []chan *ReportInfo
+	current      chan *ReportInfo
 	mode         []chan int
-	current      chan int64
+	summary      ReportInfo
 	curIndex     int
 	finished     []bool
 	allDone      bool
@@ -30,24 +43,34 @@ type Coordinator struct {
 
 const (
 	PERSEC       = 1000000000
-	REPORTLENGTH = 1000
+	REPORTPERIOD = 1000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat string) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:  make([]*Worker, nWorkers),
 		store:    store,
 		NStats:   make([]int64, LAST_STAT),
+		stat:     nil,
 		done:     make(chan bool),
-		reports:  make([]chan int64, nWorkers),
+		reports:  make([]chan *ReportInfo, nWorkers),
 		mode:     make([]chan int, nWorkers),
+		summary:  ReportInfo{},
 		finished: make([]bool, nWorkers),
 		allDone:  false,
 	}
 
+	if stat != "" {
+		st, err := os.OpenFile(stat, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+		coordinator.stat = st
+	}
+
 	for i := range coordinator.Workers {
-		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount)
-		coordinator.reports[i] = make(chan int64)
+		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode)
+		coordinator.reports[i] = make(chan *ReportInfo)
 		coordinator.mode[i] = make(chan int)
 		coordinator.finished[i] = false
 	}
@@ -58,30 +81,34 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int) *Coordinator {
 }
 
 func (coord *Coordinator) process() {
-	var tp int64
+	summary := &coord.summary
+	st := coord.stat
 	var succ bool
 	var allFinished bool
-	var tmp int64
+	var ri *ReportInfo
 	var tmpIndex int
+	var index = PARTITION
 
 	coord.current = coord.reports[0]
 	coord.curIndex = 0
 
 	for {
 		select {
-		case tmp, succ = <-coord.current:
+		case ri, succ = <-coord.current:
 			tmpIndex = coord.curIndex
 			if !succ {
 				close(coord.mode[coord.curIndex])
 				coord.finished[coord.curIndex] = true
 				allFinished = true
 			} else {
-				tp = tmp
+				summary.execTime = ri.execTime
+				summary.txn = ri.txn
+				summary.aborts = ri.aborts
 			}
 
 			for i := 0; i < len(coord.reports); i++ {
 				if !coord.finished[i] && tmpIndex != i {
-					tmp, succ = <-coord.reports[i]
+					ri, succ = <-coord.reports[i]
 					if !succ {
 						close(coord.mode[i])
 						coord.finished[i] = true
@@ -91,15 +118,28 @@ func (coord *Coordinator) process() {
 							coord.current = coord.reports[i]
 							coord.curIndex = i
 						}
-						tp += tmp
+						//tp += tmp
+						summary.execTime += ri.execTime
+						summary.txn += ri.txn
+						summary.aborts += ri.aborts
 					}
 				}
 			}
 			if !allFinished {
-				clog.Info("ThroughPut: %.f\n", float64(tp)/float64(len(coord.reports)))
-				for i := 0; i < len(coord.mode); i++ {
-					if !coord.finished[i] {
-						coord.mode[i] <- PARTITION
+				if st != nil {
+					clog.Info("%v\t%.f\t%.6f\n",
+						index, float64(summary.txn-summary.aborts)/summary.execTime.Seconds(),
+						float64(summary.aborts)/float64(summary.txn))
+					//st.WriteString(fmt.Sprintf("%.f", float64(summary.txn)/summary.NExecute.Seconds()))
+					//st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
+
+				}
+				if *SysType == ADAPTIVE {
+					index = (index + 1) % ADAPTIVE
+					for i := 0; i < len(coord.mode); i++ {
+						if !coord.finished[i] {
+							coord.mode[i] <- index
+						}
 					}
 				}
 			} else {
@@ -113,6 +153,7 @@ func (coord *Coordinator) process() {
 }
 
 func (coord *Coordinator) Finish() {
+	coord.stat.Close()
 }
 
 func (coord *Coordinator) gatherStats() {
