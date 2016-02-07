@@ -30,14 +30,10 @@ type Coordinator struct {
 	NLockAcquire int64
 	stat         *os.File
 	padding2     [PADDING]byte
-	done         chan bool
+	done         chan chan bool
 	reports      []chan *ReportInfo
-	current      chan *ReportInfo
-	mode         []chan int
+	changeACK    []chan bool
 	summary      ReportInfo
-	curIndex     int
-	finished     []bool
-	allDone      bool
 	padding1     [PADDING]byte
 }
 
@@ -48,16 +44,14 @@ const (
 
 func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat string) *Coordinator {
 	coordinator := &Coordinator{
-		Workers:  make([]*Worker, nWorkers),
-		store:    store,
-		NStats:   make([]int64, LAST_STAT),
-		stat:     nil,
-		done:     make(chan bool),
-		reports:  make([]chan *ReportInfo, nWorkers),
-		mode:     make([]chan int, nWorkers),
-		summary:  ReportInfo{},
-		finished: make([]bool, nWorkers),
-		allDone:  false,
+		Workers:   make([]*Worker, nWorkers),
+		store:     store,
+		NStats:    make([]int64, LAST_STAT),
+		stat:      nil,
+		done:      make(chan chan bool),
+		reports:   make([]chan *ReportInfo, nWorkers),
+		changeACK: make([]chan bool, nWorkers),
+		summary:   ReportInfo{},
 	}
 
 	if stat != "" {
@@ -70,9 +64,8 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat s
 
 	for i := range coordinator.Workers {
 		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode)
-		coordinator.reports[i] = make(chan *ReportInfo)
-		coordinator.mode[i] = make(chan int)
-		coordinator.finished[i] = false
+		coordinator.reports[i] = make(chan *ReportInfo, 1)
+		coordinator.changeACK[i] = make(chan bool)
 	}
 
 	go coordinator.process()
@@ -83,70 +76,48 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat s
 func (coord *Coordinator) process() {
 	summary := &coord.summary
 	st := coord.stat
-	var succ bool
-	var allFinished bool
 	var ri *ReportInfo
-	var tmpIndex int
 	var index = PARTITION
-
-	coord.current = coord.reports[0]
-	coord.curIndex = 0
 
 	for {
 		select {
-		case ri, succ = <-coord.current:
-			tmpIndex = coord.curIndex
-			if !succ {
-				close(coord.mode[coord.curIndex])
-				coord.finished[coord.curIndex] = true
-				allFinished = true
-			} else {
-				summary.execTime = ri.execTime
-				summary.txn = ri.txn
-				summary.aborts = ri.aborts
+		case ri = <-coord.reports[0]:
+			summary.execTime = ri.execTime
+			summary.txn = ri.txn
+			summary.aborts = ri.aborts
+
+			for i := 1; i < len(coord.reports); i++ {
+				ri = <-coord.reports[i]
+				summary.execTime += ri.execTime
+				summary.txn += ri.txn
+				summary.aborts += ri.aborts
 			}
 
-			for i := 0; i < len(coord.reports); i++ {
-				if !coord.finished[i] && tmpIndex != i {
-					ri, succ = <-coord.reports[i]
-					if !succ {
-						close(coord.mode[i])
-						coord.finished[i] = true
-					} else {
-						if allFinished {
-							allFinished = false
-							coord.current = coord.reports[i]
-							coord.curIndex = i
-						}
-						//tp += tmp
-						summary.execTime += ri.execTime
-						summary.txn += ri.txn
-						summary.aborts += ri.aborts
-					}
-				}
+			if st != nil {
+				clog.Info("%v\t%.f\t%.6f\n",
+					index, float64(summary.txn-summary.aborts)/summary.execTime.Seconds(),
+					float64(summary.aborts)/float64(summary.txn))
+				//st.WriteString(fmt.Sprintf("%.f", float64(summary.txn)/summary.NExecute.Seconds()))
+				//st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
 			}
-			if !allFinished {
-				if st != nil {
-					clog.Info("%v\t%.f\t%.6f\n",
-						index, float64(summary.txn-summary.aborts)/summary.execTime.Seconds(),
-						float64(summary.aborts)/float64(summary.txn))
-					//st.WriteString(fmt.Sprintf("%.f", float64(summary.txn)/summary.NExecute.Seconds()))
-					//st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
 
+			if *SysType == ADAPTIVE {
+				index = (index + 1) % ADAPTIVE
+				for i := 0; i < len(coord.Workers); i++ {
+					coord.Workers[i].modeChange <- true
 				}
-				if *SysType == ADAPTIVE {
-					index = (index + 1) % ADAPTIVE
-					for i := 0; i < len(coord.mode); i++ {
-						if !coord.finished[i] {
-							coord.mode[i] <- index
-						}
-					}
+				for i := 0; i < len(coord.Workers); i++ {
+					<-coord.changeACK[i]
 				}
-			} else {
-				coord.allDone = true
-				return
+				for i := 0; i < len(coord.Workers); i++ {
+					coord.Workers[i].modeChan <- index
+				}
 			}
-		case <-coord.done:
+		case x := <-coord.done:
+			for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[i].done <- true
+			}
+			x <- true
 			return
 		}
 	}
@@ -154,6 +125,9 @@ func (coord *Coordinator) process() {
 
 func (coord *Coordinator) Finish() {
 	coord.stat.Close()
+	x := make(chan bool)
+	coord.done <- x
+	<-x
 }
 
 func (coord *Coordinator) gatherStats() {

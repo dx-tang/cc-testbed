@@ -2,6 +2,7 @@ package testbed
 
 import (
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
@@ -25,7 +26,8 @@ const (
 type TransactionFunc func(Trans, ETransaction) (Value, error)
 
 type Worker struct {
-	padding      [PADDING]byte
+	padding [PADDING]byte
+	sync.RWMutex
 	ID           int
 	next         TID
 	epoch        TID
@@ -44,6 +46,9 @@ type Worker struct {
 	end          time.Time
 	mode         int
 	reportInfo   ReportInfo
+	done         chan bool
+	modeChange   chan bool
+	modeChan     chan int
 	padding2     [PADDING]byte
 }
 
@@ -60,6 +65,9 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int) *Work
 		NStats:     make([]int64, LAST_STAT),
 		mode:       mode,
 		reportInfo: ReportInfo{},
+		done:       make(chan bool),
+		modeChange: make(chan bool),
+		modeChan:   make(chan int),
 	}
 
 	if *SysType == PARTITION {
@@ -88,16 +96,58 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int) *Work
 	w.Register(ADDONE, AddOne)
 	w.Register(UPDATEINT, UpdateInt)
 
+	go w.run()
+
 	return w
 }
 
+func (w *Worker) run() {
+	coord := w.coord
+	duration := time.Duration(REPORTPERIOD) * time.Millisecond
+	tm := time.NewTicker(duration).C
+	for {
+		select {
+		case <-w.done:
+			return
+		case <-w.modeChange:
+			w.Lock()
+			coord.changeACK[w.ID] <- true
+			w.mode = <-w.modeChan
+			w.E = w.ExecPool[w.mode]
+			w.Unlock()
+		case <-tm: // Report Information within One Period
+			w.Lock()
+			if *SysType == ADAPTIVE {
+				w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
+				w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
+				w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
+
+				w.reportInfo.prevExec = w.NExecute
+				w.reportInfo.prevTxn = w.NStats[NTXN]
+				w.reportInfo.prevAborts = w.NStats[NABORTS]
+
+				w.coord.reports[w.ID] <- &w.reportInfo
+			} else {
+				w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
+				w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
+				w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
+
+				w.reportInfo.prevExec = w.NExecute
+				w.reportInfo.prevTxn = w.NStats[NTXN]
+				w.reportInfo.prevAborts = w.NStats[NABORTS]
+
+				w.coord.reports[w.ID] <- &w.reportInfo
+			}
+			w.Unlock()
+		}
+	}
+}
+
 func (w *Worker) Start() {
-	w.start = time.Now()
-	w.end = w.start.Add(time.Duration(REPORTPERIOD) * time.Millisecond)
 }
 
 func (w *Worker) Finish() {
-	close(w.coord.reports[w.ID])
+
 }
 
 func (w *Worker) doTxn(t Trans) (Value, error) {
@@ -131,38 +181,8 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 func (w *Worker) One(t Trans) (Value, error) {
 	w.start = time.Now()
 	var ap []int
-	if !w.end.After(w.start) {
-		if *SysType == ADAPTIVE {
-			/*w.reportInfo.NExecute = w.NExecute - w.reportInfo.NExecute
-			w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.txn
-			w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.aborts*/
-			w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
-			w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
-			w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
 
-			w.reportInfo.prevExec = w.NExecute
-			w.reportInfo.prevTxn = w.NStats[NTXN]
-			w.reportInfo.prevAborts = w.NStats[NABORTS]
-
-			//clog.Info("Sys Type %v aborts %v total %v\n", w.E.GetType(), w.reportInfo.aborts, w.NStats[NABORTS])
-
-			w.coord.reports[w.ID] <- &w.reportInfo
-			w.mode = <-w.coord.mode[w.ID]
-			w.E = w.ExecPool[w.mode]
-
-		} else {
-			w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
-			w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
-			w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
-
-			w.reportInfo.prevExec = w.NExecute
-			w.reportInfo.prevTxn = w.NStats[NTXN]
-			w.reportInfo.prevAborts = w.NStats[NABORTS]
-			w.coord.reports[w.ID] <- &w.reportInfo
-		}
-
-		w.end = time.Now().Add(time.Duration(REPORTPERIOD) * time.Millisecond)
-	}
+	w.Lock()
 
 	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
 		s := w.store
@@ -190,6 +210,8 @@ func (w *Worker) One(t Trans) (Value, error) {
 	}
 
 	w.NExecute += time.Since(w.start)
+
+	w.Unlock()
 
 	return r, err
 }
