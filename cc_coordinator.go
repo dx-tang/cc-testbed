@@ -1,12 +1,16 @@
 package testbed
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 )
+
+var Report = flag.Bool("report", true, "whether periodically report runtime information to coordinator")
+var Train = flag.Bool("train", false, "whether use training mode")
 
 type ReportInfo struct {
 	padding0   [PADDING]byte
@@ -68,7 +72,9 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat s
 		coordinator.changeACK[i] = make(chan bool)
 	}
 
-	go coordinator.process()
+	if *Report {
+		go coordinator.process()
+	}
 
 	return coordinator
 }
@@ -82,6 +88,7 @@ func (coord *Coordinator) process() {
 	for {
 		select {
 		case ri = <-coord.reports[0]:
+
 			summary.execTime = ri.execTime
 			summary.txn = ri.txn
 			summary.aborts = ri.aborts
@@ -124,10 +131,12 @@ func (coord *Coordinator) process() {
 }
 
 func (coord *Coordinator) Finish() {
-	coord.stat.Close()
-	x := make(chan bool)
-	coord.done <- x
-	<-x
+	if *Report {
+		coord.stat.Close()
+		x := make(chan bool)
+		coord.done <- x
+		<-x
+	}
 }
 
 func (coord *Coordinator) gatherStats() {

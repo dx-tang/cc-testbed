@@ -96,7 +96,9 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int) *Work
 	w.Register(ADDONE, AddOne)
 	w.Register(UPDATEINT, UpdateInt)
 
-	go w.run()
+	if *Report {
+		go w.run()
+	}
 
 	return w
 }
@@ -137,6 +139,7 @@ func (w *Worker) run() {
 				w.reportInfo.prevAborts = w.NStats[NABORTS]
 
 				w.coord.reports[w.ID] <- &w.reportInfo
+				w.start = time.Now()
 			}
 			w.Unlock()
 		}
