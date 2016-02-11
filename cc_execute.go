@@ -36,6 +36,7 @@ type PTransaction struct {
 	padding0 [PADDING]byte
 	w        *Worker
 	s        *Store
+	st       *SampleTool
 	tt       []PTrackTable
 	padding  [PADDING]byte
 }
@@ -44,6 +45,7 @@ func StartPTransaction(w *Worker, tableCount int) *PTransaction {
 	tx := &PTransaction{
 		w:  w,
 		s:  w.store,
+		st: w.st,
 		tt: make([]PTrackTable, tableCount, MAXTABLENUM),
 	}
 
@@ -68,6 +70,10 @@ func (p *PTransaction) Reset(t Trans) {
 }
 
 func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
+	if *SysType == ADAPTIVE {
+		p.st.oneSample(tableID, k, p.w.riMaster, true)
+	}
+
 	t := &p.tt[tableID]
 	for i := 0; i < len(t.wRecs); i++ {
 		wr := &t.wRecs[i]
@@ -90,6 +96,10 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 }
 
 func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
+	if *SysType == ADAPTIVE {
+		p.st.oneSample(tableID, k, p.w.riMaster, false)
+	}
+
 	t := &p.tt[tableID]
 	for i := 0; i < len(t.wRecs); i++ {
 		wr := &t.wRecs[i]
@@ -199,6 +209,7 @@ type OTransaction struct {
 	padding0 [PADDING]byte
 	w        *Worker
 	s        *Store
+	st       *SampleTool
 	tt       []TrackTable
 	maxSeen  TID
 	padding  [PADDING]byte
@@ -208,6 +219,7 @@ func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 	tx := &OTransaction{
 		w:  w,
 		s:  w.store,
+		st: w.st,
 		tt: make([]TrackTable, tableCount, MAXTABLENUM),
 	}
 
@@ -249,6 +261,9 @@ func (o *OTransaction) Reset(t Trans) {
 }
 
 func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
+	if *SysType == ADAPTIVE {
+		o.st.oneSample(tableID, k, o.w.riMaster, true)
+	}
 
 	var ok bool
 	var tid TID
@@ -311,6 +326,9 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 }
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
+	if *SysType == ADAPTIVE {
+		o.st.oneSample(tableID, k, o.w.riMaster, false)
+	}
 
 	var ok bool
 	var tid TID
@@ -519,6 +537,7 @@ type LTransaction struct {
 	padding0 [PADDING]byte
 	w        *Worker
 	s        *Store
+	st       *SampleTool
 	rt       []RecTable
 	padding  [PADDING]byte
 }
@@ -527,6 +546,7 @@ func StartLTransaction(w *Worker, nTables int) *LTransaction {
 	tx := &LTransaction{
 		w:  w,
 		s:  w.store,
+		st: w.st,
 		rt: make([]RecTable, nTables, MAXTABLENUM),
 	}
 
@@ -555,6 +575,9 @@ func (l *LTransaction) Reset(t Trans) {
 }
 
 func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
+	if *SysType == ADAPTIVE {
+		l.st.oneSample(tableID, k, l.w.riMaster, true)
+	}
 
 	var ok bool = false
 	var wr *WriteRec
@@ -635,6 +658,9 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 }
 
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
+	if *SysType == ADAPTIVE {
+		l.st.oneSample(tableID, k, l.w.riMaster, false)
+	}
 
 	var ok bool = false
 	var wr *WriteRec

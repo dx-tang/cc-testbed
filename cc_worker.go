@@ -45,10 +45,12 @@ type Worker struct {
 	start        time.Time
 	end          time.Time
 	mode         int
-	reportInfo   ReportInfo
 	done         chan bool
 	modeChange   chan bool
 	modeChan     chan int
+	riMaster     *ReportInfo
+	riReplica    *ReportInfo
+	st           *SampleTool
 	padding2     [PADDING]byte
 }
 
@@ -56,7 +58,7 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 	w.txns[fn] = transaction
 }
 
-func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int) *Worker {
+func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int, IDToKeyRange [][]int64) *Worker {
 	w := &Worker{
 		ID:         id,
 		store:      s,
@@ -64,11 +66,21 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int) *Work
 		txns:       make([]TransactionFunc, LAST_TXN),
 		NStats:     make([]int64, LAST_STAT),
 		mode:       mode,
-		reportInfo: ReportInfo{},
 		done:       make(chan bool),
 		modeChange: make(chan bool),
 		modeChan:   make(chan int),
 	}
+
+	kr := make([][]int64, len(IDToKeyRange))
+	for i := 0; i < len(IDToKeyRange); i++ {
+		kr[i] = make([]int64, len(IDToKeyRange[i]))
+		for j := 0; j < len(IDToKeyRange[i]); j++ {
+			kr[i][j] = IDToKeyRange[i][j]
+		}
+	}
+	w.st = NewSampleTool(s.nParts, kr, sampleRate)
+	w.riMaster = NewReportInfo(s.nParts, tableCount, sampleRate)
+	w.riReplica = NewReportInfo(s.nParts, tableCount, sampleRate)
 
 	if *SysType == PARTITION {
 		w.E = StartPTransaction(w, tableCount)
@@ -119,27 +131,29 @@ func (w *Worker) run() {
 			w.Unlock()
 		case <-tm: // Report Information within One Period
 			w.Lock()
+			replica := w.riMaster
+			w.riMaster = w.riReplica
+			w.riReplica = replica
 			if *SysType == ADAPTIVE {
-				w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
-				w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
-				w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
+				replica.execTime = w.NExecute - w.riMaster.prevExec
+				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
+				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
-				w.reportInfo.prevExec = w.NExecute
-				w.reportInfo.prevTxn = w.NStats[NTXN]
-				w.reportInfo.prevAborts = w.NStats[NABORTS]
+				replica.prevExec = w.NExecute
+				replica.prevTxn = w.NStats[NTXN]
+				replica.prevAborts = w.NStats[NABORTS]
 
-				w.coord.reports[w.ID] <- &w.reportInfo
+				w.coord.reports[w.ID] <- replica
 			} else {
-				w.reportInfo.execTime = w.NExecute - w.reportInfo.prevExec
-				w.reportInfo.txn = w.NStats[NTXN] - w.reportInfo.prevTxn
-				w.reportInfo.aborts = w.NStats[NABORTS] - w.reportInfo.prevAborts
+				replica.execTime = w.NExecute - w.riMaster.prevExec
+				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
+				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
-				w.reportInfo.prevExec = w.NExecute
-				w.reportInfo.prevTxn = w.NStats[NTXN]
-				w.reportInfo.prevAborts = w.NStats[NABORTS]
+				replica.prevExec = w.NExecute
+				replica.prevTxn = w.NStats[NTXN]
+				replica.prevAborts = w.NStats[NABORTS]
 
-				w.coord.reports[w.ID] <- &w.reportInfo
-				w.start = time.Now()
+				w.coord.reports[w.ID] <- replica
 			}
 			w.Unlock()
 		}
@@ -151,6 +165,14 @@ func (w *Worker) Start() {
 
 func (w *Worker) Finish() {
 
+}
+
+func (w *Worker) SetMode(mode int) {
+	if *SysType != ADAPTIVE {
+		clog.Error("None Adaptive Mode Not Support Mode Change\n")
+	}
+	w.mode = mode
+	w.E = w.ExecPool[mode]
 }
 
 func (w *Worker) doTxn(t Trans) (Value, error) {
@@ -187,9 +209,13 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	w.Lock()
 
+	if *SysType == ADAPTIVE {
+		w.st.onePartSample(t.GetAccessParts(), w.riMaster)
+	}
+
 	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
-		s := w.store
 		// Acquire all locks
+		s := w.store
 
 		ap = t.GetAccessParts()
 		w.NLockAcquire += int64(len(ap))

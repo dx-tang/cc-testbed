@@ -359,3 +359,7 @@ func (singleWL *SingelWorkload) ResetData() {
 		}
 	}
 }
+
+func (singleWL *SingelWorkload) GetIDToKeyRange() [][]int64 {
+	return singleWL.basic.IDToKeyRange
+}
