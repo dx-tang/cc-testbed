@@ -93,6 +93,7 @@ type SingleTransGen struct {
 	isPartition     bool
 	tlen            int
 	rr              int
+	mp              int
 }
 
 func (s *SingleTransGen) GenOneTrans() Trans {
@@ -104,6 +105,7 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 	nParts := s.nParts
 	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1
 	tlen := s.tlen
+	mp := s.mp
 
 	txn := rnd.Intn(100)
 	for i, v := range s.transPercentage {
@@ -115,16 +117,62 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 
 	t.TXN = txn + SINGLEBASE
 
-	var tmpPi int
 	if isPart && rnd.Intn(100) < cr {
-		t.accessParts = t.accessParts[:2]
-		tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
-		if tmpPi > pi {
-			t.accessParts[0] = pi
-			t.accessParts[1] = tmpPi
+		ap := nParts
+		if ap > mp {
+			ap = mp
+		}
+		if ap > tlen {
+			ap = tlen
+		}
+		t.accessParts = t.accessParts[:ap]
+		start := gen.GenOnePart()
+		//start := rnd.Intn(nParts)
+		end := (start + ap - 1) % nParts
+		wrap := false
+		if start >= end {
+			wrap = true
+		}
+		//clog.Info("start %v; end %v; pi %v", start, end, pi)
+		if (!wrap && pi >= start && pi < end) || (wrap && (pi >= start || pi < end)) { // The Extending Parts Includes the Home Partition
+			if start+ap <= nParts {
+				for i := 0; i < ap; i++ {
+					t.accessParts[i] = start + i
+				}
+			} else {
+				for i := 0; i < ap; i++ {
+					tmp := start + i
+					if tmp >= nParts {
+						t.accessParts[tmp-nParts] = tmp - nParts
+					} else {
+						t.accessParts[ap-nParts+start+i] = tmp
+					}
+				}
+			}
 		} else {
-			t.accessParts[0] = tmpPi
-			t.accessParts[1] = pi
+			if !wrap { // Conseculative Partitions; No Wrap
+				if pi < start { // pi to the left
+					t.accessParts[0] = pi
+					for i := 0; i < ap-1; i++ {
+						t.accessParts[i+1] = start + i
+					}
+				} else { // pi to the right
+					t.accessParts[ap-1] = pi
+					for i := 0; i < ap-1; i++ {
+						t.accessParts[i] = start + i
+					}
+				}
+			} else { // Wrap
+				t.accessParts[ap-nParts+start-1] = pi
+				for i := 0; i < ap-1; i++ {
+					tmp := start + i
+					if tmp >= nParts {
+						t.accessParts[tmp-nParts] = tmp - nParts
+					} else {
+						t.accessParts[ap-nParts+start+i] = tmp
+					}
+				}
+			}
 		}
 	} else {
 		t.accessParts = t.accessParts[:1]
@@ -155,7 +203,7 @@ type SingelWorkload struct {
 	transGen        []*SingleTransGen
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -179,7 +227,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s)
+	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps)
 
 	// Populating the Store
 	hp := singleWL.basic.generators[0]
@@ -227,6 +275,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			isPartition:     isPartition,
 			tlen:            tlen,
 			rr:              rr,
+			mp:              mp,
 		}
 		if isPartition {
 			tg.partIndex = i

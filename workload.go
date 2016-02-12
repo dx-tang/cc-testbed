@@ -16,6 +16,7 @@ const (
 type Generator struct {
 	keyGens     []KeyGen
 	partitioner []Partitioner
+	partGen     PartGen
 	partIndex   int
 	tableCount  int
 }
@@ -27,6 +28,10 @@ func (g *Generator) GetKey(tableID int, partIndex int) Key {
 
 func (g *Generator) GetPart(tableID int, key Key) int {
 	return g.partitioner[tableID].GetPart(key)
+}
+
+func (g *Generator) GenOnePart() int {
+	return g.partGen.GetOnePart()
 }
 
 type BasicWorkload struct {
@@ -42,7 +47,7 @@ type BasicWorkload struct {
 	generators    []*Generator // index by worker ID
 }
 
-func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers int, s float64) *BasicWorkload {
+func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers int, s float64, ps float64) *BasicWorkload {
 	basic := &BasicWorkload{
 		store:       NewStore(workload, nParts),
 		nParts:      nParts,
@@ -149,6 +154,17 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 			gen.keyGens[j] = kg
 			gen.partitioner[j] = p
 		}
+
+		if ps == 1 {
+			gen.partGen = NewUniformRandPart(ps, i, basic.nParts)
+		} else if ps > 1 {
+			gen.partGen = NewZipfRandLargePart(ps, i, basic.nParts)
+		} else if ps >= 0 {
+			gen.partGen = NewUniformRandPart(ps, i, basic.nParts)
+		} else {
+			clog.Error("Part Access Generation: Skew Factor Should Not Be Negative\n")
+		}
+
 		basic.generators[i] = gen
 	}
 
@@ -165,5 +181,6 @@ func (basicWL *BasicWorkload) Reset(gens []*Generator) {
 			clog.Error("Key Generators Table Count not Match\n")
 		}
 		basicWL.generators[i].keyGens = gens[i].keyGens
+		basicWL.generators[i].partGen = gens[i].partGen
 	}
 }

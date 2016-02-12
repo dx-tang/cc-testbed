@@ -234,5 +234,6 @@ func (ur *UniformRand) GetPartRank(pi int) int64 {
 	if !ur.isPartition {
 		return ur.GetWholeRank()
 	}
+
 	return ur.partUniform[pi].Int63n(ur.pKeysArray[pi])
 }
