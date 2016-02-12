@@ -484,7 +484,7 @@ func (coord *Coordinator) PrintTraining(f *os.File) {
 			sum += r
 			sumpow += r * r
 		}
-		clog.Info("Sum %v; SumPow %v\n", sum, sumpow)
+		//clog.Info("Sum %v; SumPow %v\n", sum, sumpow)
 
 		tmpAvg := float64(sum) / float64(txn*HISTOGRAMLEN)
 		tmpVar := float64(sumpow*HISTOGRAMLEN)/float64(sum*sum) - 1
@@ -496,6 +496,8 @@ func (coord *Coordinator) PrintTraining(f *os.File) {
 
 	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
 
-	f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\n", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
+	f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\t ", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
+	f.WriteString(fmt.Sprintf("%v\t %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), float64(coord.NStats[NABORTS])/float64(coord.NStats[NTXN])))
 
 }

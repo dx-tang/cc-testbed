@@ -24,7 +24,7 @@ var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var tlen = flag.Int("len", 10, "number of operations per transaction")
 var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
 var rr = flag.Int("rr", 0, "Rate Percentage From 0 to 100")
-var sr = flag.Int("st", 100, "Sample Rate")
+var sr = flag.Int("sr", 100, "Sample Rate")
 var mp = flag.Int("mp", 2, "Number of Partitions to be Acccessed")
 var ps = flag.Float64("ps", 1, "Skew For Partition")
 
