@@ -1,6 +1,8 @@
 package testbed
 
 import (
+	//"runtime/debug"
+
 	"github.com/totemtang/cc-testbed/clog"
 )
 
@@ -46,13 +48,15 @@ func ParseKey(key Key, index int) OneKey {
 	if index >= KEYLENTH {
 		clog.Error("Index %v out of range for key length %v\n", index, KEYLENTH)
 	}
+
 	var onekey int64
 	/*
 		for i := uint(0); i < ONEKEYWIDTH; i++ {
 			onekey += int64(key[index*ONEKEYWIDTH+int(i)]) << (i * 8)
 		}*/
 	for i := ONEKEYWIDTH - 1; i >= 0; i-- {
-		onekey += int64(key[index*ONEKEYWIDTH+i] << (uint(i) * 8))
+		onekey += int64(key[index*ONEKEYWIDTH+i]) << (uint(i) * 8)
 	}
+
 	return OneKey(onekey)
 }

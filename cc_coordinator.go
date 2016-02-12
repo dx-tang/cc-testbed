@@ -133,7 +133,12 @@ func (st *SampleTool) oneSample(tableID int, key Key, ri *ReportInfo, isRead boo
 		return
 	}
 
+	//clog.Info("CompKey %v\n", key)
+
 	var intKey int64 = int64(ParseKey(key, st.IDToKeyLen[tableID]-1))
+
+	//clog.Error("Key %v\n", intKey)
+
 	for i := st.IDToKeyLen[tableID] - 2; i >= 0; i-- {
 		intKey *= st.IDToKeyRange[tableID][i]
 		intKey += int64(ParseKey(key, i))
@@ -479,6 +484,7 @@ func (coord *Coordinator) PrintTraining(f *os.File) {
 			sum += r
 			sumpow += r * r
 		}
+		clog.Info("Sum %v; SumPow %v\n", sum, sumpow)
 
 		tmpAvg := float64(sum) / float64(txn*HISTOGRAMLEN)
 		tmpVar := float64(sumpow*HISTOGRAMLEN)/float64(sum*sum) - 1

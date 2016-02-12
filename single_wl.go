@@ -283,7 +283,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			tg.partIndex = 0
 		}
 		trans := &SingleTrans{
-			accessParts: make([]int, 0, SINGLEMAXPARTS+2*PADDINGINT),
+			accessParts: make([]int, 0, mp+2*PADDINGINT),
 			keys:        make([]Key, 0, SINGLEMAXKEYS+2*PADDINGKEY),
 			parts:       make([]int, 0, SINGLEMAXKEYS+2*PADDINGINT),
 			iv:          make([]IntValue, SINGLEMAXKEYS),

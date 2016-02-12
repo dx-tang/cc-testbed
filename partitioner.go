@@ -1,5 +1,9 @@
 package testbed
 
+import (
+//"github.com/totemtang/cc-testbed/clog"
+)
+
 type Partitioner interface {
 	GetPart(key Key) int
 	GetPartKey(partIndex int, rank int64) Key
@@ -59,6 +63,8 @@ func (hp *HashPartitioner) GetPartKey(partIndex int, rank int64) Key {
 	}
 
 	hp.compKey[0] = OneKey(int64(hp.compKey[0])*hp.NParts + int64(partIndex))
+
+	//clog.Info("CompKey %v\n", hp.compKey)
 
 	return CKey(hp.compKey)
 }
