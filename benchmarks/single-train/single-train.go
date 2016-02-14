@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"flag"
+	"fmt"
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,19 +16,30 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+const (
+	CROSSRATE    = "CROSSRATE"
+	MAXPARTITION = "MAXPARTITION"
+	PARTSKEW     = "PARTSKEW"
+	CONTENTION   = "CONTENTION"
+	TRANLEN      = "TRANLEN"
+	READRATE     = "READRATE"
+)
+
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
-var cr = flag.Float64("cr", 0, "percentage of cross-partition transactions")
 var wl = flag.String("wl", "", "workload to be used")
 var tp = flag.String("tp", "50:50", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var trainOut = flag.String("train", "train.out", "training set")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
-var tlen = flag.Int("len", 10, "number of operations per transaction")
-var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
-var rr = flag.Int("rr", 0, "Rate Percentage From 0 to 100")
 var sr = flag.Int("sr", 100, "Sample Rate")
-var mp = flag.Int("mp", 2, "Number of Partitions to be Acccessed")
-var ps = flag.Float64("ps", 1, "Skew For Partition")
+var tc = flag.String("tc", "train.conf", "configuration for training")
+
+var cr []float64
+var mp []int
+var ps []float64
+var contention []float64
+var tlen []int
+var rr []int
 
 const (
 	BUFSIZE = 5
@@ -45,6 +59,10 @@ func main() {
 		clog.Error("Training Output not specified\n")
 	}
 
+	if strings.Compare(*tc, "") == 0 {
+		clog.Error("Training Configuration not specified\n")
+	}
+
 	if *testbed.Report {
 		clog.Error("Report not Needed for Adaptive CC\n")
 	}
@@ -61,89 +79,229 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	f, err := os.OpenFile(*trainOut, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	defer f.Close()
+
 	nParts := nWorkers
 	*testbed.PhyPart = true
 	isPartition := true
 	clog.Info("Number of workers %v \n", nWorkers)
 	clog.Info("Adaptive CC Training\n")
 
-	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps)
-	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, "", *sr, single.GetIDToKeyRange())
+	ParseTrainConf(*tc)
+	keyGenPool := make(map[float64][][]testbed.KeyGen)
+	partGenPool := make(map[float64][]testbed.PartGen)
+	var single *testbed.SingelWorkload = nil
+	var coord *testbed.Coordinator = nil
+	var ft *testbed.Feature = &testbed.Feature{}
+	var curMode int
 
-	clog.Info("Done with Populating Store\n")
+	totalTests := len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
+	for k := 0; k < totalTests; k++ {
+		d := k
+		r := d % len(cr)
+		tmpCR := cr[r]
+		d = d / len(cr)
 
-	for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
-		var wg sync.WaitGroup
-		for i := 0; i < nWorkers; i++ {
-			wg.Add(1)
-			go func(n int, mode int) {
-				//var txn int64
-				//txn := 100000
-				var t testbed.Trans
-				//tq := testbed.NewTransQueue(BUFSIZE)
-				w := coord.Workers[n]
-				w.SetMode(mode)
-				gen := single.GetTransGen(n)
-				end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
-				w.Start()
-				for {
-					tm := time.Now()
-					if !end_time.After(tm) {
-						break
+		r = d % len(mp)
+		tmpMP := mp[r]
+		d = d / len(mp)
+
+		r = d % len(ps)
+		tmpPS := ps[r]
+		d = d / len(ps)
+
+		r = d % len(contention)
+		tmpContention := contention[r]
+		d = d / len(contention)
+
+		r = d % len(tlen)
+		tmpTlen := tlen[r]
+		d = d / len(tlen)
+
+		tmpRR := rr[d]
+
+		if single == nil {
+			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
+			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, "", *sr, single.GetIDToKeyRange())
+		} else {
+			basic := single.GetBasicWL()
+			keyGens, ok := keyGenPool[tmpContention]
+			if !ok {
+				keyGens = basic.NewKeyGen(tmpContention)
+				keyGenPool[tmpContention] = keyGens
+			}
+
+			partGens, ok1 := partGenPool[tmpPS]
+			if !ok1 {
+				partGens = basic.NewPartGen(tmpPS)
+				partGenPool[tmpPS] = partGens
+			}
+			basic.SetKeyGen(keyGens)
+			basic.SetPartGen(partGens)
+			single.ResetConf(*tp, tmpCR, tmpMP, tmpTlen, tmpRR)
+		}
+		clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
+
+		// One Test
+		for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
+			var wg sync.WaitGroup
+			coord.SetMode(j)
+			for i := 0; i < nWorkers; i++ {
+				wg.Add(1)
+				go func(n int) {
+					var t testbed.Trans
+					w := coord.Workers[n]
+					gen := single.GetTransGen(n)
+					end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+					w.Start()
+					for {
+						tm := time.Now()
+						if !end_time.After(tm) {
+							break
+						}
+
+						t = gen.GenOneTrans()
+
+						w.NGen += time.Since(tm)
+
+						w.One(t)
 					}
-					//if txn <= 0 {
-					//	break
-					//}
-					//tm := time.Now()
-					//if tq.IsFull() {
-					//	t = tq.Dequeue()
-					//} else {
-					t = gen.GenOneTrans()
-					//}
-					w.NGen += time.Since(tm)
+					w.Finish()
+					wg.Done()
+				}(i)
+			}
+			wg.Wait()
 
-					//tm = time.Now()
-					//_, err := w.One(t)
-					w.One(t)
-					//w.NExecute += time.Since(tm)
-					/*
-						if err != nil {
-							if err == testbed.EABORT {
-								tq.Enqueue(t)
-							} else if err == testbed.ENOKEY {
-								clog.Error("%s\n", err.Error())
-							} else if err != testbed.EABORT {
-								clog.Error("%s\n", err.Error())
-							}
-						}*/
-					//txn--
-				}
-				//clog.Info("Worker %d issues %d transactions\n", n, txn)
-				w.Finish()
-				wg.Done()
-			}(i, j)
+			coord.Finish()
+
+			tmpFt := coord.GetFeature()
+			//clog.Info("TXN %v; Mode %v\n", tmpFt.Txn, coord.GetMode())
+			if ft.Txn < tmpFt.Txn {
+				ft.Txn = tmpFt.Txn
+				curMode = coord.GetMode()
+				ft.Set(tmpFt)
+			}
+
+			coord.Reset()
 		}
-		wg.Wait()
 
-		coord.Finish()
+		// One Test Finished
+		//ft.Avg(testbed.ADAPTIVE)
+		f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
+		ft.Reset()
+	}
+}
 
-		f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			clog.Error("Open File Error %s\n", err.Error())
-		}
-		defer f.Close()
-		coord.PrintStats(f)
+func ParseTrainConf(tc string) {
+	f, err := os.OpenFile(tc, os.O_RDONLY, 0600)
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	defer f.Close()
 
-		f1, err1 := os.OpenFile(*trainOut, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err1 != nil {
-			clog.Error("Open File Error %s\n", err.Error())
-		}
-		defer f1.Close()
-		coord.PrintTraining(f1)
+	reader := bufio.NewReader(f)
 
-		coord.Reset()
+	var data []byte
+	var splits []string
+	var head []byte
+
+	// Read CrossRate
+	head, _, err = reader.ReadLine()
+	if strings.Compare(string(head), CROSSRATE) != 0 {
+		clog.Error("Header %v Not Right\n", string(head))
 	}
 
-	clog.Info("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds())
+	data, _, err = reader.ReadLine()
+	splits = strings.Split(string(data), ":")
+	cr = make([]float64, len(splits))
+	for i, str := range splits {
+		cr[i], err = strconv.ParseFloat(str, 64)
+		if err != nil {
+			clog.Error("ParseError %v\n", err.Error())
+		}
+	}
 
+	// Read MAXPARTITION
+	head, _, err = reader.ReadLine()
+	if strings.Compare(string(head), MAXPARTITION) != 0 {
+		clog.Error("Header %v Not Right\n", string(head))
+	}
+
+	data, _, err = reader.ReadLine()
+	splits = strings.Split(string(data), ":")
+	mp = make([]int, len(splits))
+	for i, str := range splits {
+		mp[i], err = strconv.Atoi(str)
+		if err != nil {
+			clog.Error("ParseError %v\n", err.Error())
+		}
+	}
+
+	// Read PARTSKEW
+	head, _, err = reader.ReadLine()
+	if strings.Compare(string(head), PARTSKEW) != 0 {
+		clog.Error("Header %v Not Right\n", string(head))
+	}
+
+	data, _, err = reader.ReadLine()
+	splits = strings.Split(string(data), ":")
+	ps = make([]float64, len(splits))
+	for i, str := range splits {
+		ps[i], err = strconv.ParseFloat(str, 64)
+		if err != nil {
+			clog.Error("ParseError %v\n", err.Error())
+		}
+	}
+
+	// Read CONTENTION
+	head, _, err = reader.ReadLine()
+	if strings.Compare(string(head), CONTENTION) != 0 {
+		clog.Error("Header %v Not Right\n", string(head))
+	}
+
+	data, _, err = reader.ReadLine()
+	splits = strings.Split(string(data), ":")
+	contention = make([]float64, len(splits))
+	for i, str := range splits {
+		contention[i], err = strconv.ParseFloat(str, 64)
+		if err != nil {
+			clog.Error("ParseError %v\n", err.Error())
+		}
+	}
+
+	// Read TRANLEN
+	head, _, err = reader.ReadLine()
+	if strings.Compare(string(head), TRANLEN) != 0 {
+		clog.Error("Header %v Not Right\n", string(head))
+	}
+
+	data, _, err = reader.ReadLine()
+	splits = strings.Split(string(data), ":")
+	tlen = make([]int, len(splits))
+	for i, str := range splits {
+		tlen[i], err = strconv.Atoi(str)
+		if err != nil {
+			clog.Error("ParseError %v\n", err.Error())
+		}
+	}
+
+	// Read READRATE
+	head, _, err = reader.ReadLine()
+	if strings.Compare(string(head), READRATE) != 0 {
+		clog.Error("Header %v Not Right\n", string(head))
+	}
+
+	data, _, err = reader.ReadLine()
+	splits = strings.Split(string(data), ":")
+	rr = make([]int, len(splits))
+	for i, str := range splits {
+		rr[i], err = strconv.Atoi(str)
+		if err != nil {
+			clog.Error("ParseError %v\n", err.Error())
+		}
+	}
 }

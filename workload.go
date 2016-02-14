@@ -124,7 +124,39 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 		basic.IDToKeyRange[i] = keyRange
 	}
 
+	basic.NewGenerators(s, ps)
+
+	return basic
+}
+
+func (basic *BasicWorkload) SetKeyGen(keyGens [][]KeyGen) {
+	if len(basic.generators) != len(keyGens) {
+		clog.Error("Key Generators Length not Match\n")
+	}
+	for i := 0; i < basic.nWorkers; i++ {
+		for j := 0; j < len(basic.generators[i].keyGens); j++ {
+			basic.generators[i].keyGens[j] = keyGens[i][j]
+		}
+	}
+}
+
+func (basic *BasicWorkload) SetPartGen(partGens []PartGen) {
+	if len(basic.generators) != len(partGens) {
+		clog.Error("Key Generators Length not Match\n")
+	}
+	for i := 0; i < basic.nWorkers; i++ {
+		basic.generators[i].partGen = partGens[i]
+	}
+}
+
+func (basicWL *BasicWorkload) GetGenerator() []*Generator {
+	return basicWL.GetGenerator()
+}
+
+func (basic *BasicWorkload) NewGenerators(s float64, ps float64) []*Generator {
+
 	basic.generators = make([]*Generator, basic.nWorkers)
+	tableCount := basic.tableCount
 
 	for i := 0; i < basic.nWorkers; i++ {
 		gen := &Generator{
@@ -141,6 +173,32 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 
 		for j := 0; j < tableCount; j++ {
 			p := NewHashPartitioner(int64(basic.nParts), basic.IDToKeyRange[j])
+			gen.partitioner[j] = p
+		}
+
+		basic.generators[i] = gen
+	}
+
+	keyGens := basic.NewKeyGen(s)
+	partGens := basic.NewPartGen(ps)
+	for i := 0; i < basic.nWorkers; i++ {
+		basic.generators[i].keyGens = keyGens[i]
+		basic.generators[i].partGen = partGens[i]
+	}
+
+	return basic.generators
+
+}
+
+func (basic *BasicWorkload) NewKeyGen(s float64) [][]KeyGen {
+	keyGen := make([][]KeyGen, basic.nWorkers)
+	tableCount := basic.tableCount
+
+	for i := 0; i < basic.nWorkers; i++ {
+		keyGen[i] = make([]KeyGen, tableCount)
+
+		for j := 0; j < tableCount; j++ {
+			p := basic.generators[i].partitioner[j]
 			var kg KeyGen
 			if s == 1 {
 				kg = NewUniformRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), basic.isPartition)
@@ -151,36 +209,27 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 			} else { // s >=0 && s < 1
 				kg = NewZipfRandSmall(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), s, basic.isPartition)
 			}
-			gen.keyGens[j] = kg
-			gen.partitioner[j] = p
+			keyGen[i][j] = kg
 		}
+	}
 
+	return keyGen
+}
+
+func (basic *BasicWorkload) NewPartGen(ps float64) []PartGen {
+	partGen := make([]PartGen, basic.nWorkers)
+
+	for i := 0; i < basic.nWorkers; i++ {
 		if ps == 1 {
-			gen.partGen = NewUniformRandPart(ps, i, basic.nParts)
+			partGen[i] = NewUniformRandPart(ps, i, basic.nParts)
 		} else if ps > 1 {
-			gen.partGen = NewZipfRandLargePart(ps, i, basic.nParts)
+			partGen[i] = NewZipfRandLargePart(ps, i, basic.nParts)
 		} else if ps >= 0 {
-			gen.partGen = NewUniformRandPart(ps, i, basic.nParts)
+			partGen[i] = NewZipfRandSmallPart(ps, i, basic.nParts)
 		} else {
 			clog.Error("Part Access Generation: Skew Factor Should Not Be Negative\n")
 		}
-
-		basic.generators[i] = gen
 	}
 
-	return basic
-}
-
-func (basicWL *BasicWorkload) Reset(gens []*Generator) {
-	if len(basicWL.generators) != len(gens) {
-		clog.Error("Key Generators Length not Match\n")
-	}
-
-	for i := 0; i < len(basicWL.generators); i++ {
-		if len(basicWL.generators[i].keyGens) != len(gens[i].keyGens) {
-			clog.Error("Key Generators Table Count not Match\n")
-		}
-		basicWL.generators[i].keyGens = gens[i].keyGens
-		basicWL.generators[i].partGen = gens[i].partGen
-	}
+	return partGen
 }

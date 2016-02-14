@@ -74,9 +74,15 @@ type Chunk struct {
 	padding2 [PADDING]byte
 }
 
-type Partition struct {
+/*type Partition struct {
 	padding1 [PADDING]byte
 	partData []*Chunk
+	padding2 [PADDING]byte
+}*/
+
+type Partition struct {
+	padding1 [PADDING]byte
+	rows     map[Key]Record
 	padding2 [PADDING]byte
 }
 
@@ -194,14 +200,20 @@ func NewStore(schema string, nParts int) *Store {
 		}
 
 		for j := 0; j < nParts; j++ {
-			part := &Partition{
-				partData: make([]*Chunk, CHUNKS),
-			}
-			for k := 0; k < CHUNKS; k++ {
-				chunk := &Chunk{
-					rows: make(map[Key]Record),
+			/*
+				part := &Partition{
+					partData: make([]*Chunk, CHUNKS),
 				}
-				part.partData[k] = chunk
+				for k := 0; k < CHUNKS; k++ {
+					chunk := &Chunk{
+						rows: make(map[Key]Record),
+					}
+					part.partData[k] = chunk
+				}
+				s.tables[i].data[j] = part
+			*/
+			part := &Partition{
+				rows: make(map[Key]Record),
 			}
 			s.tables[i].data[j] = part
 		}
@@ -226,21 +238,29 @@ func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Rec
 	table := s.tables[tableID]
 	table.nKeys++
 
-	chunk := table.data[partNum].partData[k[0]]
-	if _, ok := chunk.rows[k]; ok {
+	//chunk := table.data[partNum].partData[k[0]]
+	part := table.data[partNum]
+	/*if _, ok := chunk.rows[k]; ok {
+		return nil, EDUPKEY //One record with that key has existed;
+	}*/
+
+	if _, ok := part.rows[k]; ok {
 		return nil, EDUPKEY //One record with that key has existed;
 	}
 
 	r := MakeRecord(table, k, tuple)
-	chunk.rows[k] = r
+	//chunk.rows[k] = r
+	part.rows[k] = r
 	return r, nil
 }
 
 func (s *Store) GetValueByID(tableID int, k Key, partNum int, colNum int) Value {
 	table := s.tables[tableID]
 
-	chunk := table.data[partNum].partData[k[0]]
-	r, ok := chunk.rows[k]
+	//chunk := table.data[partNum].partData[k[0]]
+	//r, ok := chunk.rows[k]
+	part := table.data[partNum]
+	r, ok := part.rows[k]
 	if !ok {
 		return nil
 	}
@@ -250,8 +270,10 @@ func (s *Store) GetValueByID(tableID int, k Key, partNum int, colNum int) Value 
 func (s *Store) GetRecByID(tableID int, k Key, partNum int) Record {
 	table := s.tables[tableID]
 
-	chunk := table.data[partNum].partData[k[0]]
-	r, ok := chunk.rows[k]
+	//chunk := table.data[partNum].partData[k[0]]
+	//r, ok := chunk.rows[k]
+	part := table.data[partNum]
+	r, ok := part.rows[k]
 	if !ok {
 		return nil
 	}
@@ -283,8 +305,10 @@ func (s *Store) SetValueByID(tableID int, k Key, partNum int, value Value, colNu
 		clog.Error("Column Type Not Match: Input %v, Require %v \n", value, table.valueSchema[colNum])
 	}
 
-	chunk := table.data[partNum].partData[k[0]]
-	r, ok := chunk.rows[k]
+	//chunk := table.data[partNum].partData[k[0]]
+	//r, ok := chunk.rows[k]
+	part := table.data[partNum]
+	r, ok := part.rows[k]
 	if !ok {
 		return false // No such record; Fail
 	}

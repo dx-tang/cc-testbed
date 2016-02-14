@@ -48,7 +48,7 @@ func NewZipfRandSmallPart(s float64, partIndex int, nParts int) *ZipfRandSmallPa
 	return zp
 }
 
-func (zp *ZipfRandSmall) GetOnePart() int {
+func (zp *ZipfRandSmallPart) GetOnePart() int {
 	return int(zp.wholeZipf.NextInt())
 }
 

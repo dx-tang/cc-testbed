@@ -346,7 +346,7 @@ func (s *SingelWorkload) PrintSum() {
 	clog.Info("Sum: %v\n", total)
 }
 
-func (singleWL *SingelWorkload) ResetConf(gens []*Generator, transPercentage string, cr float64, tlen int, rr int) {
+func (singleWL *SingelWorkload) ResetConf(transPercentage string, cr float64, mp int, tlen int, rr int) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != SINGLETRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -367,8 +367,6 @@ func (singleWL *SingelWorkload) ResetConf(gens []*Generator, transPercentage str
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	singleWL.basic.Reset(gens)
-
 	for i := 0; i < len(singleWL.transGen); i++ {
 		tg := singleWL.transGen[i]
 		tg.gen = singleWL.basic.generators[i]
@@ -376,6 +374,7 @@ func (singleWL *SingelWorkload) ResetConf(gens []*Generator, transPercentage str
 		tg.cr = cr
 		tg.tlen = tlen
 		tg.rr = rr
+		tg.mp = mp
 	}
 }
 
@@ -411,4 +410,8 @@ func (singleWL *SingelWorkload) ResetData() {
 
 func (singleWL *SingelWorkload) GetIDToKeyRange() [][]int64 {
 	return singleWL.basic.IDToKeyRange
+}
+
+func (singleWL *SingelWorkload) GetBasicWL() *BasicWorkload {
+	return singleWL.basic
 }

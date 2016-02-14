@@ -13,7 +13,7 @@ const (
 	HISTOGRAMLEN = 100
 )
 
-var Report = flag.Bool("report", true, "whether periodically report runtime information to coordinator")
+var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
 
 type ReportInfo struct {
 	padding0   [PADDING]byte
@@ -187,6 +187,8 @@ type Coordinator struct {
 	NWait        time.Duration
 	NLockAcquire int64
 	stat         *os.File
+	mode         int
+	feature      *Feature
 	padding2     [PADDING]byte
 	done         chan chan bool
 	reports      []chan *ReportInfo
@@ -206,6 +208,8 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat s
 		store:     store,
 		NStats:    make([]int64, LAST_STAT),
 		stat:      nil,
+		mode:      mode,
+		feature:   &Feature{},
 		done:      make(chan chan bool),
 		reports:   make([]chan *ReportInfo, nWorkers),
 		changeACK: make([]chan bool, nWorkers),
@@ -291,6 +295,7 @@ func (coord *Coordinator) Finish() {
 		coord.done <- x
 		<-x
 	}
+	coord.gatherStats()
 }
 
 func (coord *Coordinator) Reset() {
@@ -335,6 +340,17 @@ func (coord *Coordinator) Reset() {
 	}
 }
 
+func (coord *Coordinator) SetMode(mode int) {
+	coord.mode = mode
+	for _, w := range coord.Workers {
+		w.SetMode(mode)
+	}
+}
+
+func (coord *Coordinator) GetMode() int {
+	return coord.mode
+}
+
 func (coord *Coordinator) gatherStats() {
 	for _, worker := range coord.Workers {
 		coord.NStats[NABORTS] += worker.NStats[NABORTS]
@@ -356,7 +372,6 @@ func (coord *Coordinator) gatherStats() {
 }
 
 func (coord *Coordinator) PrintStats(f *os.File) {
-	coord.gatherStats()
 
 	mode := coord.Workers[0].mode
 
@@ -433,9 +448,54 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 
 }
 
-// Currently, we have supported 5 features
-//
-func (coord *Coordinator) PrintTraining(f *os.File) {
+type Feature struct {
+	padding1 [PADDING]byte
+	PartAvg  float64
+	PartVar  float64
+	RecAvg   float64
+	RecVar   float64
+	ReadRate float64
+	Txn      float64
+	AR       float64
+	padding2 [PADDING]byte
+}
+
+func (f *Feature) Reset() {
+	f.PartAvg = 0
+	f.PartVar = 0
+	f.RecAvg = 0
+	f.RecVar = 0
+	f.ReadRate = 0
+	f.Txn = 0
+	f.AR = 0
+}
+
+func (ft *Feature) Add(tmpFt *Feature) {
+	ft.PartAvg += tmpFt.PartAvg
+	ft.PartVar += tmpFt.PartVar
+	ft.RecAvg += tmpFt.RecAvg
+	ft.RecVar += tmpFt.RecVar
+	ft.ReadRate += tmpFt.ReadRate
+}
+
+func (ft *Feature) Set(tmpFt *Feature) {
+	ft.PartAvg = tmpFt.PartAvg
+	ft.PartVar = tmpFt.PartVar
+	ft.RecAvg = tmpFt.RecAvg
+	ft.RecVar = tmpFt.RecVar
+	ft.ReadRate = tmpFt.ReadRate
+}
+
+func (ft *Feature) Avg(count float64) {
+	ft.PartAvg /= count
+	ft.PartVar /= count
+	ft.RecAvg /= count
+	ft.RecVar /= count
+	ft.ReadRate /= count
+}
+
+// Currently, we support 5 features
+func (coord *Coordinator) GetFeature() *Feature {
 	summary := coord.summary
 	for _, w := range coord.Workers {
 		master := w.riMaster
@@ -496,8 +556,20 @@ func (coord *Coordinator) PrintTraining(f *os.File) {
 
 	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
 
-	f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\t ", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
-	f.WriteString(fmt.Sprintf("%.4f\t %.4f\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), float64(coord.NStats[NABORTS])/float64(coord.NStats[NTXN])))
+	/*
+		f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\t ", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
+		f.WriteString(fmt.Sprintf("%.4f\t %.4f\n",
+			float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), float64(coord.NStats[NABORTS])/float64(coord.NStats[NTXN])))
+	*/
+	coord.feature.PartAvg = partAvg
+	coord.feature.PartVar = partVar
+	coord.feature.RecAvg = recAvg
+	coord.feature.RecVar = recVar
+	coord.feature.ReadRate = rr
+	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / coord.NExecute.Seconds()
+	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
 
+	clog.Info("TXN %v, Mode %v\n", float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.GetMode())
+
+	return coord.feature
 }
