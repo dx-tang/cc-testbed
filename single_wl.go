@@ -103,7 +103,7 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 	cr := int(s.cr)
 	pi := s.partIndex
 	nParts := s.nParts
-	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1
+	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1 && s.mp > 1
 	tlen := s.tlen
 	mp := s.mp
 
