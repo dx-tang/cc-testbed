@@ -124,6 +124,13 @@ func main() {
 
 		tmpRR := rr[d]
 
+		// Prune
+		if tmpCR == 0 || tmpMP == 1 {
+			if !(tmpCR == 0 && tmpMP == 1) {
+				continue
+			}
+		}
+
 		if single == nil {
 			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
 			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, "", *sr, single.GetIDToKeyRange())
