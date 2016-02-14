@@ -569,7 +569,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / coord.NExecute.Seconds()
 	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
 
-	clog.Info("TXN %v, Mode %v\n", float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.GetMode())
+	clog.Info("TXN %v, Abort Rate %v, Mode %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.GetMode())
 
 	return coord.feature
 }
