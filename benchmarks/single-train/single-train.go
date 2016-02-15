@@ -126,12 +126,12 @@ func main() {
 
 		// Prune
 		if tmpTlen == 1 {
-			if tmpCR != 0 || tmpMP != 1 {
+			if tmpCR != 0 || tmpMP != 1 || tmpPS != 0 {
 				continue
 			}
 		} else {
 			if tmpCR == 0 || tmpMP == 1 {
-				if !(tmpCR == 0 && tmpMP == 1) {
+				if tmpCR != 0 || tmpMP != 1 || tmpPS != 0) {
 					continue
 				}
 			}
