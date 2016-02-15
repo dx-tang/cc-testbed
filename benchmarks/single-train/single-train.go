@@ -131,7 +131,7 @@ func main() {
 			}
 		} else {
 			if tmpCR == 0 || tmpMP == 1 {
-				if tmpCR != 0 || tmpMP != 1 || tmpPS != 0) {
+				if tmpCR != 0 || tmpMP != 1 || tmpPS != 0 {
 					continue
 				}
 			}
