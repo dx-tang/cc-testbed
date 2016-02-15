@@ -125,10 +125,20 @@ func main() {
 		tmpRR := rr[d]
 
 		// Prune
-		if tmpCR == 0 || tmpMP == 1 {
-			if !(tmpCR == 0 && tmpMP == 1) {
+		if tmpTlen == 1 {
+			if tmpCR != 0 || tmpMP != 1 {
 				continue
 			}
+		} else {
+			if tmpCR == 0 || tmpMP == 1 {
+				if !(tmpCR == 0 && tmpMP == 1) {
+					continue
+				}
+			}
+		}
+
+		if tmpMP > tmpTlen {
+			continue
 		}
 
 		if single == nil {
