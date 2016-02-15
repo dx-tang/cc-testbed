@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	//"fmt"
+	"fmt"
 	"os"
 	"runtime"
 	"runtime/pprof"
