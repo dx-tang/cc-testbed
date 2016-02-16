@@ -313,39 +313,6 @@ func (s *SingelWorkload) GetTableCount() int {
 	return s.basic.tableCount
 }
 
-func (s *SingelWorkload) PrintSum() {
-	var total int64
-	nKeys := s.basic.nKeys[SINGLE]
-	gen := s.basic.generators[0]
-	keyRange := s.basic.IDToKeyRange[SINGLE]
-	keyLen := len(keyRange)
-	compKey := make([]OneKey, keyLen)
-	store := s.basic.store
-
-	var val Value
-	var k int = 0
-	for i := int64(0); i < nKeys; i++ {
-		key := CKey(compKey)
-		partNum := gen.GetPart(SINGLE, key)
-		val = store.GetValueByID(SINGLE, key, partNum, SINGLE_VAL)
-		total += *val.(*int64)
-
-		for int64(compKey[k]+1) >= keyRange[k] {
-			compKey[k] = 0
-			k++
-			if k >= keyLen {
-				break
-			}
-		}
-		if k < keyLen {
-			compKey[k]++
-			k = 0
-		}
-	}
-
-	clog.Info("Sum: %v\n", total)
-}
-
 func (singleWL *SingelWorkload) ResetConf(transPercentage string, cr float64, mp int, tlen int, rr int) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != SINGLETRANSNUM {
@@ -414,4 +381,37 @@ func (singleWL *SingelWorkload) GetIDToKeyRange() [][]int64 {
 
 func (singleWL *SingelWorkload) GetBasicWL() *BasicWorkload {
 	return singleWL.basic
+}
+
+func (s *SingelWorkload) PrintSum() {
+	var total int64
+	nKeys := s.basic.nKeys[SINGLE]
+	gen := s.basic.generators[0]
+	keyRange := s.basic.IDToKeyRange[SINGLE]
+	keyLen := len(keyRange)
+	compKey := make([]OneKey, keyLen)
+	store := s.basic.store
+
+	var val Value
+	var k int = 0
+	for i := int64(0); i < nKeys; i++ {
+		key := CKey(compKey)
+		partNum := gen.GetPart(SINGLE, key)
+		val = store.GetValueByID(SINGLE, key, partNum, SINGLE_VAL)
+		total += *val.(*int64)
+
+		for int64(compKey[k]+1) >= keyRange[k] {
+			compKey[k] = 0
+			k++
+			if k >= keyLen {
+				break
+			}
+		}
+		if k < keyLen {
+			compKey[k]++
+			k = 0
+		}
+	}
+
+	clog.Info("Sum: %v\n", total)
 }

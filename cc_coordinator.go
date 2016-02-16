@@ -383,7 +383,7 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 	f.WriteString(fmt.Sprintf("Transaction Generation Spends %v secs\n", float64(coord.NGen.Nanoseconds())/float64(PERSEC)))
 	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NExecute.Nanoseconds())/float64(PERSEC)))
 
-	if *SysType == PARTITION || mode == PARTITION {
+	if *SysType == PARTITION || (*SysType == ADAPTIVE && mode == PARTITION) {
 		f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))
 		f.WriteString(fmt.Sprintf("Transaction Waiting Spends %v secs\n", float64(coord.NWait.Nanoseconds())/float64(PERSEC)))
 		f.WriteString(fmt.Sprintf("Has Acquired %v Locks\n", coord.NLockAcquire))
@@ -391,7 +391,7 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 		r := ((float64)(coord.NStats[NABORTS]) / (float64)(coord.NStats[NTXN])) * 100
 		f.WriteString(fmt.Sprintf("Abort Rate %.4f%% \n", r))
 
-	} else if *SysType == OCC || mode == OCC {
+	} else if *SysType == OCC || (*SysType == ADAPTIVE && mode == OCC) {
 
 		if *PhyPart {
 			f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))
@@ -422,7 +422,7 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 
 		f.WriteString(fmt.Sprintf("Workload Occupy %.4f%% Aborts \n", l))
 
-	} else if *SysType == LOCKING || mode == LOCKING {
+	} else if *SysType == LOCKING || (*SysType == ADAPTIVE && mode == LOCKING) {
 		f.WriteString(fmt.Sprintf("Abort %v Transactions\n", coord.NStats[NABORTS]))
 		r := ((float64)(coord.NStats[NABORTS]) / (float64)(coord.NStats[NTXN])) * 100
 		f.WriteString(fmt.Sprintf("Abort Rate %.4f%% \n", r))

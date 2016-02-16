@@ -331,7 +331,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 
 	var ok bool
-	var tid TID
+	//var tid TID
 	var t *TrackTable
 	var r Record
 
@@ -382,7 +382,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 
 	// Read this record
-	ok, tid = r.IsUnlocked()
+	/*ok, tid = r.IsUnlocked()
 
 	if !ok {
 		o.w.NStats[NREADABORTS]++
@@ -391,7 +391,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 	if tid > o.maxSeen {
 		o.maxSeen = tid
-	}
+	}*/
 
 	return nil
 }
