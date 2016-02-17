@@ -178,7 +178,6 @@ func (s *SBTransGen) GenOneTrans() Trans {
 	gen := s.gen
 	cr := int(s.cr)
 	pi := s.partIndex
-	nParts := s.nParts
 	isPart := s.isPartition
 
 	txn := rnd.Intn(100)
@@ -208,7 +207,13 @@ func (s *SBTransGen) GenOneTrans() Trans {
 		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
 			t.accoutID = t.accoutID[:2]
-			tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
+			//tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
+			for {
+				tmpPi = gen.GenOnePart()
+				if tmpPi != pi {
+					break
+				}
+			}
 			if tmpPi > pi {
 				t.accessParts[0] = pi
 				t.accessParts[1] = tmpPi
@@ -237,7 +242,13 @@ func (s *SBTransGen) GenOneTrans() Trans {
 		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
 			t.accoutID = t.accoutID[:2]
-			tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
+			//tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
+			for {
+				tmpPi = gen.GenOnePart()
+				if tmpPi != pi {
+					break
+				}
+			}
 			if tmpPi > pi {
 				t.accessParts[0] = pi
 				t.accessParts[1] = tmpPi
@@ -418,6 +429,44 @@ func (s *SBWorkload) GetStore() *Store {
 
 func (s *SBWorkload) GetTableCount() int {
 	return s.basic.tableCount
+}
+
+func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
+	tp := strings.Split(transPercentage, ":")
+	if len(tp) != SBTRANSNUM {
+		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
+	}
+	for i, str := range tp {
+		per, err := strconv.Atoi(str)
+		if err != nil {
+			clog.Error("TransPercentage Format Error %s\n", str)
+		}
+		if i != 0 {
+			s.transPercentage[i] = s.transPercentage[i-1] + per
+		} else {
+			s.transPercentage[i] = per
+		}
+	}
+
+	if s.transPercentage[SBTRANSNUM-1] != 100 {
+		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
+	}
+
+	for i := 0; i < len(s.transGen); i++ {
+		tg := s.transGen[i]
+		tg.gen = s.basic.generators[i]
+		tg.transPercentage = s.transPercentage
+		tg.cr = cr
+	}
+
+}
+
+func (s *SBWorkload) GetBasicWL() *BasicWorkload {
+	return s.basic
+}
+
+func (s *SBWorkload) GetIDToKeyRange() [][]int64 {
+	return s.basic.IDToKeyRange
 }
 
 func (s *SBWorkload) PrintChecking() {

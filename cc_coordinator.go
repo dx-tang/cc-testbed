@@ -373,7 +373,7 @@ func (coord *Coordinator) gatherStats() {
 
 func (coord *Coordinator) PrintStats(f *os.File) {
 
-	mode := coord.Workers[0].mode
+	mode := coord.mode
 
 	f.WriteString("================\n")
 	f.WriteString("Print Statistics\n")

@@ -22,6 +22,8 @@ var tp = flag.String("tp", "100:0:0:0:0:0", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var stat = flag.String("stat", "stat.out", "statistics")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
+var sr = flag.Int("sr", 100, "Sample Rate")
+var ps = flag.Float64("ps", 1, "Skew For Partition")
 
 const (
 	BUFSIZE = 5
@@ -70,8 +72,8 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
-	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
-	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount())
+	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps)
+	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *stat, *sr, sb.GetIDToKeyRange())
 
 	clog.Info("Done with Populating Store\n")
 
@@ -80,21 +82,21 @@ func main() {
 		wg.Add(1)
 		go func(n int) {
 			//var txn int64
-			txn := 1000000
+			//txn := 1000000
 			var t testbed.Trans
 			//tq := testbed.NewTransQueue(BUFSIZE)
 			w := coord.Workers[n]
 			gen := sb.GetTransGen(n)
-			//end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
 			for {
-				//tm := time.Now()
-				//if !end_time.After(tm) {
-				//	break
-				//}
-				if txn <= 0 {
+				tm := time.Now()
+				if !end_time.After(tm) {
 					break
 				}
-				tm := time.Now()
+				//if txn <= 0 {
+				//	break
+				//}
+				//tm := time.Now()
 				//if tq.IsFull() {
 				//	t = tq.Dequeue()
 				//} else {
@@ -102,10 +104,10 @@ func main() {
 				//}
 				w.NGen += time.Since(tm)
 
-				tm = time.Now()
+				//tm = time.Now()
 				//_, err := w.One(t)
 				w.One(t)
-				w.NExecute += time.Since(tm)
+				//w.NExecute += time.Since(tm)
 				/*
 					if err != nil {
 						if err == testbed.EABORT {
@@ -116,13 +118,16 @@ func main() {
 							clog.Error("%s\n", err.Error())
 						}
 					}*/
-				txn--
+				//txn--
 			}
 			//clog.Info("Worker %d issues %d transactions\n", n, txn)
+			w.Finish()
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
+
+	coord.Finish()
 
 	//sb.PrintChecking()
 
