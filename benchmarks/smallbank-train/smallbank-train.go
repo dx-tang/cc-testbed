@@ -178,7 +178,7 @@ func main() {
 
 		// One Test Finished
 		//ft.Avg(testbed.ADAPTIVE)
-		f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
+		f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.PartLenVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
 		ft.Reset()
 	}
 }

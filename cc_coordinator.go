@@ -16,20 +16,21 @@ const (
 var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
 
 type ReportInfo struct {
-	padding0   [PADDING]byte
-	execTime   time.Duration
-	prevExec   time.Duration
-	txn        int64
-	aborts     int64
-	prevTxn    int64
-	prevAborts int64
-	txnSample  int64
-	partStat   []int64
-	recStat    [][]int64
-	readCount  int64
-	writeCount int64
-	sampleRate int
-	padding1   [PADDING]byte
+	padding0    [PADDING]byte
+	execTime    time.Duration
+	prevExec    time.Duration
+	txn         int64
+	aborts      int64
+	prevTxn     int64
+	prevAborts  int64
+	txnSample   int64
+	partStat    []int64
+	partLenStat int64
+	recStat     [][]int64
+	readCount   int64
+	writeCount  int64
+	sampleRate  int
+	padding1    [PADDING]byte
 }
 
 func (ri *ReportInfo) Reset() {
@@ -43,6 +44,7 @@ func (ri *ReportInfo) Reset() {
 	for i, _ := range ri.partStat {
 		ri.partStat[i] = 0
 	}
+	ri.partLenStat = 0
 
 	for i, _ := range ri.recStat {
 		for j, _ := range ri.recStat[i] {
@@ -171,6 +173,8 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	for _, p := range ap {
 		ri.partStat[p]++
 	}
+
+	ri.partLenStat += int64(len(ap) * len(ap))
 }
 
 func (st *SampleTool) Reset() {
@@ -449,20 +453,22 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 }
 
 type Feature struct {
-	padding1 [PADDING]byte
-	PartAvg  float64
-	PartVar  float64
-	RecAvg   float64
-	RecVar   float64
-	ReadRate float64
-	Txn      float64
-	AR       float64
-	padding2 [PADDING]byte
+	padding1   [PADDING]byte
+	PartAvg    float64
+	PartVar    float64
+	PartLenVar float64
+	RecAvg     float64
+	RecVar     float64
+	ReadRate   float64
+	Txn        float64
+	AR         float64
+	padding2   [PADDING]byte
 }
 
 func (f *Feature) Reset() {
 	f.PartAvg = 0
 	f.PartVar = 0
+	f.PartLenVar = 0
 	f.RecAvg = 0
 	f.RecVar = 0
 	f.ReadRate = 0
@@ -473,6 +479,7 @@ func (f *Feature) Reset() {
 func (ft *Feature) Add(tmpFt *Feature) {
 	ft.PartAvg += tmpFt.PartAvg
 	ft.PartVar += tmpFt.PartVar
+	ft.PartLenVar += tmpFt.PartLenVar
 	ft.RecAvg += tmpFt.RecAvg
 	ft.RecVar += tmpFt.RecVar
 	ft.ReadRate += tmpFt.ReadRate
@@ -481,6 +488,7 @@ func (ft *Feature) Add(tmpFt *Feature) {
 func (ft *Feature) Set(tmpFt *Feature) {
 	ft.PartAvg = tmpFt.PartAvg
 	ft.PartVar = tmpFt.PartVar
+	ft.PartLenVar = tmpFt.PartLenVar
 	ft.RecAvg = tmpFt.RecAvg
 	ft.RecVar = tmpFt.RecVar
 	ft.ReadRate = tmpFt.ReadRate
@@ -489,6 +497,7 @@ func (ft *Feature) Set(tmpFt *Feature) {
 func (ft *Feature) Avg(count float64) {
 	ft.PartAvg /= count
 	ft.PartVar /= count
+	ft.PartLenVar /= count
 	ft.RecAvg /= count
 	ft.RecVar /= count
 	ft.ReadRate /= count
@@ -506,6 +515,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 		for j, ps := range master.partStat {
 			summary.partStat[j] += ps
 		}
+
+		summary.partLenStat += master.partLenStat
 
 		for j, _ := range master.recStat {
 			for k, rs := range master.recStat[j] {
@@ -533,6 +544,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
 	partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
+	partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
 
 	var recAvg float64
 	var recVar float64
@@ -563,6 +575,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	*/
 	coord.feature.PartAvg = partAvg
 	coord.feature.PartVar = partVar
+	coord.feature.PartLenVar = partLenVar
 	coord.feature.RecAvg = recAvg
 	coord.feature.RecVar = recVar
 	coord.feature.ReadRate = rr
