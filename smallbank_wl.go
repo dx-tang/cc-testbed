@@ -427,10 +427,6 @@ func (s *SBWorkload) GetStore() *Store {
 	return s.basic.store
 }
 
-func (s *SBWorkload) GetTableCount() int {
-	return s.basic.tableCount
-}
-
 func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != SBTRANSNUM {
@@ -467,6 +463,10 @@ func (s *SBWorkload) GetBasicWL() *BasicWorkload {
 
 func (s *SBWorkload) GetIDToKeyRange() [][]int64 {
 	return s.basic.IDToKeyRange
+}
+
+func (s *SBWorkload) GetTableCount() int {
+	return s.basic.tableCount
 }
 
 func (s *SBWorkload) PrintChecking() {
