@@ -23,6 +23,7 @@ const (
 	CONTENTION   = "CONTENTION"
 	TRANLEN      = "TRANLEN"
 	READRATE     = "READRATE"
+	PERFDIFF     = 0.03
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
@@ -96,10 +97,15 @@ func main() {
 	partGenPool := make(map[float64][]testbed.PartGen)
 	var single *testbed.SingelWorkload = nil
 	var coord *testbed.Coordinator = nil
-	var ft *testbed.Feature = &testbed.Feature{}
-	var curMode int
+	//var curMode int
+
+	var ft []*testbed.Feature = make([]*testbed.Feature, testbed.ADAPTIVE)
+	for i := 0; i < testbed.ADAPTIVE; i++ {
+		ft[i] = &testbed.Feature{}
+	}
 
 	totalTests := len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
+	count := 0
 	for k := 0; k < totalTests; k++ {
 		d := k
 		r := d % len(cr)
@@ -196,20 +202,39 @@ func main() {
 			coord.Finish()
 
 			tmpFt := coord.GetFeature()
-			//clog.Info("TXN %v; Mode %v\n", tmpFt.Txn, coord.GetMode())
-			if ft.Txn < tmpFt.Txn {
-				ft.Txn = tmpFt.Txn
-				curMode = coord.GetMode()
-				ft.Set(tmpFt)
+			for p := 0; p < testbed.ADAPTIVE; p++ {
+				if ft[p].Txn < tmpFt.Txn {
+					for q := testbed.ADAPTIVE - 2; q >= p; q-- {
+						ft[q+1].Set(ft[q])
+					}
+					ft[p].Set(tmpFt)
+					break
+				}
 			}
+			//clog.Info("TXN %v; Mode %v\n", tmpFt.Txn, coord.GetMode())
+			//if ft.Txn < tmpFt.Txn {
+			//	ft.Txn = tmpFt.Txn
+			//	curMode = coord.GetMode()
+			//	ft.Set(tmpFt)
+			//}
 
 			coord.Reset()
 		}
 
 		// One Test Finished
+		// ID
+		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))
+		if (ft[0].Txn-ft[1].Txn)/ft[0].Txn < PERFDIFF {
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].PartVar, ft[0].ReadRate, ft[0].Mode, ft[1].Mode))
+		} else {
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].PartVar, ft[0].ReadRate, ft[0].Mode))
+		}
 		//ft.Avg(testbed.ADAPTIVE)
-		f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.PartLenVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
-		ft.Reset()
+		//f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.PartLenVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
+		for _, feature := range ft {
+			feature.Reset()
+		}
+		count++
 	}
 }
 

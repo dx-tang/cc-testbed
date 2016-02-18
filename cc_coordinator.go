@@ -462,6 +462,7 @@ type Feature struct {
 	ReadRate   float64
 	Txn        float64
 	AR         float64
+	Mode       int
 	padding2   [PADDING]byte
 }
 
@@ -474,6 +475,7 @@ func (f *Feature) Reset() {
 	f.ReadRate = 0
 	f.Txn = 0
 	f.AR = 0
+	f.Mode = 0
 }
 
 func (ft *Feature) Add(tmpFt *Feature) {
@@ -492,6 +494,9 @@ func (ft *Feature) Set(tmpFt *Feature) {
 	ft.RecAvg = tmpFt.RecAvg
 	ft.RecVar = tmpFt.RecVar
 	ft.ReadRate = tmpFt.ReadRate
+	ft.Txn = tmpFt.Txn
+	ft.AR = tmpFt.AR
+	ft.Mode = tmpFt.Mode
 }
 
 func (ft *Feature) Avg(count float64) {
@@ -581,8 +586,9 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.ReadRate = rr
 	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / coord.NExecute.Seconds()
 	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
+	coord.feature.Mode = coord.mode
 
-	clog.Info("TXN %v, Abort Rate %v, Mode %v\n",
+	clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.GetMode())
 
 	return coord.feature
