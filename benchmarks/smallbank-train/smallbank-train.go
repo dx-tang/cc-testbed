@@ -277,7 +277,7 @@ func ParseTrainConf(tc string) {
 	}
 
 	transper = make([]string, count)
-	tmpPer = make([]int, testbed.SBTRANSNUM)
+	tmpPer := make([]int, testbed.SBTRANSNUM)
 	for i := 0; i < count; i++ {
 		data, _, err = reader.ReadLine()
 		if err != nil {
@@ -301,7 +301,7 @@ func ParseTrainConf(tc string) {
 			}
 		}
 
-		if tmpPer[SBTRANSNUM-1] != 100 {
+		if tmpPer[testbed.SBTRANSNUM-1] != 100 {
 			clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", string(data))
 		}
 
