@@ -275,12 +275,36 @@ func ParseTrainConf(tc string) {
 	if err != nil {
 		clog.Error("Parse String Error: %v \n", err.Error())
 	}
+
 	transper = make([]string, count)
+	tmpPer = make([]int, testbed.SBTRANSNUM)
 	for i := 0; i < count; i++ {
 		data, _, err = reader.ReadLine()
 		if err != nil {
 			clog.Error("Read String Error: %v \n", err.Error())
 		}
+
+		tp := strings.Split(string(data), ":")
+		if len(tp) != testbed.SBTRANSNUM {
+			clog.Error("Wrong format of transaction percentage string %s\n", string(data))
+		}
+
+		for i, str := range tp {
+			per, err := strconv.Atoi(str)
+			if err != nil {
+				clog.Error("TransPercentage Format Error %s\n", str)
+			}
+			if i != 0 {
+				tmpPer[i] = tmpPer[i-1] + per
+			} else {
+				tmpPer[i] = per
+			}
+		}
+
+		if tmpPer[SBTRANSNUM-1] != 100 {
+			clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", string(data))
+		}
+
 		transper[i] = string(data)
 	}
 
