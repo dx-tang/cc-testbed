@@ -588,6 +588,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
 	coord.feature.Mode = coord.mode
 
+	//clog.Info("ReadCount %v; WriteCount %v\n", summary.readCount, summary.writeCount)
+
 	clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.GetMode())
 

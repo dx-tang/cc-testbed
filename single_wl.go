@@ -66,7 +66,8 @@ type SingleTrans struct {
 	parts       []int
 	iv          []IntValue
 	trial       int
-	readNum     int
+	rnd         *rand.Rand
+	rr          int
 	padding2    [PADDING]byte
 }
 
@@ -192,7 +193,7 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 		t.trial = rnd.Intn(WDTRIAL)
 	}
 
-	t.readNum = (s.rr * s.tlen) / 100
+	//t.readNum = (s.rr * s.tlen) / 100
 
 	return t
 }
@@ -291,6 +292,8 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 		trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
 		trans.keys = trans.keys[PADDINGKEY:PADDINGKEY]
 		trans.parts = trans.parts[PADDINGINT:PADDINGINT]
+		trans.rnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i*17+19)))
+		trans.rr = rr
 		tg.trans = trans
 		singleWL.transGen[i] = tg
 	}

@@ -504,27 +504,24 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 	var part int
 	var err error
 	var val Value
-	for i := 0; i < singleTrans.readNum; i++ {
+	for i := 0; i < len(singleTrans.keys); i++ {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
 
-		val, _, err = exec.ReadValue(SINGLE, k, part, SINGLE_VAL, trial)
-		if err != nil {
-			return nil, err
-		}
-		if val == nil {
-			return nil, ENOKEY
-		}
-	}
-
-	for i := singleTrans.readNum; i < len(singleTrans.keys); i++ {
-		k = singleTrans.keys[i]
-		part = singleTrans.parts[i]
-
-		iv[i].intVal = int64(i)
-		err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, trial)
-		if err != nil {
-			return nil, err
+		if singleTrans.rnd.Intn(100) < singleTrans.rr {
+			val, _, err = exec.ReadValue(SINGLE, k, part, SINGLE_VAL, trial)
+			if err != nil {
+				return nil, err
+			}
+			if val == nil {
+				return nil, ENOKEY
+			}
+		} else {
+			iv[i].intVal = int64(i)
+			err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, trial)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 	}
