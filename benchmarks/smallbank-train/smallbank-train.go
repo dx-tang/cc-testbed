@@ -139,49 +139,74 @@ func main() {
 		clog.Info("CR %v PS %v Contention %v TransPer %v \n", tmpCR, tmpPS, tmpContention, tmpTP)
 
 		// One Test
-		for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
-			var wg sync.WaitGroup
-			coord.SetMode(j)
-			for i := 0; i < nWorkers; i++ {
-				wg.Add(1)
-				go func(n int) {
-					var t testbed.Trans
-					w := coord.Workers[n]
-					gen := sb.GetTransGen(n)
-					end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
-					w.Start()
-					for {
-						tm := time.Now()
-						if !end_time.After(tm) {
-							break
+		for a := 0; a < 3; a++ {
+			for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
+				var wg sync.WaitGroup
+				coord.SetMode(j)
+				for i := 0; i < nWorkers; i++ {
+					wg.Add(1)
+					go func(n int) {
+						var t testbed.Trans
+						w := coord.Workers[n]
+						gen := sb.GetTransGen(n)
+						end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+						w.Start()
+						for {
+							tm := time.Now()
+							if !end_time.After(tm) {
+								break
+							}
+
+							t = gen.GenOneTrans()
+
+							w.NGen += time.Since(tm)
+
+							w.One(t)
 						}
+						w.Finish()
+						wg.Done()
+					}(i)
+				}
+				wg.Wait()
 
-						t = gen.GenOneTrans()
+				coord.Finish()
 
-						w.NGen += time.Since(tm)
-
-						w.One(t)
+				tmpFt := coord.GetFeature()
+				/*for p := 0; p < testbed.ADAPTIVE; p++ {
+					if ft[p].Txn < tmpFt.Txn {
+						for q := testbed.ADAPTIVE - 2; q >= p; q-- {
+							ft[q+1].Set(ft[q])
+						}
+						ft[p].Set(tmpFt)
+						break
 					}
-					w.Finish()
-					wg.Done()
-				}(i)
+				}*/
+				if a == 0 {
+					ft[j].Set(tmpFt)
+				} else {
+					ft[j].Add(tmpFt)
+				}
+
+				coord.Reset()
 			}
-			wg.Wait()
+		}
 
-			coord.Finish()
+		for _, feature := range ft {
+			feature.Avg(3)
+		}
 
-			tmpFt := coord.GetFeature()
-			for p := 0; p < testbed.ADAPTIVE; p++ {
-				if ft[p].Txn < tmpFt.Txn {
-					for q := testbed.ADAPTIVE - 2; q >= p; q-- {
-						ft[q+1].Set(ft[q])
-					}
-					ft[p].Set(tmpFt)
-					break
+		for x := 0; x < testbed.ADAPTIVE-1; x++ {
+			tmp := ft[x]
+			tmpI := x
+			for y := x + 1; y < testbed.ADAPTIVE; y++ {
+				if tmp.Txn < ft[y].Txn {
+					tmp = ft[y]
+					tmpI = y
 				}
 			}
-
-			coord.Reset()
+			tmp = ft[x]
+			ft[x] = ft[tmpI]
+			ft[tmpI] = tmp
 		}
 
 		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpPS, tmpContention, tmpTP))
