@@ -485,6 +485,8 @@ func (ft *Feature) Add(tmpFt *Feature) {
 	ft.RecAvg += tmpFt.RecAvg
 	ft.RecVar += tmpFt.RecVar
 	ft.ReadRate += tmpFt.ReadRate
+	ft.Txn += tmpFt.Txn
+	ft.AR += tmpFt.AR
 }
 
 func (ft *Feature) Set(tmpFt *Feature) {
@@ -506,6 +508,8 @@ func (ft *Feature) Avg(count float64) {
 	ft.RecAvg /= count
 	ft.RecVar /= count
 	ft.ReadRate /= count
+	ft.Txn /= count
+	ft.AR /= count
 }
 
 // Currently, we support 5 features
