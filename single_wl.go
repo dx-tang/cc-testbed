@@ -194,6 +194,7 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 	}
 
 	//t.readNum = (s.rr * s.tlen) / 100
+	t.rr = s.rr
 
 	return t
 }
