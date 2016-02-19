@@ -170,55 +170,81 @@ func main() {
 		clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
 
 		// One Test
-		for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
-			var wg sync.WaitGroup
-			coord.SetMode(j)
-			for i := 0; i < nWorkers; i++ {
-				wg.Add(1)
-				go func(n int) {
-					var t testbed.Trans
-					w := coord.Workers[n]
-					gen := single.GetTransGen(n)
-					end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
-					w.Start()
-					for {
-						tm := time.Now()
-						if !end_time.After(tm) {
+		for a := 0; a < 3; a++ {
+			for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
+				var wg sync.WaitGroup
+				coord.SetMode(j)
+				for i := 0; i < nWorkers; i++ {
+					wg.Add(1)
+					go func(n int) {
+						var t testbed.Trans
+						w := coord.Workers[n]
+						gen := single.GetTransGen(n)
+						end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+						w.Start()
+						for {
+							tm := time.Now()
+							if !end_time.After(tm) {
+								break
+							}
+
+							t = gen.GenOneTrans()
+
+							w.NGen += time.Since(tm)
+
+							w.One(t)
+						}
+						w.Finish()
+						wg.Done()
+					}(i)
+				}
+				wg.Wait()
+
+				coord.Finish()
+
+				tmpFt := coord.GetFeature()
+				/*
+					for p := 0; p < testbed.ADAPTIVE; p++ {
+						if ft[p].Txn < tmpFt.Txn {
+							for q := testbed.ADAPTIVE - 2; q >= p; q-- {
+								ft[q+1].Set(ft[q])
+							}
+							ft[p].Set(tmpFt)
 							break
 						}
+					}*/
+				if a == 0 {
+					ft[j].Set(tmpFt)
+				} else {
+					ft[j].Add(tmpFt)
+				}
+				//clog.Info("TXN %v; Mode %v\n", tmpFt.Txn, coord.GetMode())
+				//if ft.Txn < tmpFt.Txn {
+				//	ft.Txn = tmpFt.Txn
+				//	curMode = coord.GetMode()
+				//	ft.Set(tmpFt)
+				//}
 
-						t = gen.GenOneTrans()
-
-						w.NGen += time.Since(tm)
-
-						w.One(t)
-					}
-					w.Finish()
-					wg.Done()
-				}(i)
+				coord.Reset()
 			}
-			wg.Wait()
+		}
 
-			coord.Finish()
+		for _, feature := range ft {
+			feature.Avg(3)
+		}
 
-			tmpFt := coord.GetFeature()
-			for p := 0; p < testbed.ADAPTIVE; p++ {
-				if ft[p].Txn < tmpFt.Txn {
-					for q := testbed.ADAPTIVE - 2; q >= p; q-- {
-						ft[q+1].Set(ft[q])
-					}
-					ft[p].Set(tmpFt)
-					break
+		for x := 0; x < testbed.ADAPTIVE-1; x++ {
+			tmp := ft[x]
+			tmpI := x
+			for y := x + 1; y < testbed.ADAPTIVE; y++ {
+				if tmp.Txn < ft[y].Txn {
+					tmp = ft[y]
+					tmpI = y
 				}
 			}
-			//clog.Info("TXN %v; Mode %v\n", tmpFt.Txn, coord.GetMode())
-			//if ft.Txn < tmpFt.Txn {
-			//	ft.Txn = tmpFt.Txn
-			//	curMode = coord.GetMode()
-			//	ft.Set(tmpFt)
-			//}
-
-			coord.Reset()
+			tmp = ft[x]
+			ft[x] = ft[tmpI]
+			ft[tmpI] = tmp
 		}
 
 		// One Test Finished
@@ -232,6 +258,7 @@ func main() {
 		//ft.Avg(testbed.ADAPTIVE)
 		//f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.PartLenVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
 		for _, feature := range ft {
+			//clog.Info("Mode %v; Txn %v\n", feature.Mode, feature.Txn)
 			feature.Reset()
 		}
 		count++
