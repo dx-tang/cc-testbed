@@ -211,9 +211,9 @@ func main() {
 
 		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpPS, tmpContention, tmpTP))
 		if (ft[0].Txn-ft[1].Txn)/ft[0].Txn < PERFDIFF {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].PartVar, ft[0].ReadRate, ft[0].Mode, ft[1].Mode))
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].RecVar, ft[0].ReadRate, ft[0].Mode, ft[1].Mode))
 		} else {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].PartVar, ft[0].ReadRate, ft[0].Mode))
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].RecVar, ft[0].ReadRate, ft[0].Mode))
 		}
 
 		// One Test Finished
