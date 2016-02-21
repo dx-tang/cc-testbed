@@ -105,6 +105,8 @@ func main() {
 	}
 
 	totalTests := len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
+	prevCR := 0
+	prevMode := 0
 	count := 0
 	for k := 0; k < totalTests; k++ {
 		d := k
@@ -145,6 +147,18 @@ func main() {
 
 		if tmpMP > tmpTlen {
 			continue
+		}
+
+		if tmpCR > prevCR {
+			if prevMode != 0 {
+				prevCR = 0
+				prevMode = 0
+				continue
+			} else {
+				prevCR = tmpCR
+			}
+		} else {
+			prevCR = tmpCR
 		}
 
 		if single == nil {
@@ -246,6 +260,8 @@ func main() {
 			ft[x] = ft[tmpI]
 			ft[tmpI] = tmp
 		}
+
+		prevMode = ft[0].Mode
 
 		// One Test Finished
 		// ID
