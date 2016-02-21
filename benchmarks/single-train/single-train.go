@@ -151,8 +151,7 @@ func main() {
 
 		if tmpCR > prevCR {
 			if prevMode != 0 {
-				prevCR = 0
-				prevMode = 0
+				prevCR = tmpCR
 				continue
 			} else {
 				prevCR = tmpCR
