@@ -105,7 +105,7 @@ func main() {
 	}
 
 	totalTests := len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
-	prevCR := 0
+	prevCR := float64(0.0)
 	prevMode := 0
 	count := 0
 	for k := 0; k < totalTests; k++ {
