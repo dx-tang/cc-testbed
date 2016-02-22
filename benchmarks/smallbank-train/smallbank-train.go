@@ -99,6 +99,8 @@ func main() {
 	}
 
 	totalTests := len(cr) * len(ps) * len(contention) * len(transper)
+	prevCR := float64(0.0)
+	prevMode := 0
 	count := 0
 	for k := 0; k < totalTests; k++ {
 		d := k
@@ -115,6 +117,18 @@ func main() {
 		d = d / len(contention)
 
 		tmpTP := transper[d]
+
+		// CR pruning
+		if tmpCR > prevCR {
+			if prevMode != 0 {
+				prevCR = tmpCR
+				continue
+			} else {
+				prevCR = tmpCR
+			}
+		} else {
+			prevCR = tmpCR
+		}
 
 		if sb == nil {
 			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
@@ -208,6 +222,8 @@ func main() {
 			ft[x] = ft[tmpI]
 			ft[tmpI] = tmp
 		}
+
+		prevMode = ft[0].Mode
 
 		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpPS, tmpContention, tmpTP))
 		if (ft[0].Txn-ft[1].Txn)/ft[0].Txn < PERFDIFF {
