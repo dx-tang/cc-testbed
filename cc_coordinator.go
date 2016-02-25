@@ -1,185 +1,12 @@
 package testbed
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 )
-
-const (
-	HISTOGRAMLEN = 100
-)
-
-var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
-
-type ReportInfo struct {
-	padding0    [PADDING]byte
-	execTime    time.Duration
-	prevExec    time.Duration
-	txn         int64
-	aborts      int64
-	prevTxn     int64
-	prevAborts  int64
-	txnSample   int64
-	partStat    []int64
-	partLenStat int64
-	recStat     [][]int64
-	readCount   int64
-	writeCount  int64
-	sampleRate  int
-	padding1    [PADDING]byte
-}
-
-func (ri *ReportInfo) Reset() {
-	ri.execTime = 0
-	ri.prevExec = 0
-	ri.txn = 0
-	ri.aborts = 0
-	ri.prevTxn = 0
-	ri.prevAborts = 0
-
-	for i, _ := range ri.partStat {
-		ri.partStat[i] = 0
-	}
-	ri.partLenStat = 0
-
-	for i, _ := range ri.recStat {
-		for j, _ := range ri.recStat[i] {
-			ri.recStat[i][j] = 0
-		}
-	}
-
-	ri.readCount = 0
-	ri.writeCount = 0
-	ri.txnSample = 0
-
-}
-
-func NewReportInfo(nParts int, tableCount int, sampleRate int) *ReportInfo {
-	ri := &ReportInfo{}
-
-	ri.txnSample = 0
-	ri.partStat = make([]int64, 2*PADDINGINT64+nParts)
-	ri.partStat = ri.partStat[PADDINGINT64 : PADDINGINT64+nParts]
-
-	ri.recStat = make([][]int64, 2*PADDINGINT64+tableCount)
-	ri.recStat = ri.recStat[PADDINGINT64 : PADDINGINT64+tableCount]
-	for i := 0; i < tableCount; i++ {
-		ri.recStat[i] = make([]int64, 2*PADDINGINT64+HISTOGRAMLEN)
-		ri.recStat[i] = ri.recStat[i][PADDINGINT64 : PADDINGINT64+HISTOGRAMLEN]
-	}
-
-	ri.sampleRate = sampleRate
-
-	return ri
-}
-
-type SampleTool struct {
-	padding0     [PADDING]byte
-	nParts       int
-	tableCount   int
-	IDToKeyRange [][]int64
-	sampleCount  int
-	sampleRate   int
-	period       []int64
-	offset       []int64
-	offIndex     []int
-	IDToKeys     []int64
-	IDToKeyLen   []int
-	padding1     [PADDING]byte
-}
-
-func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int) *SampleTool {
-	st := &SampleTool{
-		nParts:       nParts,
-		tableCount:   len(IDToKeyRange),
-		IDToKeyRange: IDToKeyRange,
-		sampleRate:   sampleRate,
-	}
-
-	st.period = make([]int64, 2*PADDINGINT64+st.tableCount)
-	st.offset = make([]int64, 2*PADDINGINT64+st.tableCount)
-	st.offIndex = make([]int, 2*PADDINGINT+st.tableCount)
-	st.IDToKeys = make([]int64, 2*PADDINGINT64+st.tableCount)
-	st.IDToKeyLen = make([]int, 2*PADDINGINT+st.tableCount)
-
-	st.period = st.period[PADDINGINT64 : PADDINGINT64+st.tableCount]
-	st.offset = st.offset[PADDINGINT64 : PADDINGINT64+st.tableCount]
-	st.offIndex = st.offIndex[PADDINGINT : PADDINGINT+st.tableCount]
-	st.IDToKeys = st.IDToKeys[PADDINGINT64 : PADDINGINT64+st.tableCount]
-	st.IDToKeyLen = st.IDToKeyLen[PADDINGINT : PADDINGINT+st.tableCount]
-
-	for i := 0; i < st.tableCount; i++ {
-		keyLen := len(st.IDToKeyRange[i])
-		var nKeys int64 = 1
-		for j := 0; j < keyLen; j++ {
-			nKeys *= st.IDToKeyRange[i][j]
-		}
-		st.period[i] = nKeys / HISTOGRAMLEN
-		r := nKeys % HISTOGRAMLEN
-
-		st.offset[i] = (st.period[i] + 1) * r
-		st.offIndex[i] = int(r)
-		st.IDToKeys[i] = nKeys
-		st.IDToKeyLen[i] = keyLen
-	}
-
-	return st
-}
-
-func (st *SampleTool) oneSample(tableID int, key Key, ri *ReportInfo, isRead bool) {
-	if st.sampleCount != 0 {
-		return
-	}
-
-	//clog.Info("CompKey %v\n", key)
-
-	var intKey int64 = int64(ParseKey(key, st.IDToKeyLen[tableID]-1))
-
-	//clog.Error("Key %v\n", intKey)
-
-	for i := st.IDToKeyLen[tableID] - 2; i >= 0; i-- {
-		intKey *= st.IDToKeyRange[tableID][i]
-		intKey += int64(ParseKey(key, i))
-	}
-
-	var index int64
-	if intKey < st.offset[tableID] {
-		index = intKey / (st.period[tableID] + 1)
-	} else {
-		index = int64(st.offIndex[tableID]) + (intKey-st.offset[tableID])/st.period[tableID]
-	}
-
-	ri.recStat[tableID][index]++
-
-	if isRead {
-		ri.readCount++
-	} else {
-		ri.writeCount++
-	}
-}
-
-func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
-	st.sampleCount++
-	if st.sampleCount < st.sampleRate {
-		return
-	}
-	st.sampleCount = 0
-	ri.txnSample++
-
-	for _, p := range ap {
-		ri.partStat[p]++
-	}
-
-	ri.partLenStat += int64(len(ap) * len(ap))
-}
-
-func (st *SampleTool) Reset() {
-	st.sampleCount = 0
-}
 
 type Coordinator struct {
 	padding0     [PADDING]byte
@@ -198,6 +25,7 @@ type Coordinator struct {
 	reports      []chan *ReportInfo
 	changeACK    []chan bool
 	summary      *ReportInfo
+	txnAr        []int64
 	padding1     [PADDING]byte
 }
 
@@ -206,7 +34,7 @@ const (
 	REPORTPERIOD = 1000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat string, sampleRate int, IDToKeyRange [][]int64) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat string, sampleRate int, IDToKeyRange [][]int64, reportCount int) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:   make([]*Worker, nWorkers),
 		store:     store,
@@ -217,7 +45,12 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat s
 		done:      make(chan chan bool),
 		reports:   make([]chan *ReportInfo, nWorkers),
 		changeACK: make([]chan bool, nWorkers),
-		summary:   NewReportInfo(store.nParts, tableCount, sampleRate),
+		summary:   NewReportInfo(store.nParts, tableCount),
+	}
+
+	if *Report {
+		coordinator.txnAr = make([]int64, reportCount+2*PADDINGINT64)
+		coordinator.txnAr = coordinator.txnAr[PADDINGINT64:PADDINGINT64]
 	}
 
 	if stat != "" {
@@ -298,8 +131,9 @@ func (coord *Coordinator) Finish() {
 		x := make(chan bool)
 		coord.done <- x
 		<-x
+	} else {
+		coord.gatherStats()
 	}
-	coord.gatherStats()
 }
 
 func (coord *Coordinator) Reset() {
@@ -319,6 +153,9 @@ func (coord *Coordinator) Reset() {
 	coord.NWait = 0
 	coord.NLockAcquire = 0
 	coord.summary.Reset()
+	if *Report {
+		coord.txnAr = coord.txnAr[:0]
+	}
 
 	for _, worker := range coord.Workers {
 		worker.NStats[NABORTS] = 0
@@ -458,8 +295,9 @@ type Feature struct {
 	PartVar    float64
 	PartLenVar float64
 	RecAvg     float64
-	RecVar     float64
+	HitRate    float64
 	ReadRate   float64
+	ConfRate   float64
 	Txn        float64
 	AR         float64
 	Mode       int
@@ -471,8 +309,10 @@ func (f *Feature) Reset() {
 	f.PartVar = 0
 	f.PartLenVar = 0
 	f.RecAvg = 0
-	f.RecVar = 0
+	//f.RecVar = 0
+	f.HitRate = 0
 	f.ReadRate = 0
+	f.ConfRate = 0
 	f.Txn = 0
 	f.AR = 0
 	f.Mode = 0
@@ -483,8 +323,10 @@ func (ft *Feature) Add(tmpFt *Feature) {
 	ft.PartVar += tmpFt.PartVar
 	ft.PartLenVar += tmpFt.PartLenVar
 	ft.RecAvg += tmpFt.RecAvg
-	ft.RecVar += tmpFt.RecVar
+	//ft.RecVar += tmpFt.RecVar
+	ft.HitRate += tmpFt.HitRate
 	ft.ReadRate += tmpFt.ReadRate
+	ft.ConfRate += tmpFt.ConfRate
 	ft.Txn += tmpFt.Txn
 	ft.AR += tmpFt.AR
 }
@@ -494,8 +336,10 @@ func (ft *Feature) Set(tmpFt *Feature) {
 	ft.PartVar = tmpFt.PartVar
 	ft.PartLenVar = tmpFt.PartLenVar
 	ft.RecAvg = tmpFt.RecAvg
-	ft.RecVar = tmpFt.RecVar
+	//ft.RecVar = tmpFt.RecVar
+	ft.HitRate = tmpFt.HitRate
 	ft.ReadRate = tmpFt.ReadRate
+	ft.ConfRate = tmpFt.ConfRate
 	ft.Txn = tmpFt.Txn
 	ft.AR = tmpFt.AR
 	ft.Mode = tmpFt.Mode
@@ -506,8 +350,10 @@ func (ft *Feature) Avg(count float64) {
 	ft.PartVar /= count
 	ft.PartLenVar /= count
 	ft.RecAvg /= count
-	ft.RecVar /= count
+	//ft.RecVar /= count
+	ft.HitRate /= count
 	ft.ReadRate /= count
+	ft.ConfRate /= count
 	ft.Txn /= count
 	ft.AR /= count
 }
@@ -518,8 +364,10 @@ func (coord *Coordinator) GetFeature() *Feature {
 	for _, w := range coord.Workers {
 		master := w.riMaster
 
-		summary.readCount += master.readCount
-		summary.writeCount += master.writeCount
+		summary.txn += w.riMaster.txn
+		summary.aborts += w.riMaster.aborts
+
+		summary.txnSample += w.riMaster.txnSample
 
 		for j, ps := range master.partStat {
 			summary.partStat[j] += ps
@@ -527,15 +375,22 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 		summary.partLenStat += master.partLenStat
 
-		for j, _ := range master.recStat {
+		/*for j, _ := range master.recStat {
 			for k, rs := range master.recStat[j] {
 				summary.recStat[j][k] += rs
 			}
+		}*/
+
+		for i, rs := range master.recStat {
+			summary.recStat[i] += rs
 		}
 
-		summary.txn += w.riMaster.txn
-		summary.aborts += w.riMaster.aborts
-		summary.txnSample += w.riMaster.txnSample
+		summary.readCount += master.readCount
+		summary.writeCount += master.writeCount
+		summary.hits += master.hits
+
+		summary.accessCount += master.accessCount
+		summary.conflicts += master.conflicts
 	}
 
 	txn := summary.txnSample
@@ -555,28 +410,43 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
 	partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
 
-	var recAvg float64
-	var recVar float64
+	//var recVar float64
 
-	for i := 0; i < len(summary.recStat); i++ {
-		sum = 0
-		sumpow = 0
-		for _, r := range summary.recStat[i] {
-			sum += r
-			sumpow += r * r
+	/*
+		for i := 0; i < len(summary.recStat); i++ {
+			sum = 0
+			sumpow = 0
+			for _, r := range summary.recStat[i] {
+				sum += r
+				sumpow += r * r
+			}
+
+			if sum == 0 {
+				continue
+			}
+			//clog.Info("Sum %v; SumPow %v\n", sum, sumpow)
+
+			tmpAvg := float64(sum) / float64(txn*HISTOGRAMLEN)
+			tmpVar := float64(sumpow*HISTOGRAMLEN)/float64(sum*sum) - 1
+			recAvg += tmpAvg
+			recVar += tmpVar * tmpAvg
 		}
-		//clog.Info("Sum %v; SumPow %v\n", sum, sumpow)
+	*/
+	//recVar /= recAvg
 
-		tmpAvg := float64(sum) / float64(txn*HISTOGRAMLEN)
-		tmpVar := float64(sumpow*HISTOGRAMLEN)/float64(sum*sum) - 1
-		recAvg += tmpAvg
-		recVar += tmpVar * tmpAvg
+	var recAvg float64
+	sum = 0
+	for _, rs := range summary.recStat {
+		sum += rs
 	}
-
-	recVar /= recAvg
+	recAvg = float64(sum) / float64(txn)
 
 	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
-
+	hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
+	var confRate float64
+	if summary.conflicts != 0 {
+		confRate = float64(summary.conflicts*100) / float64(summary.accessCount+summary.conflicts)
+	}
 	/*
 		f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\t ", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
 		f.WriteString(fmt.Sprintf("%.4f\t %.4f\n",
@@ -586,11 +456,15 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.PartVar = partVar
 	coord.feature.PartLenVar = partLenVar
 	coord.feature.RecAvg = recAvg
-	coord.feature.RecVar = recVar
+	//coord.feature.RecVar = recVar
+	coord.feature.HitRate = hitRate
 	coord.feature.ReadRate = rr
+	coord.feature.ConfRate = confRate
 	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / coord.NExecute.Seconds()
 	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
 	coord.feature.Mode = coord.mode
+
+	clog.Info("Hits %v, Count %v, Conficts %v, Access %v", summary.hits, summary.readCount+summary.writeCount, summary.conflicts, summary.accessCount+summary.conflicts)
 
 	//clog.Info("ReadCount %v; WriteCount %v\n", summary.readCount, summary.writeCount)
 

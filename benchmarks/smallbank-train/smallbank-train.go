@@ -93,9 +93,12 @@ func main() {
 	var sb *testbed.SBWorkload = nil
 	var coord *testbed.Coordinator = nil
 
-	var ft []*testbed.Feature = make([]*testbed.Feature, testbed.ADAPTIVE)
+	var ft [][]*testbed.Feature = make([][]*testbed.Feature, testbed.ADAPTIVE)
 	for i := 0; i < testbed.ADAPTIVE; i++ {
-		ft[i] = &testbed.Feature{}
+		ft[i] = make([]*testbed.Feature, 3)
+		for j := 0; j < 3; j++ {
+			ft[i][j] = &testbed.Feature{}
+		}
 	}
 
 	totalTests := len(cr) * len(ps) * len(contention) * len(transper)
@@ -130,9 +133,15 @@ func main() {
 			prevCR = tmpCR
 		}
 
+		// Single Pruning
+		tp := strings.Split(tmpTP, ":")
+		if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && tmpCR > 0 {
+			continue
+		}
+
 		if sb == nil {
 			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, "", *sr, sb.GetIDToKeyRange())
+			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, "", *sr, sb.GetIDToKeyRange(), 0)
 		} else {
 			basic := sb.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]
@@ -195,46 +204,66 @@ func main() {
 						break
 					}
 				}*/
-				if a == 0 {
+				/*if a == 0 {
 					ft[j].Set(tmpFt)
 				} else {
 					ft[j].Add(tmpFt)
-				}
+				}*/
+				ft[j][a].Set(tmpFt)
 
 				coord.Reset()
 			}
 		}
 
-		for _, feature := range ft {
+		/*for _, feature := range ft {
 			feature.Avg(3)
+		}*/
+
+		for z := 0; z < testbed.ADAPTIVE; z++ {
+			tmpFeature := ft[z]
+			for x := 0; x < 2; x++ {
+				tmp := tmpFeature[x]
+				tmpI := x
+				for y := x + 1; y < testbed.ADAPTIVE; y++ {
+					if tmp.Txn < tmpFeature[y].Txn {
+						tmp = tmpFeature[y]
+						tmpI = y
+					}
+				}
+				tmp = tmpFeature[x]
+				tmpFeature[x] = tmpFeature[tmpI]
+				tmpFeature[tmpI] = tmp
+			}
 		}
 
-		for x := 0; x < testbed.ADAPTIVE-1; x++ {
-			tmp := ft[x]
+		for x := 0; x < 2; x++ {
+			tmp := ft[x][1]
 			tmpI := x
 			for y := x + 1; y < testbed.ADAPTIVE; y++ {
-				if tmp.Txn < ft[y].Txn {
-					tmp = ft[y]
+				if tmp.Txn < ft[y][1].Txn {
+					tmp = ft[y][1]
 					tmpI = y
 				}
 			}
-			tmp = ft[x]
-			ft[x] = ft[tmpI]
-			ft[tmpI] = tmp
+			tmp = ft[x][1]
+			ft[x][1] = ft[tmpI][1]
+			ft[tmpI][1] = tmp
 		}
 
-		prevMode = ft[0].Mode
+		prevMode = ft[0][1].Mode
 
 		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpPS, tmpContention, tmpTP))
-		if (ft[0].Txn-ft[1].Txn)/ft[0].Txn < PERFDIFF {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].RecVar, ft[0].ReadRate, ft[0].Mode, ft[1].Mode))
+		if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode, ft[1][1].Mode))
 		} else {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0].PartAvg, ft[0].PartVar, ft[0].PartLenVar, ft[0].RecAvg, ft[0].RecVar, ft[0].ReadRate, ft[0].Mode))
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode))
 		}
 
 		// One Test Finished
-		for _, feature := range ft {
-			feature.Reset()
+		for _, features := range ft {
+			for _, tmp := range features {
+				tmp.Reset()
+			}
 		}
 		count++
 	}

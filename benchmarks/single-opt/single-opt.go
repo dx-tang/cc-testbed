@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -30,10 +31,11 @@ var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
 var wl = flag.String("wl", "", "workload to be used")
 var tp = flag.String("tp", "50:50", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
-var trainOut = flag.String("train", "train.out", "training set")
+var ro = flag.String("ro", "report.out", "report out")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 100, "Sample Rate")
-var tc = flag.String("tc", "train.conf", "configuration for training")
+var rc = flag.String("rc", "report.conf", "configuration for reporting")
+var count = flag.Int("count", 10, "Test Count")
 
 var cr []float64
 var mp []int
@@ -48,24 +50,47 @@ const (
 
 func main() {
 	flag.Parse()
-	if *testbed.SysType != testbed.ADAPTIVE {
-		clog.Error("Training only Works for Adaptive CC\n")
+
+	if *testbed.SysType == testbed.PARTITION {
+		clog.Info("Using Partition-based CC\n")
+	} else if *testbed.SysType == testbed.OCC {
+		if *testbed.PhyPart {
+			clog.Info("Using OCC with partition\n")
+		} else {
+			nParts = 1
+			isPartition = false
+			clog.Info("Using OCC\n")
+		}
+	} else if *testbed.SysType == testbed.LOCKING {
+		if *testbed.PhyPart {
+			clog.Info("Using 2PL with partition\n")
+		} else {
+			nParts = 1
+			isPartition = false
+			clog.Info("Using 2PL\n")
+		}
+	} else if *testbed.SysType == testbed.ADAPTIVE {
+		clog.Info("Using Adaptive CC\n")
+		*testbed.PhyPart = true
+		isPartition = true
+	} else {
+		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
 	if strings.Compare(*wl, "") == 0 {
 		clog.Error("WorkLoad not specified\n")
 	}
 
-	if strings.Compare(*trainOut, "") == 0 {
-		clog.Error("Training Output not specified\n")
+	if strings.Compare(*ro, "") == 0 {
+		clog.Error("Report Output not specified\n")
 	}
 
-	if strings.Compare(*tc, "") == 0 {
-		clog.Error("Training Configuration not specified\n")
+	if strings.Compare(*rc, "") == 0 {
+		clog.Error("Report Configuration not specified\n")
 	}
 
-	if *testbed.Report {
-		clog.Error("Report not Needed for Adaptive CC\n")
+	if !*testbed.Report {
+		clog.Error("Report Needed for Adaptive CC Execution\n")
 	}
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
@@ -80,7 +105,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	f, err := os.OpenFile(*trainOut, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	f, err := os.OpenFile(*ro, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		clog.Error("Open File Error %s\n", err.Error())
 	}
@@ -90,30 +115,19 @@ func main() {
 	*testbed.PhyPart = true
 	isPartition := true
 	clog.Info("Number of workers %v \n", nWorkers)
-	clog.Info("Adaptive CC Training\n")
 
-	ParseTrainConf(*tc)
+	ParseReportConf(*rc)
+	var curMode int = testbed.LOCKING
 	keyGenPool := make(map[float64][][]testbed.KeyGen)
 	partGenPool := make(map[float64][]testbed.PartGen)
 	var single *testbed.SingelWorkload = nil
 	var coord *testbed.Coordinator = nil
-	//var curMode int
-
-	var ft [][]*testbed.Feature = make([][]*testbed.Feature, testbed.ADAPTIVE)
-	for i := 0; i < testbed.ADAPTIVE; i++ {
-		ft[i] = make([]*testbed.Feature, 3)
-		for j := 0; j < 3; j++ {
-			ft[i][j] = &testbed.Feature{}
-		}
-	}
-
 	totalTests := len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
-	prevCR := float64(0.0)
-	prevMode := 0
-	count := 0
-	for k := 0; k < totalTests; k++ {
-		d := k
+	for k := 0; k < *count; k++ {
+		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+		d := rnd.Intn(totalTests)
 		r := d % len(cr)
+
 		tmpCR := cr[r]
 		d = d / len(cr)
 
@@ -135,49 +149,41 @@ func main() {
 
 		tmpRR := rr[d]
 
-		// Prune
-		if tmpTlen == 1 {
-			if tmpCR != 0 || tmpMP != 1 || tmpPS != 0 {
-				continue
-			}
-		} else {
-			if tmpCR == 0 || tmpMP == 1 {
-				if tmpCR != 0 || tmpMP != 1 || tmpPS != 0 {
-					continue
+		if single == nil {
+			// Initialize
+			clog.Info("Populating Whole Store\n")
+			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
+			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, "", *sr, single.GetIDToKeyRange())
+
+			// Populate Key Gen and Part Gen
+			clog.Info("Populating Key Generators and Part Generators\n")
+			basic := single.GetBasicWL()
+			for _, ct := range contention {
+				keyGens, ok := keyGenPool[cr]
+				if !ok {
+					keyGens = basic.NewKeyGen(ct)
+					keyGenPool[ct] = keyGens
 				}
 			}
-		}
 
-		if tmpMP > tmpTlen {
-			continue
-		}
-
-		if tmpCR > prevCR {
-			if prevMode != 0 {
-				prevCR = tmpCR
-				continue
-			} else {
-				prevCR = tmpCR
+			for _, skew := range ps {
+				partGens, ok := partGenPool[skew]
+				if !ok {
+					partGens = basic.NewPartGen(skew)
+					partGenPool[skew] = partGens
+				}
 			}
-		} else {
-			prevCR = tmpCR
-		}
 
-		if single == nil {
-			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, "", *sr, single.GetIDToKeyRange(), 0)
 		} else {
 			basic := single.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]
 			if !ok {
-				keyGens = basic.NewKeyGen(tmpContention)
-				keyGenPool[tmpContention] = keyGens
+				clog.Info("Lacking Key Gen With %v\n", tmpContention)
 			}
 
 			partGens, ok1 := partGenPool[tmpPS]
 			if !ok1 {
-				partGens = basic.NewPartGen(tmpPS)
-				partGenPool[tmpPS] = partGens
+				clog.Info("Lacking Part Gen With %v\n", tmpPS)
 			}
 			basic.SetKeyGen(keyGens)
 			basic.SetPartGen(partGens)
@@ -185,143 +191,43 @@ func main() {
 		}
 		clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
 
-		// One Test
-		for a := 0; a < 3; a++ {
-			for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
-				var wg sync.WaitGroup
-				coord.SetMode(j)
-				for i := 0; i < nWorkers; i++ {
-					wg.Add(1)
-					go func(n int) {
-						var t testbed.Trans
-						w := coord.Workers[n]
-						gen := single.GetTransGen(n)
-						end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
-						w.Start()
-						for {
-							tm := time.Now()
-							if !end_time.After(tm) {
-								break
-							}
-
-							t = gen.GenOneTrans()
-
-							w.NGen += time.Since(tm)
-
-							w.One(t)
-						}
-						w.Finish()
-						wg.Done()
-					}(i)
-				}
-				wg.Wait()
-
-				coord.Finish()
-
-				tmpFt := coord.GetFeature()
-				/*
-					for p := 0; p < testbed.ADAPTIVE; p++ {
-						if ft[p].Txn < tmpFt.Txn {
-							for q := testbed.ADAPTIVE - 2; q >= p; q-- {
-								ft[q+1].Set(ft[q])
-							}
-							ft[p].Set(tmpFt)
-							break
-						}
-					}*/
-				/*if a == 0 {
-					ft[j].Set(tmpFt)
-				} else {
-					ft[j].Add(tmpFt)
-				}*/
-				ft[j][a].Set(tmpFt)
-
-				//clog.Info("TXN %v; Mode %v\n", tmpFt.Txn, coord.GetMode())
-				//if ft.Txn < tmpFt.Txn {
-				//	ft.Txn = tmpFt.Txn
-				//	curMode = coord.GetMode()
-				//	ft.Set(tmpFt)
-				//}
-
-				coord.Reset()
-			}
-		}
-
-		/*
-			for _, feature := range ft {
-				feature.Avg(3)
-			}
-
-			for x := 0; x < testbed.ADAPTIVE-1; x++ {
-				tmp := ft[x]
-				tmpI := x
-				for y := x + 1; y < testbed.ADAPTIVE; y++ {
-					if tmp.Txn < ft[y].Txn {
-						tmp = ft[y]
-						tmpI = y
+		coord.SetMode(curMode)
+		for i := 0; i < nWorkers; i++ {
+			wg.Add(1)
+			go func(n int) {
+				var t testbed.Trans
+				w := coord.Workers[n]
+				gen := single.GetTransGen(n)
+				end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+				w.Start()
+				for {
+					tm := time.Now()
+					if !end_time.After(tm) {
+						break
 					}
+
+					t = gen.GenOneTrans()
+
+					w.NGen += time.Since(tm)
+
+					w.One(t)
 				}
-				tmp = ft[x]
-				ft[x] = ft[tmpI]
-				ft[tmpI] = tmp
-			}
-		*/
-
-		for z := 0; z < testbed.ADAPTIVE; z++ {
-			tmpFeature := ft[z]
-			for x := 0; x < 2; x++ {
-				tmp := tmpFeature[x]
-				tmpI := x
-				for y := x + 1; y < testbed.ADAPTIVE; y++ {
-					if tmp.Txn < tmpFeature[y].Txn {
-						tmp = tmpFeature[y]
-						tmpI = y
-					}
-				}
-				tmp = tmpFeature[x]
-				tmpFeature[x] = tmpFeature[tmpI]
-				tmpFeature[tmpI] = tmp
-			}
+				w.Finish()
+				wg.Done()
+			}(i)
 		}
+		wg.Wait()
 
-		for x := 0; x < 2; x++ {
-			tmp := ft[x][1]
-			tmpI := x
-			for y := x + 1; y < testbed.ADAPTIVE; y++ {
-				if tmp.Txn < ft[y][1].Txn {
-					tmp = ft[y][1]
-					tmpI = y
-				}
-			}
-			tmp = ft[x][1]
-			ft[x][1] = ft[tmpI][1]
-			ft[tmpI][1] = tmp
-		}
-
-		prevMode = ft[0][1].Mode
-
-		// One Test Finished
-		// ID
-		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))
-		if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode, ft[1][1].Mode))
-		} else {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode))
-		}
-		//ft.Avg(testbed.ADAPTIVE)
-		//f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.PartLenVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
-		// One Test Finished
-		for _, features := range ft {
-			for _, tmp := range features {
-				tmp.Reset()
-			}
-		}
-		count++
+		coord.Finish()
+		coord.Reset()
+		curMode = coord.GetMode()
 	}
+
+	// Output Throughput Statistics
 }
 
-func ParseTrainConf(tc string) {
-	f, err := os.OpenFile(tc, os.O_RDONLY, 0600)
+func ParseReportConf(rc string) {
+	f, err := os.OpenFile(rc, os.O_RDONLY, 0600)
 	if err != nil {
 		clog.Error("Open File Error %s\n", err.Error())
 	}

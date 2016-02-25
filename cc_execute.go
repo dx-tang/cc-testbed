@@ -291,8 +291,14 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 		if rk.k == k {
 			ok, _ = rk.rec.IsUnlocked()
 			if !ok {
+				if *SysType == ADAPTIVE {
+					o.st.oneAccessSample(true, o.w.riMaster)
+				}
 				o.w.NStats[NREADABORTS]++
 				return nil, true, EABORT
+			}
+			if *SysType == ADAPTIVE {
+				o.st.oneAccessSample(false, o.w.riMaster)
 			}
 			return rk.rec.GetValue(colNum), true, nil
 		}
@@ -312,8 +318,15 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	}
 
 	if !ok {
+		if *SysType == ADAPTIVE {
+			o.st.oneAccessSample(true, o.w.riMaster)
+		}
 		o.w.NStats[NREADABORTS]++
 		return nil, true, EABORT
+	}
+
+	if *SysType == ADAPTIVE {
+		o.st.oneAccessSample(false, o.w.riMaster)
 	}
 
 	n := len(t.rKeys)
@@ -427,8 +440,14 @@ func (o *OTransaction) Commit() TID {
 			var ok bool
 			ok, former = wk.rec.Lock()
 			if !ok {
+				if *SysType == ADAPTIVE {
+					o.st.oneAccessSample(true, o.w.riMaster)
+				}
 				o.w.NStats[NLOCKABORTS]++
 				return o.Abort()
+			}
+			if *SysType == ADAPTIVE {
+				o.st.oneAccessSample(false, o.w.riMaster)
 			}
 			wk.locked = true
 			if former > o.maxSeen {
@@ -458,6 +477,9 @@ func (o *OTransaction) Commit() TID {
 			var tmpTID TID
 			ok1, tmpTID = rk.rec.IsUnlocked()
 			if tmpTID != rk.last {
+				if *SysType == ADAPTIVE {
+					o.st.oneAccessSample(true, o.w.riMaster)
+				}
 				o.w.NStats[NRCHANGEABORTS]++
 				return o.Abort()
 			}
@@ -473,6 +495,9 @@ func (o *OTransaction) Commit() TID {
 			}
 
 			if !ok1 && !ok2 {
+				if *SysType == ADAPTIVE {
+					o.st.oneAccessSample(true, o.w.riMaster)
+				}
 				o.w.NStats[NRWABORTS]++
 				return o.Abort()
 			}
@@ -640,9 +665,16 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 			}
 			clog.Error("\n")
 		*/
+		if *SysType == ADAPTIVE {
+			l.st.oneAccessSample(true, l.w.riMaster)
+		}
 		w.NStats[NRLOCKABORTS]++
 		l.Abort()
 		return nil, true, EABORT
+	}
+
+	if *SysType == ADAPTIVE {
+		l.st.oneAccessSample(false, l.w.riMaster)
 	}
 
 	//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
@@ -700,6 +732,9 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	if ok {
 		rr.exist = false
 		if rr.rec.Upgrade(trial) {
+			if *SysType == ADAPTIVE {
+				l.st.oneAccessSample(false, l.w.riMaster)
+			}
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -713,6 +748,9 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			wr.cols[0] = colNum
 			return nil
 		} else {
+			if *SysType == ADAPTIVE {
+				l.st.oneAccessSample(true, l.w.riMaster)
+			}
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			w.NStats[NUPGRADEABORTS]++
 			l.Abort()
@@ -727,6 +765,9 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 
 	if rec.WLock(trial) {
+		if *SysType == ADAPTIVE {
+			l.st.oneAccessSample(false, l.w.riMaster)
+		}
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -739,6 +780,9 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		wr.cols[0] = colNum
 		return nil
 	} else {
+		if *SysType == ADAPTIVE {
+			l.st.oneAccessSample(true, l.w.riMaster)
+		}
 		w.NStats[NWLOCKABORTS]++
 		l.Abort()
 		return EABORT
@@ -776,6 +820,9 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) erro
 	if ok {
 		rr.exist = false
 		if rr.rec.Upgrade(trial) {
+			if *SysType == ADAPTIVE {
+				l.st.oneAccessSample(false, l.w.riMaster)
+			}
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -785,6 +832,9 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) erro
 			wr.rec = rr.rec
 			return nil
 		} else {
+			if *SysType == ADAPTIVE {
+				l.st.oneAccessSample(true, l.w.riMaster)
+			}
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			w.NStats[NUPGRADEABORTS]++
 			l.Abort()
@@ -799,6 +849,9 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) erro
 	}
 
 	if rec.WLock(trial) {
+		if *SysType == ADAPTIVE {
+			l.st.oneAccessSample(false, l.w.riMaster)
+		}
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -807,6 +860,9 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) erro
 		wr.rec = rec
 		return nil
 	} else {
+		if *SysType == ADAPTIVE {
+			l.st.oneAccessSample(true, l.w.riMaster)
+		}
 		w.NStats[NWLOCKABORTS]++
 		l.Abort()
 		return EABORT
