@@ -200,9 +200,6 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 }
 
 func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
-	if st.sampleCount != 0 {
-		return
-	}
 
 	if conflict {
 		ri.conflicts++
@@ -213,6 +210,8 @@ func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
 
 func (st *SampleTool) Reset() {
 	st.sampleCount = 0
+	//st.lru.Reset()
+	st.lru = NewLRU(st.lru.size)
 }
 
 type LRU struct {
@@ -247,9 +246,19 @@ func (lru *LRU) Insert(k Key) bool {
 	} else {
 		back := lru.l.Back()
 		kP := back.Value.(*Key)
+		delete(lru.m, *kP)
 		*kP = k
 		lru.l.MoveToFront(back)
 		lru.m[k] = back
 		return false
+	}
+}
+
+func (lru *LRU) Reset() {
+	for e := lru.l.Front(); e != nil; e = e.Next() {
+		var k Key
+		kp := e.Value.(*Key)
+		delete(lru.m, *kp)
+		*kp = k
 	}
 }
