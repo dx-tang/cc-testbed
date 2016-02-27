@@ -5,12 +5,16 @@ import (
 	"flag"
 	"time"
 
+	"github.com/totemtang/cc-testbed/wfmutex"
+
 	//"github.com/totemtang/cc-testbed/clog"
 )
 
 const (
 	HISTOGRAMLEN = 100
-	CACHESIZE    = 100
+	CACHESIZE    = 1000
+	BUFSIZE      = 10
+	TRIAL        = 10
 )
 
 var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
@@ -97,6 +101,10 @@ type SampleTool struct {
 	tableCount   int
 	IDToKeyRange [][]int64
 	sampleCount  int
+	sampleAccess int
+	recBuf       []*ARecord
+	trials       int
+	state        int
 	sampleRate   int
 	lru          *LRU
 	padding1     [PADDING]byte
@@ -115,6 +123,9 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int) *SampleTo
 		sampleRate:   sampleRate,
 		lru:          NewLRU(CACHESIZE),
 	}
+
+	st.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
+	st.recBuf = st.recBuf[PADDINGINT64:PADDINGINT64]
 
 	/*
 		st.period = make([]int64, 2*PADDINGINT64+st.tableCount)
@@ -148,9 +159,18 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int) *SampleTo
 	return st
 }
 
-func (st *SampleTool) oneSample(tableID int, key Key, ri *ReportInfo, isRead bool) {
-	if st.sampleCount != 0 {
-		return
+func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isRead bool) {
+	if st.sampleCount == 0 {
+		ri.recStat[tableID]++
+		if st.lru.Insert(key) {
+			ri.hits++
+		}
+
+		if isRead {
+			ri.readCount++
+		} else {
+			ri.writeCount++
+		}
 	}
 
 	/*
@@ -171,17 +191,65 @@ func (st *SampleTool) oneSample(tableID int, key Key, ri *ReportInfo, isRead boo
 		ri.recStat[tableID][index]++
 	*/
 
-	ri.recStat[tableID]++
+	// We need acquire more locks
+	if st.state == 0 {
+		for _, rec := range st.recBuf {
+			if rec.key == key {
+				return
+			}
+		}
 
-	if st.lru.Insert(key) {
-		ri.hits++
+		rec := s.GetRecByID(tableID, key, partNum)
+		tmpRec := rec.(*ARecord)
+		ok, _ := tmpRec.conflict.Lock()
+		if ok {
+			n := len(st.recBuf)
+			st.recBuf = st.recBuf[0 : n+1]
+			st.recBuf[n] = tmpRec
+			if n+1 == BUFSIZE {
+				st.state = 1
+			}
+		}
+
+		return
 	}
 
-	if isRead {
-		ri.readCount++
-	} else {
-		ri.writeCount++
+	st.sampleAccess++
+	if st.sampleAccess < 100 {
+		return
 	}
+	st.sampleAccess = 0
+
+	var ok bool = false
+	for _, rec := range st.recBuf {
+		if rec.key == key {
+			ri.accessCount++
+			ok = true
+			break
+		}
+	}
+
+	if !ok {
+		rec := s.GetRecByID(tableID, key, partNum)
+		tmpRec := rec.(*ARecord)
+		x := tmpRec.conflict.Read()
+		if x&wfmutex.LOCKED == 0 {
+			ri.accessCount++
+		} else {
+			ri.conflicts++
+		}
+	}
+
+	st.trials++
+	if st.trials == TRIAL {
+		st.trials = 0
+		st.state = 0
+		for _, rec := range st.recBuf {
+			rec.conflict.Unlock(0)
+		}
+		st.recBuf = st.recBuf[0:0]
+	}
+
 }
 
 func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
@@ -206,10 +274,18 @@ func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
 	} else {
 		ri.accessCount++
 	}
+
 }
 
 func (st *SampleTool) Reset() {
 	st.sampleCount = 0
+	st.sampleAccess = 0
+	st.trials = 0
+	st.state = 0
+	for _, rec := range st.recBuf {
+		rec.conflict.Unlock(0)
+	}
+	st.recBuf = st.recBuf[0:0]
 	//st.lru.Reset()
 	st.lru = NewLRU(st.lru.size)
 }

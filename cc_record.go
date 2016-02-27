@@ -429,6 +429,7 @@ type ARecord struct {
 	rwLock   spinlockopt.WDRWSpinlock
 	last     wfmutex.WFMutex
 	table    *Table
+	conflict wfmutex.WFMutex
 	padding2 [PADDING]byte
 }
 

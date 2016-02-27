@@ -464,15 +464,16 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
 	coord.feature.Mode = coord.mode
 
-	clog.Info("Hits %v, Count %v, Conficts %v, Access %v", summary.hits, summary.readCount+summary.writeCount, summary.conflicts, summary.accessCount+summary.conflicts)
+	//clog.Info("Hits %v, Count %v, Conficts %v, Access %v", summary.hits, summary.readCount+summary.writeCount, summary.conflicts, summary.accessCount+summary.conflicts)
+	//clog.Info(", float64(summary.hits*100)/float64(summary.readCount+summary.writeCount), float64(summary.conflicts*100)/float64(summary.accessCount+summary.conflicts))
 
 	//clog.Info("ReadCount %v; WriteCount %v\n", summary.readCount, summary.writeCount)
 
-	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
-	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.GetMode())
+	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f Mode %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.GetMode())
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
-		float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
+	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
+	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
 
 	return coord.feature
 }

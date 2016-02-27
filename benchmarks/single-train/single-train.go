@@ -34,6 +34,7 @@ var trainOut = flag.String("train", "train.out", "training set")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 100, "Sample Rate")
 var tc = flag.String("tc", "train.conf", "configuration for training")
+var np = flag.Bool("np", false, "Whether test partition")
 
 var cr []float64
 var mp []int
@@ -191,6 +192,11 @@ func main() {
 				var wg sync.WaitGroup
 				coord.SetMode(j)
 				for i := 0; i < nWorkers; i++ {
+					if *np {
+						if j == testbed.PARTITION {
+							break
+						}
+					}
 					wg.Add(1)
 					go func(n int) {
 						var t testbed.Trans
@@ -217,6 +223,11 @@ func main() {
 				wg.Wait()
 
 				coord.Finish()
+
+				if *np && j == testbed.PARTITION {
+					coord.Reset()
+					continue
+				}
 
 				tmpFt := coord.GetFeature()
 				/*
@@ -299,6 +310,16 @@ func main() {
 		}
 
 		prevMode = ft[0][1].Mode
+
+		for z := 0; z < 9; z++ {
+			x := z / 3
+			y := z % 3
+			if !(x == 0 && y == 1) && ft[x][y].Mode == ft[0][1].Mode {
+				ft[0][1].Add(ft[x][y])
+			}
+		}
+
+		ft[0][1].Avg(float64(3))
 
 		// One Test Finished
 		// ID
