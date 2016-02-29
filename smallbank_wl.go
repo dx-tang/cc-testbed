@@ -303,7 +303,7 @@ type SBWorkload struct {
 	transGen        []*SBTransGen
 }
 
-func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64) *SBWorkload {
+func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64) *SBWorkload {
 	sbWorkload := &SBWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -327,7 +327,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps)
+	sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, isPhysical, nWorkers, s, ps)
 
 	// Populating the Store
 	hp := sbWorkload.basic.generators[0]
@@ -455,6 +455,19 @@ func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
 		tg.cr = cr
 	}
 
+}
+
+func (sb *SBWorkload) ResetPart(nParts int, isPartition bool) {
+	sb.basic.ResetPart(nParts, isPartition)
+	for i, tranGen := range sb.transGen {
+		if isPartition {
+			tranGen.partIndex = i
+		} else {
+			tranGen.partIndex = 0
+		}
+		tranGen.isPartition = isPartition
+		tranGen.nParts = nParts
+	}
 }
 
 func (s *SBWorkload) GetBasicWL() *BasicWorkload {

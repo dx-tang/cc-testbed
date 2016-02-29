@@ -34,7 +34,9 @@ var trainOut = flag.String("train", "train.out", "training set")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 100, "Sample Rate")
 var tc = flag.String("tc", "train.conf", "configuration for training")
-var np = flag.Bool("np", false, "Whether test partition")
+var np = flag.Bool("np", false, "Whether not test partition")
+var prune = flag.Bool("prune", false, "Whether prune tests")
+var isPart = flag.Bool("p", true, "Whether partition index")
 
 var cr []float64
 var mp []int
@@ -49,6 +51,7 @@ const (
 
 func main() {
 	flag.Parse()
+
 	if *testbed.SysType != testbed.ADAPTIVE {
 		clog.Error("Training only Works for Adaptive CC\n")
 	}
@@ -66,8 +69,14 @@ func main() {
 	}
 
 	if *testbed.Report {
-		clog.Error("Report not Needed for Adaptive CC\n")
+		clog.Error("Report not Needed for Training\n")
 	}
+
+	/*
+		if !*np && !*isPart {
+			clog.Error("When Partition Included, isPartition must be Indicated")
+		}
+	*/
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
@@ -88,8 +97,14 @@ func main() {
 	defer f.Close()
 
 	nParts := nWorkers
-	*testbed.PhyPart = true
-	isPartition := true
+	var isPartition bool
+	if !*isPart && *np {
+		nParts = 1
+		isPartition = *isPart
+	} else {
+		isPartition = true
+	}
+	isPhysical := false
 	clog.Info("Number of workers %v \n", nWorkers)
 	clog.Info("Adaptive CC Training\n")
 
@@ -153,20 +168,22 @@ func main() {
 			continue
 		}
 
-		if tmpCR > prevCR {
-			if prevMode != 0 {
-				prevCR = tmpCR
-				continue
+		if *prune {
+			if tmpCR > prevCR {
+				if prevMode != 0 {
+					prevCR = tmpCR
+					continue
+				} else {
+					prevCR = tmpCR
+				}
 			} else {
 				prevCR = tmpCR
 			}
-		} else {
-			prevCR = tmpCR
 		}
 
 		if single == nil {
-			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, "", *sr, single.GetIDToKeyRange(), 0)
+			single = testbed.NewSingleWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
+			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1)
 		} else {
 			basic := single.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]
@@ -189,14 +206,24 @@ func main() {
 		// One Test
 		for a := 0; a < 3; a++ {
 			for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
+
+				if *np {
+					if j == testbed.PARTITION {
+						continue
+					}
+				}
+
+				if !*isPart && !*np {
+					if j == testbed.PARTITION {
+						single.ResetPart(nWorkers, true)
+					} else {
+						single.ResetPart(1, false)
+					}
+				}
+
 				var wg sync.WaitGroup
 				coord.SetMode(j)
 				for i := 0; i < nWorkers; i++ {
-					if *np {
-						if j == testbed.PARTITION {
-							break
-						}
-					}
 					wg.Add(1)
 					go func(n int) {
 						var t testbed.Trans
@@ -230,53 +257,12 @@ func main() {
 				}
 
 				tmpFt := coord.GetFeature()
-				/*
-					for p := 0; p < testbed.ADAPTIVE; p++ {
-						if ft[p].Txn < tmpFt.Txn {
-							for q := testbed.ADAPTIVE - 2; q >= p; q-- {
-								ft[q+1].Set(ft[q])
-							}
-							ft[p].Set(tmpFt)
-							break
-						}
-					}*/
-				/*if a == 0 {
-					ft[j].Set(tmpFt)
-				} else {
-					ft[j].Add(tmpFt)
-				}*/
-				ft[j][a].Set(tmpFt)
 
-				//clog.Info("TXN %v; Mode %v\n", tmpFt.Txn, coord.GetMode())
-				//if ft.Txn < tmpFt.Txn {
-				//	ft.Txn = tmpFt.Txn
-				//	curMode = coord.GetMode()
-				//	ft.Set(tmpFt)
-				//}
+				ft[j][a].Set(tmpFt)
 
 				coord.Reset()
 			}
 		}
-
-		/*
-			for _, feature := range ft {
-				feature.Avg(3)
-			}
-
-			for x := 0; x < testbed.ADAPTIVE-1; x++ {
-				tmp := ft[x]
-				tmpI := x
-				for y := x + 1; y < testbed.ADAPTIVE; y++ {
-					if tmp.Txn < ft[y].Txn {
-						tmp = ft[y]
-						tmpI = y
-					}
-				}
-				tmp = ft[x]
-				ft[x] = ft[tmpI]
-				ft[tmpI] = tmp
-			}
-		*/
 
 		for z := 0; z < testbed.ADAPTIVE; z++ {
 			tmpFeature := ft[z]

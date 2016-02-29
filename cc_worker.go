@@ -1,6 +1,7 @@
 package testbed
 
 import (
+	"errors"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -21,6 +22,10 @@ const (
 	NTXN
 	NCROSSTXN
 	LAST_STAT
+)
+
+var (
+	FINISHED = errors.New("Finished")
 )
 
 type TransactionFunc func(Trans, ETransaction) (Value, error)
@@ -44,6 +49,7 @@ type Worker struct {
 	NLockAcquire int64
 	start        time.Time
 	end          time.Time
+	finished     bool
 	mode         int
 	done         chan bool
 	modeChange   chan bool
@@ -65,10 +71,11 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		coord:      c,
 		txns:       make([]TransactionFunc, LAST_TXN),
 		NStats:     make([]int64, LAST_STAT),
+		finished:   false,
 		mode:       mode,
 		done:       make(chan bool),
-		modeChange: make(chan bool),
-		modeChan:   make(chan int),
+		modeChange: make(chan bool, 1),
+		modeChan:   make(chan int, 1),
 	}
 
 	kr := make([][]int64, len(IDToKeyRange))
@@ -108,10 +115,6 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.Register(ADDONE, AddOne)
 	w.Register(UPDATEINT, UpdateInt)
 
-	if *Report {
-		go w.run()
-	}
-
 	return w
 }
 
@@ -122,6 +125,9 @@ func (w *Worker) run() {
 	for {
 		select {
 		case <-w.done:
+			w.Lock()
+			w.finished = true
+			w.Unlock()
 			return
 		case <-w.modeChange:
 			w.Lock()
@@ -167,9 +173,13 @@ func (w *Worker) Finish() {
 
 }
 
+func (w *Worker) Reset() {
+
+}
+
 func (w *Worker) SetMode(mode int) {
 	if *SysType != ADAPTIVE {
-		clog.Error("None Adaptive Mode Not Support Mode Change\n")
+		return
 	}
 	w.mode = mode
 	w.E = w.ExecPool[mode]
@@ -208,6 +218,11 @@ func (w *Worker) One(t Trans) (Value, error) {
 	var ap []int
 
 	w.Lock()
+
+	if w.finished {
+		w.Unlock()
+		return nil, FINISHED
+	}
 
 	if *SysType == ADAPTIVE {
 		w.st.onePartSample(t.GetAccessParts(), w.riMaster)

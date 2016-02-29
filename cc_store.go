@@ -66,7 +66,6 @@ type TID uint64
 var NumPart = flag.Int("ncores", 2, "number of partitions; equals to the number of cores")
 var SysType = flag.Int("sys", PARTITION, "System Type we will use")
 var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
-var PhyPart = flag.Bool("p", false, "Indicate whether physically partition for OCC or 2PL")
 
 type Chunk struct {
 	padding1 [PADDING]byte
@@ -113,11 +112,12 @@ type Store struct {
 	spinLock     []*SpinLockPad
 	mutexLock    []*RWMutex
 	nParts       int
+	isPhysical   bool
 	tableToIndex map[string]int
 	padding2     [PADDING]byte
 }
 
-func NewStore(schema string, nParts int) *Store {
+func NewStore(schema string, nParts int, isPhysical bool) *Store {
 
 	// Open Schema File and Read Configuration
 	sch, err := os.OpenFile(schema, os.O_RDONLY, 0600)
@@ -154,6 +154,7 @@ func NewStore(schema string, nParts int) *Store {
 		mutexLock:    make([]*RWMutex, nParts),
 		spinLock:     make([]*SpinLockPad, nParts),
 		nParts:       nParts,
+		isPhysical:   isPhysical,
 	}
 
 	for i := 0; i < nParts; i++ {
@@ -180,7 +181,6 @@ func NewStore(schema string, nParts int) *Store {
 		s.tableToIndex[schemaStrs[0]] = i
 		// We allocate more space to make the array algined to cache line
 		s.tables[i] = &Table{
-			data:        make([]*Partition, nParts),
 			nKeys:       0,
 			name:        schemaStrs[0],
 			valueSchema: make([]BTYPE, len(schemaStrs)-1),
@@ -199,24 +199,22 @@ func NewStore(schema string, nParts int) *Store {
 			}
 		}
 
-		for j := 0; j < nParts; j++ {
-			/*
+		if isPhysical {
+			s.tables[i].data = make([]*Partition, nParts)
+			for j := 0; j < nParts; j++ {
 				part := &Partition{
-					partData: make([]*Chunk, CHUNKS),
-				}
-				for k := 0; k < CHUNKS; k++ {
-					chunk := &Chunk{
-						rows: make(map[Key]Record),
-					}
-					part.partData[k] = chunk
+					rows: make(map[Key]Record),
 				}
 				s.tables[i].data[j] = part
-			*/
+			}
+		} else {
+			s.tables[i].data = make([]*Partition, 1)
 			part := &Partition{
 				rows: make(map[Key]Record),
 			}
-			s.tables[i].data[j] = part
+			s.tables[i].data[0] = part
 		}
+
 	}
 	return s
 }
@@ -239,7 +237,12 @@ func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Rec
 	table.nKeys++
 
 	//chunk := table.data[partNum].partData[k[0]]
-	part := table.data[partNum]
+	var part *Partition
+	if s.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
 	/*if _, ok := chunk.rows[k]; ok {
 		return nil, EDUPKEY //One record with that key has existed;
 	}*/
@@ -259,7 +262,12 @@ func (s *Store) GetValueByID(tableID int, k Key, partNum int, colNum int) Value 
 
 	//chunk := table.data[partNum].partData[k[0]]
 	//r, ok := chunk.rows[k]
-	part := table.data[partNum]
+	var part *Partition
+	if s.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
 	r, ok := part.rows[k]
 	if !ok {
 		return nil
@@ -272,7 +280,15 @@ func (s *Store) GetRecByID(tableID int, k Key, partNum int) Record {
 
 	//chunk := table.data[partNum].partData[k[0]]
 	//r, ok := chunk.rows[k]
-	part := table.data[partNum]
+	//if s.nParts == 1 {
+	//	clog.Info("ID %v, Key %v, PartNum %v, Part %v", tableID, k, partNum, len(table.data))
+	//}
+	var part *Partition
+	if s.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
 	r, ok := part.rows[k]
 	if !ok {
 		return nil
@@ -307,7 +323,12 @@ func (s *Store) SetValueByID(tableID int, k Key, partNum int, value Value, colNu
 
 	//chunk := table.data[partNum].partData[k[0]]
 	//r, ok := chunk.rows[k]
-	part := table.data[partNum]
+	var part *Partition
+	if s.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
 	r, ok := part.rows[k]
 	if !ok {
 		return false // No such record; Fail

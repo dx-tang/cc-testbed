@@ -27,6 +27,7 @@ var rr = flag.Int("rr", 0, "Rate Percentage From 0 to 100")
 var sr = flag.Int("sr", 100, "Sample Rate")
 var mp = flag.Int("mp", 2, "Number of Partitions to be Acccessed")
 var ps = flag.Float64("ps", 1, "Skew For Partition")
+var p = flag.Bool("p", false, "Whether Index Partition")
 
 const (
 	BUFSIZE = 5
@@ -41,6 +42,10 @@ func main() {
 		clog.Error("WorkLoad not specified\n")
 	}
 
+	if *testbed.Report {
+		clog.Error("Report not Needed\n")
+	}
+
 	if *prof {
 		f, err := os.Create("single.prof")
 		if err != nil {
@@ -51,12 +56,13 @@ func main() {
 	}
 
 	nParts := nWorkers
+	isPhysical := false
 	isPartition := true
 	clog.Info("Number of workers %v \n", nWorkers)
 	if *testbed.SysType == testbed.PARTITION {
 		clog.Info("Using Partition-based CC\n")
 	} else if *testbed.SysType == testbed.OCC {
-		if *testbed.PhyPart {
+		if *p {
 			clog.Info("Using OCC with partition\n")
 		} else {
 			nParts = 1
@@ -64,27 +70,24 @@ func main() {
 			clog.Info("Using OCC\n")
 		}
 	} else if *testbed.SysType == testbed.LOCKING {
-		if *testbed.PhyPart {
+		if *p {
 			clog.Info("Using 2PL with partition\n")
 		} else {
 			nParts = 1
 			isPartition = false
 			clog.Info("Using 2PL\n")
 		}
-	} else if *testbed.SysType == testbed.ADAPTIVE {
-		clog.Info("Using Adaptive CC\n")
-		*testbed.PhyPart = true
-		isPartition = true
 	} else {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
 	//sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
-	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps)
-	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *stat, *sr, single.GetIDToKeyRange())
+	single := testbed.NewSingleWL(*wl, nParts, isPartition, isPhysical, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps)
+	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1)
 
 	clog.Info("Done with Populating Store\n")
 
+	coord.Start()
 	var wg sync.WaitGroup
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)

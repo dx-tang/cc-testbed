@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -32,10 +31,11 @@ var wl = flag.String("wl", "", "workload to be used")
 var tp = flag.String("tp", "50:50", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var ro = flag.String("ro", "report.out", "report out")
+var tc = flag.String("tc", "test.conf", "Test Configuration")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 100, "Sample Rate")
 var rc = flag.String("rc", "report.conf", "configuration for reporting")
-var count = flag.Int("count", 10, "Test Count")
+var isPart = flag.Bool("p", true, "Whether index partition")
 
 var cr []float64
 var mp []int
@@ -43,6 +43,7 @@ var ps []float64
 var contention []float64
 var tlen []int
 var rr []int
+var tests []int
 
 const (
 	BUFSIZE = 5
@@ -51,10 +52,19 @@ const (
 func main() {
 	flag.Parse()
 
+	runtime.GOMAXPROCS(*testbed.NumPart)
+	nWorkers := *testbed.NumPart
+
+	nParts := nWorkers
+	isPhysical := false
+	isPartition := true
+	curMode := testbed.PARTITION
+
 	if *testbed.SysType == testbed.PARTITION {
 		clog.Info("Using Partition-based CC\n")
 	} else if *testbed.SysType == testbed.OCC {
-		if *testbed.PhyPart {
+		curMode = testbed.OCC
+		if *isPart {
 			clog.Info("Using OCC with partition\n")
 		} else {
 			nParts = 1
@@ -62,7 +72,8 @@ func main() {
 			clog.Info("Using OCC\n")
 		}
 	} else if *testbed.SysType == testbed.LOCKING {
-		if *testbed.PhyPart {
+		curMode = testbed.LOCKING
+		if *isPart {
 			clog.Info("Using 2PL with partition\n")
 		} else {
 			nParts = 1
@@ -71,8 +82,6 @@ func main() {
 		}
 	} else if *testbed.SysType == testbed.ADAPTIVE {
 		clog.Info("Using Adaptive CC\n")
-		*testbed.PhyPart = true
-		isPartition = true
 	} else {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
@@ -89,12 +98,13 @@ func main() {
 		clog.Error("Report Configuration not specified\n")
 	}
 
+	if strings.Compare(*tc, "") == 0 {
+		clog.Error("Test Configuration not specified\n")
+	}
+
 	if !*testbed.Report {
 		clog.Error("Report Needed for Adaptive CC Execution\n")
 	}
-
-	runtime.GOMAXPROCS(*testbed.NumPart)
-	nWorkers := *testbed.NumPart
 
 	if *prof {
 		f, err := os.Create("single.prof")
@@ -105,27 +115,17 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	f, err := os.OpenFile(*ro, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		clog.Error("Open File Error %s\n", err.Error())
-	}
-	defer f.Close()
-
-	nParts := nWorkers
-	*testbed.PhyPart = true
-	isPartition := true
 	clog.Info("Number of workers %v \n", nWorkers)
 
 	ParseReportConf(*rc)
-	var curMode int = testbed.LOCKING
+	ParseTestConf(*tc)
 	keyGenPool := make(map[float64][][]testbed.KeyGen)
 	partGenPool := make(map[float64][]testbed.PartGen)
 	var single *testbed.SingelWorkload = nil
 	var coord *testbed.Coordinator = nil
-	totalTests := len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
-	for k := 0; k < *count; k++ {
-		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-		d := rnd.Intn(totalTests)
+
+	for k := 0; k < len(tests); k++ {
+		d := tests[k]
 		r := d % len(cr)
 
 		tmpCR := cr[r]
@@ -152,14 +152,14 @@ func main() {
 		if single == nil {
 			// Initialize
 			clog.Info("Populating Whole Store\n")
-			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, "", *sr, single.GetIDToKeyRange())
+			single = testbed.NewSingleWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
+			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), len(tests), *nsecs)
 
 			// Populate Key Gen and Part Gen
 			clog.Info("Populating Key Generators and Part Generators\n")
 			basic := single.GetBasicWL()
 			for _, ct := range contention {
-				keyGens, ok := keyGenPool[cr]
+				keyGens, ok := keyGenPool[ct]
 				if !ok {
 					keyGens = basic.NewKeyGen(ct)
 					keyGenPool[ct] = keyGens
@@ -178,39 +178,41 @@ func main() {
 			basic := single.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]
 			if !ok {
-				clog.Info("Lacking Key Gen With %v\n", tmpContention)
+				clog.Error("Lacking Key Gen With %v\n", tmpContention)
 			}
 
 			partGens, ok1 := partGenPool[tmpPS]
 			if !ok1 {
-				clog.Info("Lacking Part Gen With %v\n", tmpPS)
+				clog.Error("Lacking Part Gen With %v\n", tmpPS)
 			}
 			basic.SetKeyGen(keyGens)
 			basic.SetPartGen(partGens)
 			single.ResetConf(*tp, tmpCR, tmpMP, tmpTlen, tmpRR)
 		}
+
 		clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
 
+		var wg sync.WaitGroup
 		coord.SetMode(curMode)
+		coord.Start()
 		for i := 0; i < nWorkers; i++ {
 			wg.Add(1)
 			go func(n int) {
 				var t testbed.Trans
 				w := coord.Workers[n]
 				gen := single.GetTransGen(n)
-				end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
 				w.Start()
 				for {
 					tm := time.Now()
-					if !end_time.After(tm) {
-						break
-					}
 
 					t = gen.GenOneTrans()
 
 					w.NGen += time.Since(tm)
 
-					w.One(t)
+					_, err := w.One(t)
+					if err == testbed.FINISHED {
+						break
+					}
 				}
 				w.Finish()
 				wg.Done()
@@ -219,11 +221,43 @@ func main() {
 		wg.Wait()
 
 		coord.Finish()
-		coord.Reset()
 		curMode = coord.GetMode()
+		coord.Reset()
 	}
 
 	// Output Throughput Statistics
+	f, err := os.OpenFile(*ro, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	defer f.Close()
+
+	txnAr := coord.TxnAR
+	modeAr := coord.ModeAR
+	for i, txn := range txnAr {
+		f.WriteString(fmt.Sprintf("%d\t%.4f\n", modeAr[i], txn))
+	}
+}
+
+func ParseTestConf(tc string) {
+	f, err := os.OpenFile(tc, os.O_RDONLY, 0600)
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	defer f.Close()
+	reader := bufio.NewReader(f)
+	var data []byte
+	var splits []string
+
+	data, _, err = reader.ReadLine()
+	splits = strings.Split(string(data), " ")
+	tests = make([]int, len(splits))
+	for i, str := range splits {
+		tests[i], err = strconv.Atoi(str)
+		if err != nil {
+			clog.Error("ParseError %v\n", err.Error())
+		}
+	}
 }
 
 func ParseReportConf(rc string) {

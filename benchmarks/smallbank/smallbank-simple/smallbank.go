@@ -24,6 +24,7 @@ var stat = flag.String("stat", "stat.out", "statistics")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 100, "Sample Rate")
 var ps = flag.Float64("ps", 1, "Skew For Partition")
+var p = flag.Bool("p", false, "Whether Index Partition")
 
 const (
 	BUFSIZE = 5
@@ -38,6 +39,10 @@ func main() {
 		clog.Error("WorkLoad not specified\n")
 	}
 
+	if *testbed.Report {
+		clog.Error("Report not Needed\n")
+	}
+
 	if *prof {
 		f, err := os.Create("smallbank.prof")
 		if err != nil {
@@ -48,12 +53,13 @@ func main() {
 	}
 
 	nParts := nWorkers
+	isPhysical := false
 	isPartition := true
 	clog.Info("Number of workers %v \n", nWorkers)
 	if *testbed.SysType == testbed.PARTITION {
 		clog.Info("Using Partition-based CC\n")
 	} else if *testbed.SysType == testbed.OCC {
-		if *testbed.PhyPart {
+		if *p {
 			clog.Info("Using OCC with partition\n")
 		} else {
 			nParts = 1
@@ -61,7 +67,7 @@ func main() {
 			clog.Info("Using OCC\n")
 		}
 	} else if *testbed.SysType == testbed.LOCKING {
-		if *testbed.PhyPart {
+		if *p {
 			clog.Info("Using 2PL with partition\n")
 		} else {
 			nParts = 1
@@ -72,19 +78,17 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
-	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps)
-	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *stat, *sr, sb.GetIDToKeyRange())
+	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, isPhysical, nWorkers, *contention, *tp, *cr, *ps)
+	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), -1, -1)
 
 	clog.Info("Done with Populating Store\n")
 
+	coord.Start()
 	var wg sync.WaitGroup
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)
 		go func(n int) {
-			//var txn int64
-			//txn := 1000000
 			var t testbed.Trans
-			//tq := testbed.NewTransQueue(BUFSIZE)
 			w := coord.Workers[n]
 			gen := sb.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
@@ -93,34 +97,14 @@ func main() {
 				if !end_time.After(tm) {
 					break
 				}
-				//if txn <= 0 {
-				//	break
-				//}
-				//tm := time.Now()
-				//if tq.IsFull() {
-				//	t = tq.Dequeue()
-				//} else {
+
 				t = gen.GenOneTrans()
-				//}
+
 				w.NGen += time.Since(tm)
 
-				//tm = time.Now()
-				//_, err := w.One(t)
 				w.One(t)
-				//w.NExecute += time.Since(tm)
-				/*
-					if err != nil {
-						if err == testbed.EABORT {
-							tq.Enqueue(t)
-						} else if err == testbed.ENOKEY {
-							clog.Error("%s\n", err.Error())
-						} else if err != testbed.EABORT {
-							clog.Error("%s\n", err.Error())
-						}
-					}*/
-				//txn--
+
 			}
-			//clog.Info("Worker %d issues %d transactions\n", n, txn)
 			w.Finish()
 			wg.Done()
 		}(i)
@@ -128,8 +112,6 @@ func main() {
 	wg.Wait()
 
 	coord.Finish()
-
-	//sb.PrintChecking()
 
 	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
@@ -145,8 +127,6 @@ func main() {
 		}
 		defer st.Close()
 
-		//bs.WriteString(fmt.Sprintf("%v\t%v\n", *testbed.CrossPercent, coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS]))
-		//st.WriteString(fmt.Sprintf("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
 		st.WriteString(fmt.Sprintf("%.f", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
 		st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
 

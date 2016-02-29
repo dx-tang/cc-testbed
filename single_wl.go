@@ -205,7 +205,7 @@ type SingelWorkload struct {
 	transGen        []*SingleTransGen
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -229,7 +229,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps)
+	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, isPhysical, nWorkers, s, ps)
 
 	// Populating the Store
 	hp := singleWL.basic.generators[0]
@@ -418,4 +418,17 @@ func (s *SingelWorkload) PrintSum() {
 	}
 
 	clog.Info("Sum: %v\n", total)
+}
+
+func (singleWL *SingelWorkload) ResetPart(nParts int, isPartition bool) {
+	singleWL.basic.ResetPart(nParts, isPartition)
+	for i, tranGen := range singleWL.transGen {
+		if isPartition {
+			tranGen.partIndex = i
+		} else {
+			tranGen.partIndex = 0
+		}
+		tranGen.isPartition = isPartition
+		tranGen.nParts = nParts
+	}
 }

@@ -21,54 +21,47 @@ type Coordinator struct {
 	mode         int
 	feature      *Feature
 	padding2     [PADDING]byte
-	done         chan chan bool
 	reports      []chan *ReportInfo
 	changeACK    []chan bool
 	summary      *ReportInfo
-	txnAr        []int64
+	perTest      int
+	TxnAR        []float64
+	ModeAR       []int
+	rc           int
 	padding1     [PADDING]byte
 }
 
 const (
 	PERSEC       = 1000000000
+	PERMINISEC   = 1000
 	REPORTPERIOD = 1000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat string, sampleRate int, IDToKeyRange [][]int64, reportCount int) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, IDToKeyRange [][]int64, tests int, nsecs int) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:   make([]*Worker, nWorkers),
 		store:     store,
 		NStats:    make([]int64, LAST_STAT),
-		stat:      nil,
 		mode:      mode,
 		feature:   &Feature{},
-		done:      make(chan chan bool),
 		reports:   make([]chan *ReportInfo, nWorkers),
 		changeACK: make([]chan bool, nWorkers),
 		summary:   NewReportInfo(store.nParts, tableCount),
 	}
 
 	if *Report {
-		coordinator.txnAr = make([]int64, reportCount+2*PADDINGINT64)
-		coordinator.txnAr = coordinator.txnAr[PADDINGINT64:PADDINGINT64]
-	}
-
-	if stat != "" {
-		st, err := os.OpenFile(stat, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			clog.Error("Open File Error %s\n", err.Error())
-		}
-		coordinator.stat = st
+		coordinator.perTest = nsecs * PERMINISEC / REPORTPERIOD
+		reportCount := tests * coordinator.perTest
+		coordinator.TxnAR = make([]float64, reportCount+2*PADDINGINT64)
+		coordinator.TxnAR = coordinator.TxnAR[PADDINGINT64 : reportCount+PADDINGINT64]
+		coordinator.ModeAR = make([]int, reportCount+2*PADDINGINT64)
+		coordinator.ModeAR = coordinator.ModeAR[PADDINGINT64 : reportCount+PADDINGINT64]
 	}
 
 	for i := range coordinator.Workers {
 		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate, IDToKeyRange)
 		coordinator.reports[i] = make(chan *ReportInfo, 1)
-		coordinator.changeACK[i] = make(chan bool)
-	}
-
-	if *Report {
-		go coordinator.process()
+		coordinator.changeACK[i] = make(chan bool, 1)
 	}
 
 	return coordinator
@@ -76,7 +69,6 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, stat s
 
 func (coord *Coordinator) process() {
 	summary := coord.summary
-	st := coord.stat
 	var ri *ReportInfo
 	var index = PARTITION
 
@@ -95,16 +87,27 @@ func (coord *Coordinator) process() {
 				summary.aborts += ri.aborts
 			}
 
-			if st != nil {
-				clog.Info("%v\t%.f\t%.6f\n",
-					index, float64(summary.txn-summary.aborts)/summary.execTime.Seconds(),
-					float64(summary.aborts)/float64(summary.txn))
-				//st.WriteString(fmt.Sprintf("%.f", float64(summary.txn)/summary.NExecute.Seconds()))
-				//st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
+			// Record
+			coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / summary.execTime.Seconds()
+			coord.ModeAR[coord.rc] = coord.mode
+
+			clog.Info("Mode %v; Txn %.4f; Abort %.4f", coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn))
+
+			coord.rc++
+
+			// Done
+			if coord.rc%coord.perTest == 0 {
+				// Done with tests
+				for i := 0; i < len(coord.Workers); i++ {
+					coord.Workers[i].done <- true
+				}
+				return
 			}
 
+			// Transit
 			if *SysType == ADAPTIVE {
 				index = (index + 1) % ADAPTIVE
+				coord.mode = index
 				for i := 0; i < len(coord.Workers); i++ {
 					coord.Workers[i].modeChange <- true
 				}
@@ -115,23 +118,21 @@ func (coord *Coordinator) process() {
 					coord.Workers[i].modeChan <- index
 				}
 			}
-		case x := <-coord.done:
-			for i := 0; i < len(coord.Workers); i++ {
-				coord.Workers[i].done <- true
-			}
-			x <- true
-			return
+		}
+	}
+}
+
+func (coord *Coordinator) Start() {
+	if *Report {
+		go coord.process()
+		for _, w := range coord.Workers {
+			go w.run()
 		}
 	}
 }
 
 func (coord *Coordinator) Finish() {
-	if *Report {
-		coord.stat.Close()
-		x := make(chan bool)
-		coord.done <- x
-		<-x
-	} else {
+	if !*Report {
 		coord.gatherStats()
 	}
 }
@@ -152,10 +153,8 @@ func (coord *Coordinator) Reset() {
 	coord.NExecute = 0
 	coord.NWait = 0
 	coord.NLockAcquire = 0
+	coord.mode = PARTITION
 	coord.summary.Reset()
-	if *Report {
-		coord.txnAr = coord.txnAr[:0]
-	}
 
 	for _, worker := range coord.Workers {
 		worker.NStats[NABORTS] = 0
@@ -178,6 +177,8 @@ func (coord *Coordinator) Reset() {
 		worker.riMaster.Reset()
 		worker.riReplica.Reset()
 		worker.st.Reset()
+		worker.finished = false
+		worker.mode = PARTITION
 	}
 }
 
@@ -234,7 +235,7 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 
 	} else if *SysType == OCC || (*SysType == ADAPTIVE && mode == OCC) {
 
-		if *PhyPart {
+		if coord.store.nParts > 1 {
 			f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))
 		}
 

@@ -31,6 +31,9 @@ var trainOut = flag.String("train", "train.out", "training set")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 100, "Sample Rate")
 var tc = flag.String("tc", "train.conf", "configuration for training")
+var np = flag.Bool("np", false, "Whether test partition")
+var prune = flag.Bool("prune", false, "Whether prune tests")
+var isPart = flag.Bool("p", true, "Whether partition index")
 
 var cr []float64
 var ps []float64
@@ -43,6 +46,7 @@ const (
 
 func main() {
 	flag.Parse()
+
 	if *testbed.SysType != testbed.ADAPTIVE {
 		clog.Error("Training only Works for Adaptive CC\n")
 	}
@@ -60,14 +64,14 @@ func main() {
 	}
 
 	if *testbed.Report {
-		clog.Error("Report not Needed for Adaptive CC\n")
+		clog.Error("Report not Needed for Training\n")
 	}
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
 
 	if *prof {
-		f, err := os.Create("single.prof")
+		f, err := os.Create("smallbank.prof")
 		if err != nil {
 			clog.Error(err.Error())
 		}
@@ -82,8 +86,14 @@ func main() {
 	defer f.Close()
 
 	nParts := nWorkers
-	*testbed.PhyPart = true
-	isPartition := true
+	var isPartition bool
+	if !*isPart && *np {
+		nParts = 1
+		isPartition = *isPart
+	} else {
+		isPartition = true
+	}
+	isPhysical := false
 	clog.Info("Number of workers %v \n", nWorkers)
 	clog.Info("Adaptive CC Training\n")
 
@@ -122,15 +132,17 @@ func main() {
 		tmpTP := transper[d]
 
 		// CR pruning
-		if tmpCR > prevCR {
-			if prevMode != 0 {
-				prevCR = tmpCR
-				continue
+		if *prune {
+			if tmpCR > prevCR {
+				if prevMode != 0 {
+					prevCR = tmpCR
+					continue
+				} else {
+					prevCR = tmpCR
+				}
 			} else {
 				prevCR = tmpCR
 			}
-		} else {
-			prevCR = tmpCR
 		}
 
 		// Single Pruning
@@ -140,8 +152,8 @@ func main() {
 		}
 
 		if sb == nil {
-			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, "", *sr, sb.GetIDToKeyRange(), 0)
+			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
+			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), -1, -1)
 		} else {
 			basic := sb.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]
@@ -164,6 +176,21 @@ func main() {
 		// One Test
 		for a := 0; a < 3; a++ {
 			for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
+
+				if *np {
+					if j == testbed.PARTITION {
+						break
+					}
+				}
+
+				if !*isPart && !*np {
+					if j == testbed.PARTITION {
+						sb.ResetPart(nWorkers, true)
+					} else {
+						sb.ResetPart(1, false)
+					}
+				}
+
 				var wg sync.WaitGroup
 				coord.SetMode(j)
 				for i := 0; i < nWorkers; i++ {
@@ -194,30 +221,18 @@ func main() {
 
 				coord.Finish()
 
+				if *np && j == testbed.PARTITION {
+					coord.Reset()
+					continue
+				}
+
 				tmpFt := coord.GetFeature()
-				/*for p := 0; p < testbed.ADAPTIVE; p++ {
-					if ft[p].Txn < tmpFt.Txn {
-						for q := testbed.ADAPTIVE - 2; q >= p; q-- {
-							ft[q+1].Set(ft[q])
-						}
-						ft[p].Set(tmpFt)
-						break
-					}
-				}*/
-				/*if a == 0 {
-					ft[j].Set(tmpFt)
-				} else {
-					ft[j].Add(tmpFt)
-				}*/
+
 				ft[j][a].Set(tmpFt)
 
 				coord.Reset()
 			}
 		}
-
-		/*for _, feature := range ft {
-			feature.Avg(3)
-		}*/
 
 		for z := 0; z < testbed.ADAPTIVE; z++ {
 			tmpFeature := ft[z]
@@ -251,6 +266,16 @@ func main() {
 		}
 
 		prevMode = ft[0][1].Mode
+
+		for z := 0; z < 9; z++ {
+			x := z / 3
+			y := z % 3
+			if !(x == 0 && y == 1) && ft[x][y].Mode == ft[0][1].Mode {
+				ft[0][1].Add(ft[x][y])
+			}
+		}
+
+		ft[0][1].Avg(float64(3))
 
 		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpPS, tmpContention, tmpTP))
 		if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {

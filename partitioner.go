@@ -9,6 +9,7 @@ type Partitioner interface {
 	GetPartKey(partIndex int, rank int64) Key
 	GetWholeKey(rank int64) Key
 	GetKeyArray() []int64
+	ResetPart(nParts int64)
 }
 
 type HashPartitioner struct {
@@ -57,6 +58,10 @@ func (hp *HashPartitioner) GetPart(key Key) int {
 }
 
 func (hp *HashPartitioner) GetPartKey(partIndex int, rank int64) Key {
+	if hp.NParts == 0 {
+		hp.GetWholeKey(rank)
+	}
+
 	for i := len(hp.keyRange) - 1; i >= 0; i-- {
 		hp.compKey[i] = OneKey(rank % hp.keyRange[i])
 		rank = rank / hp.keyRange[i]
@@ -70,9 +75,14 @@ func (hp *HashPartitioner) GetPartKey(partIndex int, rank int64) Key {
 }
 
 func (hp *HashPartitioner) GetWholeKey(rank int64) Key {
-	return hp.GetPartKey(0, rank)
+	hp.compKey[0] = OneKey(rank)
+	return CKey(hp.compKey)
 }
 
 func (hp *HashPartitioner) GetKeyArray() []int64 {
 	return hp.pKeysArray
+}
+
+func (hp *HashPartitioner) ResetPart(nParts int64) {
+	hp.NParts = nParts
 }

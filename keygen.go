@@ -10,6 +10,7 @@ import (
 type KeyGen interface {
 	GetWholeRank() int64
 	GetPartRank(pi int) int64
+	ResetPart(isPartition bool)
 }
 
 type HotColdRand struct {
@@ -88,6 +89,10 @@ func (hr *HotColdRand) GetPartRank(pi int) int64 {
 	}
 }
 
+func (hr *HotColdRand) ResetPart(isPartition bool) {
+	hr.isPartition = isPartition
+}
+
 type ZipfRandLarge struct {
 	isPartition bool
 	partIndex   int
@@ -137,6 +142,10 @@ func (zr *ZipfRandLarge) GetPartRank(pi int) int64 {
 		return zr.GetWholeRank()
 	}
 	return int64(zr.partZipf[pi].Uint64())
+}
+
+func (zr *ZipfRandLarge) ResetPart(isPartition bool) {
+	zr.isPartition = isPartition
 }
 
 type ZipfRandSmall struct {
@@ -192,6 +201,10 @@ func (zr *ZipfRandSmall) GetPartRank(pi int) int64 {
 	return zr.partZipf[pi].NextInt()
 }
 
+func (zr *ZipfRandSmall) ResetPart(isPartition bool) {
+	zr.isPartition = isPartition
+}
+
 type UniformRand struct {
 	isPartition  bool
 	partIndex    int
@@ -236,4 +249,8 @@ func (ur *UniformRand) GetPartRank(pi int) int64 {
 	}
 
 	return ur.partUniform[pi].Int63n(ur.pKeysArray[pi])
+}
+
+func (ur *UniformRand) ResetPart(isPartition bool) {
+	ur.isPartition = isPartition
 }
