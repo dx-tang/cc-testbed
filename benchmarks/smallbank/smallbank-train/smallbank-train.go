@@ -153,7 +153,7 @@ func main() {
 
 		if sb == nil {
 			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), -1, -1)
+			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), -1, -1, testbed.SMALLBANKWL)
 		} else {
 			basic := sb.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]

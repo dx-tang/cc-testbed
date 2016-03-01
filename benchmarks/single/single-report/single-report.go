@@ -153,7 +153,7 @@ func main() {
 			// Initialize
 			clog.Info("Populating Whole Store\n")
 			single = testbed.NewSingleWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), len(tests), *nsecs)
+			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), len(tests), *nsecs, testbed.SINGLEWL)
 
 			// Populate Key Gen and Part Gen
 			clog.Info("Populating Key Generators and Part Generators\n")

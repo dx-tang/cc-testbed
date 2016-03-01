@@ -137,6 +137,7 @@ func (w *Worker) run() {
 			w.Unlock()
 		case <-tm: // Report Information within One Period
 			w.Lock()
+			w.riReplica.Reset()
 			replica := w.riMaster
 			w.riMaster = w.riReplica
 			w.riReplica = replica

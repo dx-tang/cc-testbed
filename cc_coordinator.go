@@ -5,7 +5,16 @@ import (
 	"os"
 	"time"
 
+	"github.com/totemtang/cc-testbed/classifier"
 	"github.com/totemtang/cc-testbed/clog"
+)
+
+const (
+	CLASSIFERPATH   = "/home/totemtang/Multicore-CC/workspace/src/github.com/totemtang/cc-testbed/classifier"
+	SINGLEPARTTRAIN = "single-part-train.out"
+	SINGLEOCCTRAIN  = "single-occ-train.out"
+	SBPARTTRAIN     = "sb-part-train.out"
+	SBOCCTRAIN      = "sb-occ-train.out"
 )
 
 type Coordinator struct {
@@ -28,6 +37,8 @@ type Coordinator struct {
 	TxnAR        []float64
 	ModeAR       []int
 	rc           int
+	clf          classifier.Classifier
+	workload     int
 	padding1     [PADDING]byte
 }
 
@@ -37,7 +48,7 @@ const (
 	REPORTPERIOD = 1000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, IDToKeyRange [][]int64, tests int, nsecs int) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, IDToKeyRange [][]int64, tests int, nsecs int, workload int) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:   make([]*Worker, nWorkers),
 		store:     store,
@@ -56,6 +67,19 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		coordinator.TxnAR = coordinator.TxnAR[PADDINGINT64 : reportCount+PADDINGINT64]
 		coordinator.ModeAR = make([]int, reportCount+2*PADDINGINT64)
 		coordinator.ModeAR = coordinator.ModeAR[PADDINGINT64 : reportCount+PADDINGINT64]
+
+		coordinator.workload = workload
+		if workload == SINGLEWL {
+			partTS := CLASSIFERPATH + "/" + SINGLEPARTTRAIN
+			occTS := CLASSIFERPATH + "/" + SINGLEOCCTRAIN
+			coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partTS, occTS)
+		} else if workload == SMALLBANKWL {
+			partTS := CLASSIFERPATH + "/" + SBPARTTRAIN
+			occTS := CLASSIFERPATH + "/" + SBOCCTRAIN
+			coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
+		} else {
+			clog.Error("Workload %v Not Supported", workload)
+		}
 	}
 
 	for i := range coordinator.Workers {
@@ -70,8 +94,6 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 func (coord *Coordinator) process() {
 	summary := coord.summary
 	var ri *ReportInfo
-	var index = PARTITION
-
 	for {
 		select {
 		case ri = <-coord.reports[0]:
@@ -80,14 +102,56 @@ func (coord *Coordinator) process() {
 			summary.txn = ri.txn
 			summary.aborts = ri.aborts
 
+			if *SysType == ADAPTIVE {
+				summary.txnSample = ri.txnSample
+
+				for i, ps := range ri.partStat {
+					summary.partStat[i] = ps
+				}
+
+				summary.partLenStat = ri.partLenStat
+
+				for i, rs := range ri.recStat {
+					summary.recStat[i] = rs
+				}
+
+				summary.readCount = ri.readCount
+				summary.writeCount = ri.writeCount
+				summary.hits = ri.hits
+
+				summary.accessCount = ri.accessCount
+				summary.conflicts = ri.conflicts
+			}
+
 			for i := 1; i < len(coord.reports); i++ {
 				ri = <-coord.reports[i]
 				summary.execTime += ri.execTime
 				summary.txn += ri.txn
 				summary.aborts += ri.aborts
+
+				if *SysType == ADAPTIVE {
+					summary.txnSample += ri.txnSample
+
+					for i, ps := range ri.partStat {
+						summary.partStat[i] += ps
+					}
+
+					summary.partLenStat += ri.partLenStat
+
+					for i, rs := range ri.recStat {
+						summary.recStat[i] += rs
+					}
+
+					summary.readCount += ri.readCount
+					summary.writeCount += ri.writeCount
+					summary.hits += ri.hits
+
+					summary.accessCount += ri.accessCount
+					summary.conflicts += ri.conflicts
+				}
 			}
 
-			// Record
+			// Record Throughput and Mode
 			coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / summary.execTime.Seconds()
 			coord.ModeAR[coord.rc] = coord.mode
 
@@ -104,18 +168,62 @@ func (coord *Coordinator) process() {
 				return
 			}
 
-			// Transit
+			// Switch
 			if *SysType == ADAPTIVE {
-				index = (index + 1) % ADAPTIVE
-				coord.mode = index
-				for i := 0; i < len(coord.Workers); i++ {
-					coord.Workers[i].modeChange <- true
+
+				// Compute Features
+				txn := summary.txnSample
+
+				var sum int64
+				var sumpow int64
+				for _, p := range summary.partStat {
+					sum += p
+					sumpow += p * p
 				}
-				for i := 0; i < len(coord.Workers); i++ {
-					<-coord.changeACK[i]
+
+				partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
+				partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
+				partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
+
+				var recAvg float64
+				sum = 0
+				for _, rs := range summary.recStat {
+					sum += rs
 				}
-				for i := 0; i < len(coord.Workers); i++ {
-					coord.Workers[i].modeChan <- index
+				recAvg = float64(sum) / float64(txn)
+
+				rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
+				hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
+				var confRate float64
+				if summary.conflicts != 0 {
+					confRate = float64(summary.conflicts*100) / float64(summary.accessCount+summary.conflicts)
+				}
+
+				// Use Classifier to Predict Features
+				mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
+				//clog.Info("Mode: %v; PartAvg: %.2f; PartVar: %.2f; PartLenPar: %.2f; RecAvg: %.2f; HitRate: %.2f; RR: %.2f; ConfRate: %.2f", mode, partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
+				var change bool = false
+				if mode != coord.mode {
+					if !(mode == 3 && coord.mode != 0) {
+						change = true
+						if mode == 3 {
+							// Prefer 2PL
+							coord.mode = 2
+						} else {
+							coord.mode = mode
+						}
+					}
+				}
+				if change {
+					for i := 0; i < len(coord.Workers); i++ {
+						coord.Workers[i].modeChange <- true
+					}
+					for i := 0; i < len(coord.Workers); i++ {
+						<-coord.changeACK[i]
+					}
+					for i := 0; i < len(coord.Workers); i++ {
+						coord.Workers[i].modeChan <- coord.mode
+					}
 				}
 			}
 		}
@@ -135,6 +243,10 @@ func (coord *Coordinator) Finish() {
 	if !*Report {
 		coord.gatherStats()
 	}
+}
+
+func (coord *Coordinator) Final() {
+	coord.clf.Finalize()
 }
 
 func (coord *Coordinator) Reset() {
@@ -359,7 +471,7 @@ func (ft *Feature) Avg(count float64) {
 	ft.AR /= count
 }
 
-// Currently, we support 5 features
+// Currently, we support 7 features
 func (coord *Coordinator) GetFeature() *Feature {
 	summary := coord.summary
 	for _, w := range coord.Workers {
@@ -375,12 +487,6 @@ func (coord *Coordinator) GetFeature() *Feature {
 		}
 
 		summary.partLenStat += master.partLenStat
-
-		/*for j, _ := range master.recStat {
-			for k, rs := range master.recStat[j] {
-				summary.recStat[j][k] += rs
-			}
-		}*/
 
 		for i, rs := range master.recStat {
 			summary.recStat[i] += rs

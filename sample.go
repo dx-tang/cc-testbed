@@ -54,14 +54,6 @@ func (ri *ReportInfo) Reset() {
 	}
 	ri.partLenStat = 0
 
-	/*
-		for i, _ := range ri.recStat {
-			for j, _ := range ri.recStat[i] {
-				ri.recStat[i][j] = 0
-			}
-		}
-	*/
-
 	for i, _ := range ri.recStat {
 		ri.recStat[i] = 0
 	}

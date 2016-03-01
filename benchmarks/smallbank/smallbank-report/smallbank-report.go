@@ -138,7 +138,7 @@ func main() {
 		if sb == nil {
 			clog.Info("Populating Whole Store\n")
 			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), len(tests), *nsecs)
+			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), len(tests), *nsecs, testbed.SMALLBANKWL)
 
 			// Populate Key Gen and Part Gen
 			clog.Info("Populating Key Generators and Part Generators\n")

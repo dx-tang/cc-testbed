@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	SMALLBANK = iota
+	SINGLEWL = iota
+	SMALLBANKWL
 )
 
 type Generator struct {

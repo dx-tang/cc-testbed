@@ -183,7 +183,7 @@ func main() {
 
 		if single == nil {
 			single = testbed.NewSingleWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1)
+			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1, testbed.SINGLEWL)
 		} else {
 			basic := single.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]
