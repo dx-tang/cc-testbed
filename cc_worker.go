@@ -85,7 +85,7 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 			kr[i][j] = IDToKeyRange[i][j]
 		}
 	}
-	w.st = NewSampleTool(s.nParts, kr, sampleRate)
+	w.st = NewSampleTool(s.nParts, kr, sampleRate, s)
 	w.riMaster = NewReportInfo(s.nParts, tableCount)
 	w.riReplica = NewReportInfo(s.nParts, tableCount)
 
@@ -137,7 +137,6 @@ func (w *Worker) run() {
 			w.Unlock()
 		case <-tm: // Report Information within One Period
 			w.Lock()
-			w.riReplica.Reset()
 			replica := w.riMaster
 			w.riMaster = w.riReplica
 			w.riReplica = replica
@@ -162,6 +161,7 @@ func (w *Worker) run() {
 
 				w.coord.reports[w.ID] <- replica
 			}
+			w.riMaster.Reset()
 			w.Unlock()
 		}
 	}

@@ -523,7 +523,6 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 				return nil, err
 			}
 		}
-
 	}
 
 	if exec.Commit() == 0 {

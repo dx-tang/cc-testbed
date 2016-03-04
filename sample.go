@@ -36,6 +36,8 @@ type ReportInfo struct {
 	hits        int64
 	accessCount int64
 	conflicts   int64
+	partAccess  int64
+	partSuccess int64
 	padding1    [PADDING]byte
 	//recStat     [][]int64
 
@@ -65,6 +67,9 @@ func (ri *ReportInfo) Reset() {
 	ri.accessCount = 0
 	ri.conflicts = 0
 	ri.hits = 0
+
+	ri.partAccess = 0
+	ri.partSuccess = 0
 
 }
 
@@ -99,6 +104,9 @@ type SampleTool struct {
 	state        int
 	sampleRate   int
 	lru          *LRU
+	ap           []int
+	cur          int
+	s            *Store
 	padding1     [PADDING]byte
 	//IDToKeys     []int64
 	//IDToKeyLen   []int
@@ -107,7 +115,7 @@ type SampleTool struct {
 	//offIndex []int
 }
 
-func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int) *SampleTool {
+func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store) *SampleTool {
 	st := &SampleTool{
 		nParts:       nParts,
 		tableCount:   len(IDToKeyRange),
@@ -115,6 +123,11 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int) *SampleTo
 		sampleRate:   sampleRate,
 		lru:          NewLRU(CACHESIZE),
 	}
+
+	st.ap = make([]int, nParts+2*PADDINGINT)
+	st.ap = st.ap[PADDINGINT:PADDINGINT]
+	st.s = s
+	st.cur = -1
 
 	st.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
 	st.recBuf = st.recBuf[PADDINGINT64:PADDINGINT64]
@@ -257,6 +270,38 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	}
 
 	ri.partLenStat += int64(len(ap) * len(ap))
+
+	if st.cur >= len(st.ap) {
+		for _, p := range st.ap {
+			st.s.wfLock[p].lock.Unlock(0)
+		}
+		st.cur = -1
+		st.ap = st.ap[0:0]
+		ri.partSuccess++
+		return
+	}
+
+	if st.cur == -1 {
+		st.cur = 0
+		st.ap = st.ap[0:len(ap)]
+		for i, p := range ap {
+			st.ap[i] = p
+		}
+	}
+
+	cur := st.cur
+	// Try Locking
+	for cur < len(st.ap) {
+		ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
+		if !ok {
+			break
+		}
+		cur++
+	}
+
+	ri.partAccess++
+
+	st.cur = cur
 }
 
 func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
@@ -280,6 +325,12 @@ func (st *SampleTool) Reset() {
 	st.recBuf = st.recBuf[0:0]
 	//st.lru.Reset()
 	st.lru = NewLRU(st.lru.size)
+
+	for i := 0; i < st.cur; i++ {
+		st.s.wfLock[st.ap[i]].lock.Unlock(0)
+	}
+	st.ap = st.ap[0:0]
+	st.cur = -1
 }
 
 type LRU struct {

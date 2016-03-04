@@ -65,8 +65,8 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		reportCount := tests * coordinator.perTest
 		coordinator.TxnAR = make([]float64, reportCount+2*PADDINGINT64)
 		coordinator.TxnAR = coordinator.TxnAR[PADDINGINT64 : reportCount+PADDINGINT64]
-		coordinator.ModeAR = make([]int, reportCount+2*PADDINGINT64)
-		coordinator.ModeAR = coordinator.ModeAR[PADDINGINT64 : reportCount+PADDINGINT64]
+		coordinator.ModeAR = make([]int, reportCount+2*PADDINGINT)
+		coordinator.ModeAR = coordinator.ModeAR[PADDINGINT : reportCount+PADDINGINT]
 
 		coordinator.workload = workload
 		if workload == SINGLEWL {
@@ -153,6 +153,7 @@ func (coord *Coordinator) process() {
 
 			// Record Throughput and Mode
 			coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / summary.execTime.Seconds()
+			clog.Info("Summary %v; Exec Secs: %v", summary.txn, summary.execTime.Seconds())
 			coord.ModeAR[coord.rc] = coord.mode
 
 			clog.Info("Mode %v; Txn %.4f; Abort %.4f", coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn))
@@ -407,6 +408,7 @@ type Feature struct {
 	PartAvg    float64
 	PartVar    float64
 	PartLenVar float64
+	PartConf   float64
 	RecAvg     float64
 	HitRate    float64
 	ReadRate   float64
@@ -421,6 +423,7 @@ func (f *Feature) Reset() {
 	f.PartAvg = 0
 	f.PartVar = 0
 	f.PartLenVar = 0
+	f.PartConf = 0
 	f.RecAvg = 0
 	//f.RecVar = 0
 	f.HitRate = 0
@@ -435,6 +438,7 @@ func (ft *Feature) Add(tmpFt *Feature) {
 	ft.PartAvg += tmpFt.PartAvg
 	ft.PartVar += tmpFt.PartVar
 	ft.PartLenVar += tmpFt.PartLenVar
+	ft.PartConf += tmpFt.PartConf
 	ft.RecAvg += tmpFt.RecAvg
 	//ft.RecVar += tmpFt.RecVar
 	ft.HitRate += tmpFt.HitRate
@@ -448,6 +452,7 @@ func (ft *Feature) Set(tmpFt *Feature) {
 	ft.PartAvg = tmpFt.PartAvg
 	ft.PartVar = tmpFt.PartVar
 	ft.PartLenVar = tmpFt.PartLenVar
+	ft.PartConf = tmpFt.PartConf
 	ft.RecAvg = tmpFt.RecAvg
 	//ft.RecVar = tmpFt.RecVar
 	ft.HitRate = tmpFt.HitRate
@@ -462,6 +467,7 @@ func (ft *Feature) Avg(count float64) {
 	ft.PartAvg /= count
 	ft.PartVar /= count
 	ft.PartLenVar /= count
+	ft.PartConf /= count
 	ft.RecAvg /= count
 	//ft.RecVar /= count
 	ft.HitRate /= count
@@ -471,7 +477,7 @@ func (ft *Feature) Avg(count float64) {
 	ft.AR /= count
 }
 
-// Currently, we support 7 features
+// Currently, we support 8 features
 func (coord *Coordinator) GetFeature() *Feature {
 	summary := coord.summary
 	for _, w := range coord.Workers {
@@ -498,6 +504,9 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 		summary.accessCount += master.accessCount
 		summary.conflicts += master.conflicts
+
+		summary.partAccess += master.partAccess
+		summary.partSuccess += master.partSuccess
 	}
 
 	txn := summary.txnSample
@@ -562,6 +571,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.PartAvg = partAvg
 	coord.feature.PartVar = partVar
 	coord.feature.PartLenVar = partLenVar
+	coord.feature.PartConf = float64(summary.partAccess) / float64(summary.partSuccess)
 	coord.feature.RecAvg = recAvg
 	//coord.feature.RecVar = recVar
 	coord.feature.HitRate = hitRate
@@ -576,8 +586,9 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	//clog.Info("ReadCount %v; WriteCount %v\n", summary.readCount, summary.writeCount)
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f Mode %v\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.GetMode())
+	//clog.Info("PartAccess %v; PartSuccess %v", summary.partAccess, summary.partSuccess)
+	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
