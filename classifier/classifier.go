@@ -29,11 +29,11 @@ func NewSingleClassifier(path string, partTS string, occTS string) *SingleClassi
 	occ := C.CString(occTS)
 	sc.partClf = C.SinglePartTrain(part)
 	if sc.partClf == nil {
-		clog.Info("Single Part Training Error")
+		clog.Error("Single Part Training Error")
 	}
 	sc.occClf = C.SingleOCCTrain(occ)
 	if sc.occClf == nil {
-		clog.Info("Single OCC Training Error")
+		clog.Error("Single OCC Training Error")
 	}
 	return sc
 }
@@ -79,11 +79,11 @@ func NewSBClassifier(path string, partTS string, occTS string) *SmallbankClassif
 	occ := C.CString(occTS)
 	sbc.partClf = C.SBPartTrain(part)
 	if sbc.partClf == nil {
-		clog.Info("Smallbank Part Training Error")
+		clog.Error("Smallbank Part Training Error")
 	}
 	sbc.occClf = C.SBOCCTrain(occ)
 	if sbc.partClf == nil {
-		clog.Info("Smallbank Part Training Error")
+		clog.Error("Smallbank Part Training Error")
 	}
 	return sbc
 }

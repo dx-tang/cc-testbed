@@ -23,7 +23,7 @@ const (
 	CONTENTION   = "CONTENTION"
 	TRANLEN      = "TRANLEN"
 	READRATE     = "READRATE"
-	PERFDIFF     = 0.03
+	PERFDIFF     = 0.05
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
@@ -165,6 +165,10 @@ func main() {
 		}
 
 		if tmpMP > tmpTlen {
+			continue
+		}
+
+		if *np && tmpMP != tmpTlen {
 			continue
 		}
 
@@ -311,9 +315,9 @@ func main() {
 		// ID
 		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))
 		if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].PartConf, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode, ft[1][1].Mode))
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode, ft[1][1].Mode))
 		} else {
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].PartConf, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode))
+			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode))
 		}
 		//ft.Avg(testbed.ADAPTIVE)
 		//f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.PartLenVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))

@@ -103,7 +103,7 @@ type SampleTool struct {
 	trials       int
 	state        int
 	sampleRate   int
-	lru          *LRU
+	lruAr        []*LRU
 	ap           []int
 	cur          int
 	s            *Store
@@ -121,7 +121,11 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store)
 		tableCount:   len(IDToKeyRange),
 		IDToKeyRange: IDToKeyRange,
 		sampleRate:   sampleRate,
-		lru:          NewLRU(CACHESIZE),
+		lruAr:        make([]*LRU, len(IDToKeyRange)),
+	}
+
+	for i := 0; i < len(IDToKeyRange); i++ {
+		st.lruAr[i] = NewLRU(CACHESIZE)
 	}
 
 	st.ap = make([]int, nParts+2*PADDINGINT)
@@ -167,7 +171,7 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store)
 func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isRead bool) {
 	if st.sampleCount == 0 {
 		ri.recStat[tableID]++
-		if st.lru.Insert(key) {
+		if st.lruAr[tableID].Insert(key) {
 			ri.hits++
 		}
 
@@ -271,37 +275,39 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 
 	ri.partLenStat += int64(len(ap) * len(ap))
 
-	if st.cur >= len(st.ap) {
-		for _, p := range st.ap {
-			st.s.wfLock[p].lock.Unlock(0)
+	// Part Conflicts
+	/*	if st.cur >= len(st.ap) {
+			for _, p := range st.ap {
+				st.s.wfLock[p].lock.Unlock(0)
+			}
+			st.cur = -1
+			st.ap = st.ap[0:0]
+			ri.partSuccess++
+			return
 		}
-		st.cur = -1
-		st.ap = st.ap[0:0]
-		ri.partSuccess++
-		return
-	}
 
-	if st.cur == -1 {
-		st.cur = 0
-		st.ap = st.ap[0:len(ap)]
-		for i, p := range ap {
-			st.ap[i] = p
+		if st.cur == -1 {
+			st.cur = 0
+			st.ap = st.ap[0:len(ap)]
+			for i, p := range ap {
+				st.ap[i] = p
+			}
 		}
-	}
 
-	cur := st.cur
-	// Try Locking
-	for cur < len(st.ap) {
-		ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
-		if !ok {
-			break
+		cur := st.cur
+		// Try Locking
+		for cur < len(st.ap) {
+			ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
+			if !ok {
+				break
+			}
+			cur++
 		}
-		cur++
-	}
 
-	ri.partAccess++
+		ri.partAccess++
 
-	st.cur = cur
+		st.cur = cur
+	*/
 }
 
 func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
@@ -324,7 +330,10 @@ func (st *SampleTool) Reset() {
 	}
 	st.recBuf = st.recBuf[0:0]
 	//st.lru.Reset()
-	st.lru = NewLRU(st.lru.size)
+	//st.lru = NewLRU(st.lru.size)
+	for i := 0; i < len(st.lruAr); i++ {
+		st.lruAr[i] = NewLRU(st.lruAr[i].size)
+	}
 
 	for i := 0; i < st.cur; i++ {
 		st.s.wfLock[st.ap[i]].lock.Unlock(0)

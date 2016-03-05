@@ -21,7 +21,7 @@ const (
 	PARTSKEW   = "PARTSKEW"
 	CONTENTION = "CONTENTION"
 	TRANSPER   = "TRANSPER"
-	PERFDIFF   = 0.03
+	PERFDIFF   = 0.05
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
