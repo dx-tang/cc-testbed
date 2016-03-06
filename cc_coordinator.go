@@ -595,7 +595,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
 	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf coord.GetMode())
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
