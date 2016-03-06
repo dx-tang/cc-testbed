@@ -276,38 +276,38 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	ri.partLenStat += int64(len(ap) * len(ap))
 
 	// Part Conflicts
-	/*	if st.cur >= len(st.ap) {
-			for _, p := range st.ap {
-				st.s.wfLock[p].lock.Unlock(0)
-			}
-			st.cur = -1
-			st.ap = st.ap[0:0]
-			ri.partSuccess++
-			return
+	if st.cur >= len(st.ap) {
+		for _, p := range st.ap {
+			st.s.wfLock[p].lock.Unlock(0)
 		}
+		st.cur = -1
+		st.ap = st.ap[0:0]
+		ri.partSuccess++
+		return
+	}
 
-		if st.cur == -1 {
-			st.cur = 0
-			st.ap = st.ap[0:len(ap)]
-			for i, p := range ap {
-				st.ap[i] = p
-			}
+	if st.cur == -1 {
+		st.cur = 0
+		st.ap = st.ap[0:len(ap)]
+		for i, p := range ap {
+			st.ap[i] = p
 		}
+	}
 
-		cur := st.cur
-		// Try Locking
-		for cur < len(st.ap) {
-			ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
-			if !ok {
-				break
-			}
-			cur++
+	cur := st.cur
+	// Try Locking
+	for cur < len(st.ap) {
+		ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
+		if !ok {
+			break
 		}
+		cur++
+	}
 
-		ri.partAccess++
+	ri.partAccess++
 
-		st.cur = cur
-	*/
+	st.cur = cur
+
 }
 
 func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {

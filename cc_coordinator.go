@@ -45,7 +45,7 @@ type Coordinator struct {
 const (
 	PERSEC       = 1000000000
 	PERMINISEC   = 1000
-	REPORTPERIOD = 1000
+	REPORTPERIOD = 2000
 )
 
 func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, IDToKeyRange [][]int64, tests int, nsecs int, workload int) *Coordinator {
@@ -153,10 +153,10 @@ func (coord *Coordinator) process() {
 
 			// Record Throughput and Mode
 			coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / summary.execTime.Seconds()
-			clog.Info("Summary %v; Exec Secs: %v", summary.txn, summary.execTime.Seconds())
+			//clog.Info("Summary %v; Exec Secs: %v", summary.txn, summary.execTime.Seconds())
 			coord.ModeAR[coord.rc] = coord.mode
 
-			clog.Info("Mode %v; Txn %.4f; Abort %.4f", coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn))
+			//clog.Info("Mode %v; Txn %.4f; Abort %.4f", coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn))
 
 			coord.rc++
 
@@ -171,7 +171,9 @@ func (coord *Coordinator) process() {
 
 			// Switch
 			if *SysType == ADAPTIVE {
-
+				for _, ps := range summary.partStat {
+					clog.Info("%v ", ps)
+				}
 				// Compute Features
 				txn := summary.txnSample
 
@@ -199,6 +201,8 @@ func (coord *Coordinator) process() {
 				if summary.conflicts != 0 {
 					confRate = float64(summary.conflicts*100) / float64(summary.accessCount+summary.conflicts)
 				}
+
+				//clog.Info("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
 
 				// Use Classifier to Predict Features
 				mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
@@ -571,7 +575,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.PartAvg = partAvg
 	coord.feature.PartVar = partVar
 	coord.feature.PartLenVar = partLenVar
-	//coord.feature.PartConf = float64(summary.partAccess) / float64(summary.partSuccess)
+	coord.feature.PartConf = float64(summary.partAccess) / float64(summary.partSuccess)
 	coord.feature.RecAvg = recAvg
 	//coord.feature.RecVar = recVar
 	coord.feature.HitRate = hitRate
@@ -590,8 +594,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, Mode %v\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.GetMode())
+	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf coord.GetMode())
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
