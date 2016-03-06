@@ -5,3 +5,5 @@
 *.prof
 *.conf
 *.bak
+*~
+*.pyc

@@ -48,13 +48,12 @@ class SingleOCC(object):
 					tmp = []
 					tmp.extend(columns[3:7])
 					X.append(tmp)
-
-			if (len(columns) > FEATURELEN + 1):
-				Y.extend([3])
-			elif (columns[FEATURELEN] == 1):
-				Y.extend([1])
-			elif (columns[FEATURELEN] == 2):
-				Y.extend([2])
+					#if (len(columns) > FEATURELEN + 1):
+					#	Y.extend([3])
+					if (columns[FEATURELEN] == 1):
+						Y.extend([1])
+					elif (columns[FEATURELEN] == 2):
+						Y.extend([2])
 		clf = tree.DecisionTreeClassifier(max_depth=6)
 		clf = clf.fit(X, Y)
 		return clf

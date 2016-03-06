@@ -48,18 +48,28 @@ class SmallbankOCC(object):
 					tmp = []
 					tmp.extend(columns[3:7])
 					X.append(tmp)
-
-			if (len(columns) > FEATURELEN + 1):
-				Y.extend([3])
-			elif (columns[FEATURELEN] == 1):
-				Y.extend([1])
-			elif (columns[FEATURELEN] == 2):
-				Y.extend([2])
-		clf = tree.DecisionTreeClassifier(max_depth=6)
+					Z = [0, 0]
+					for y in tmpY:
+						Z[int(y) - 1] = 1
+					Y.append(Z)
+			#if (len(columns) > FEATURELEN + 1):
+			#	Y.extend([3])
+			#elif (columns[FEATURELEN] == 1):
+			#	Y.extend([1])
+			#elif (columns[FEATURELEN] == 2):
+			#	Y.extend([2])
+		#clf = tree.DecisionTreeClassifier(max_depth=6)
+		clf = OneVsRestClassifier(tree.DecisionTreeClassifier(max_depth=6))
 		clf = clf.fit(X, Y)
 		return clf
 
 	def Predict(self, recAvg, hitRate, readRate, confRate):
 		X = [[recAvg, hitRate, readRate, confRate]]
-		return self.clf.predict(X)[0]
+		Y = self.clf.predict(X)[0]
+		if (Y[0] == 1 and Y[1] == 1):
+			return 3
+		elif (Y[1] == 0):
+			return 1
+		else:
+			return 2
 
