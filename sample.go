@@ -5,8 +5,7 @@ import (
 	"flag"
 	"time"
 
-	"github.com/totemtang/cc-testbed/wfmutex"
-
+	//"github.com/totemtang/cc-testbed/wfmutex"
 	//"github.com/totemtang/cc-testbed/clog"
 )
 
@@ -15,6 +14,7 @@ const (
 	CACHESIZE    = 1000
 	BUFSIZE      = 10
 	TRIAL        = 10
+	RECSR        = 100
 )
 
 var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
@@ -39,8 +39,6 @@ type ReportInfo struct {
 	partAccess  int64
 	partSuccess int64
 	padding1    [PADDING]byte
-	//recStat     [][]int64
-
 }
 
 func (ri *ReportInfo) Reset() {
@@ -82,13 +80,6 @@ func NewReportInfo(nParts int, tableCount int) *ReportInfo {
 	ri.recStat = make([]int64, 2*PADDINGINT64+tableCount)
 	ri.recStat = ri.recStat[PADDINGINT64 : PADDINGINT64+tableCount]
 
-	/*
-		for i := 0; i < tableCount; i++ {
-			ri.recStat[i] = make([]int64, 2*PADDINGINT64+HISTOGRAMLEN)
-			ri.recStat[i] = ri.recStat[i][PADDINGINT64 : PADDINGINT64+HISTOGRAMLEN]
-		}
-	*/
-
 	return ri
 }
 
@@ -108,11 +99,6 @@ type SampleTool struct {
 	cur          int
 	s            *Store
 	padding1     [PADDING]byte
-	//IDToKeys     []int64
-	//IDToKeyLen   []int
-	//period   []int64
-	//offset   []int64
-	//offIndex []int
 }
 
 func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store) *SampleTool {
@@ -136,70 +122,10 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store)
 	st.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
 	st.recBuf = st.recBuf[PADDINGINT64:PADDINGINT64]
 
-	/*
-		st.period = make([]int64, 2*PADDINGINT64+st.tableCount)
-		st.offset = make([]int64, 2*PADDINGINT64+st.tableCount)
-		st.offIndex = make([]int, 2*PADDINGINT+st.tableCount)
-		st.IDToKeys = make([]int64, 2*PADDINGINT64+st.tableCount)
-		st.IDToKeyLen = make([]int, 2*PADDINGINT+st.tableCount)
-
-		st.period = st.period[PADDINGINT64 : PADDINGINT64+st.tableCount]
-		st.offset = st.offset[PADDINGINT64 : PADDINGINT64+st.tableCount]
-		st.offIndex = st.offIndex[PADDINGINT : PADDINGINT+st.tableCount]
-		st.IDToKeys = st.IDToKeys[PADDINGINT64 : PADDINGINT64+st.tableCount]
-		st.IDToKeyLen = st.IDToKeyLen[PADDINGINT : PADDINGINT+st.tableCount]
-
-		for i := 0; i < st.tableCount; i++ {
-			keyLen := len(st.IDToKeyRange[i])
-			var nKeys int64 = 1
-			for j := 0; j < keyLen; j++ {
-				nKeys *= st.IDToKeyRange[i][j]
-			}
-			st.period[i] = nKeys / HISTOGRAMLEN
-			r := nKeys % HISTOGRAMLEN
-
-			st.offset[i] = (st.period[i] + 1) * r
-			st.offIndex[i] = int(r)
-			st.IDToKeys[i] = nKeys
-			st.IDToKeyLen[i] = keyLen
-		}
-	*/
-
 	return st
 }
 
-func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isRead bool) {
-	if st.sampleCount == 0 {
-		ri.recStat[tableID]++
-		if st.lruAr[tableID].Insert(key) {
-			ri.hits++
-		}
-
-		if isRead {
-			ri.readCount++
-		} else {
-			ri.writeCount++
-		}
-	}
-
-	/*
-		var intKey int64 = int64(ParseKey(key, st.IDToKeyLen[tableID]-1))
-
-		for i := st.IDToKeyLen[tableID] - 2; i >= 0; i-- {
-			intKey *= st.IDToKeyRange[tableID][i]
-			intKey += int64(ParseKey(key, i))
-		}
-
-		var index int64
-		if intKey < st.offset[tableID] {
-			index = intKey / (st.period[tableID] + 1)
-		} else {
-			index = int64(st.offIndex[tableID]) + (intKey-st.offset[tableID])/st.period[tableID]
-		}
-
-		ri.recStat[tableID][index]++
-	*/
-
+func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isRead bool) {
 	// We need acquire more locks
 	if st.state == 0 {
 		for _, rec := range st.recBuf {
@@ -210,7 +136,7 @@ func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri 
 
 		rec := s.GetRecByID(tableID, key, partNum)
 		tmpRec := rec.(*ARecord)
-		ok, _ := tmpRec.conflict.Lock()
+		ok := tmpRec.conflict.RLock(0)
 		if ok {
 			n := len(st.recBuf)
 			st.recBuf = st.recBuf[0 : n+1]
@@ -223,12 +149,6 @@ func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri 
 		return
 	}
 
-	st.sampleAccess++
-	if st.sampleAccess < 100 {
-		return
-	}
-	st.sampleAccess = 0
-
 	var ok bool = false
 	for _, rec := range st.recBuf {
 		if rec.key == key {
@@ -238,14 +158,16 @@ func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri 
 		}
 	}
 
-	if !ok {
-		rec := s.GetRecByID(tableID, key, partNum)
-		tmpRec := rec.(*ARecord)
-		x := tmpRec.conflict.Read()
-		if x&wfmutex.LOCKED == 0 {
-			ri.accessCount++
+	rec := s.GetRecByID(tableID, key, partNum)
+	tmpRec := rec.(*ARecord)
+	x := tmpRec.conflict.CheckLock()
+	if x == 0 {
+		ri.accessCount++
+	} else {
+		if ok {
+			ri.conflicts += int64(x - 1)
 		} else {
-			ri.conflicts++
+			ri.conflicts += int64(x)
 		}
 	}
 
@@ -254,19 +176,27 @@ func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri 
 		st.trials = 0
 		st.state = 0
 		for _, rec := range st.recBuf {
-			rec.conflict.Unlock(0)
+			rec.conflict.RUnlock()
 		}
 		st.recBuf = st.recBuf[0:0]
+	}
+}
+
+func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isRead bool) {
+	ri.recStat[tableID]++
+	if st.lruAr[tableID].Insert(key) {
+		ri.hits++
+	}
+
+	if isRead {
+		ri.readCount++
+	} else {
+		ri.writeCount++
 	}
 
 }
 
 func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
-	st.sampleCount++
-	if st.sampleCount < st.sampleRate {
-		return
-	}
-	st.sampleCount = 0
 	ri.txnSample++
 
 	for _, p := range ap {
@@ -276,7 +206,7 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	ri.partLenStat += int64(len(ap) * len(ap))
 
 	// Part Conflicts
-	if st.cur >= len(st.ap) {
+	/*if st.cur >= len(st.ap) {
 		for _, p := range st.ap {
 			st.s.wfLock[p].lock.Unlock(0)
 		}
@@ -306,7 +236,7 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 
 	ri.partAccess++
 
-	st.cur = cur
+	st.cur = cur*/
 
 }
 
@@ -326,11 +256,10 @@ func (st *SampleTool) Reset() {
 	st.trials = 0
 	st.state = 0
 	for _, rec := range st.recBuf {
-		rec.conflict.Unlock(0)
+		rec.conflict.RUnlock()
 	}
 	st.recBuf = st.recBuf[0:0]
-	//st.lru.Reset()
-	//st.lru = NewLRU(st.lru.size)
+
 	for i := 0; i < len(st.lruAr); i++ {
 		st.lruAr[i] = NewLRU(st.lruAr[i].size)
 	}

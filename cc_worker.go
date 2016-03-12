@@ -226,7 +226,11 @@ func (w *Worker) One(t Trans) (Value, error) {
 	}
 
 	if *SysType == ADAPTIVE {
-		w.st.onePartSample(t.GetAccessParts(), w.riMaster)
+		w.st.sampleCount++
+		if w.st.sampleCount >= w.st.sampleRate {
+			w.st.sampleCount = 0
+			w.st.onePartSample(t.GetAccessParts(), w.riMaster)
+		}
 	}
 
 	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
