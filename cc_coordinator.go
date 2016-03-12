@@ -171,9 +171,9 @@ func (coord *Coordinator) process() {
 
 			// Switch
 			if *SysType == ADAPTIVE {
-				for _, ps := range summary.partStat {
-					clog.Info("%v ", ps)
-				}
+				//for _, ps := range summary.partStat {
+				//	clog.Info("%v ", ps)
+				//}
 				// Compute Features
 				txn := summary.txnSample
 
