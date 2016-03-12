@@ -10,7 +10,7 @@ import (
 )
 
 type Classifier interface {
-	Predict(partAvg float64, partSkew float64, partLenSkew float64, recAvg float64, hitRate float64, readRate float64, confRate float64) int
+	Predict(partAvg float64, partSkew float64, partLenSkew float64, recAvg float64, latency float64, readRate float64, confRate float64) int
 	Finalize()
 }
 
@@ -38,21 +38,21 @@ func NewSingleClassifier(path string, partTS string, occTS string) *SingleClassi
 	return sc
 }
 
-func (sc *SingleClassifier) Predict(partAvg float64, partSkew float64, partLenSkew float64, recAvg float64, hitRate float64, readRate float64, confRate float64) int {
+func (sc *SingleClassifier) Predict(partAvg float64, partSkew float64, partLenSkew float64, recAvg float64, latency float64, readRate float64, confRate float64) int {
 	cPartAvg := C.double(partAvg)
 	cPartSkew := C.double(partSkew)
 	cPartLenSkew := C.double(partLenSkew)
 	cRecAvg := C.double(recAvg)
-	cHitRate := C.double(hitRate)
+	cLatency := C.double(latency)
 	cReadRate := C.double(readRate)
 	cConfRate := C.double(confRate)
 
-	c := C.SinglePartPredict(sc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cHitRate, cReadRate)
+	c := C.SinglePartPredict(sc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cLatency, cReadRate)
 	if c < 0 {
 		clog.Error("Single Part Predict Error")
 	}
 	if c != 0 {
-		c = C.SingleOCCPredict(sc.occClf, cRecAvg, cHitRate, cReadRate, cConfRate)
+		c = C.SingleOCCPredict(sc.occClf, cRecAvg, cLatency, cReadRate, cConfRate)
 		if c < 0 {
 			clog.Error("Single OCC Predict Error")
 		}
@@ -88,21 +88,21 @@ func NewSBClassifier(path string, partTS string, occTS string) *SmallbankClassif
 	return sbc
 }
 
-func (sbc *SmallbankClassifier) Predict(partAvg float64, partSkew float64, partLenSkew float64, recAvg float64, hitRate float64, readRate float64, confRate float64) int {
+func (sbc *SmallbankClassifier) Predict(partAvg float64, partSkew float64, partLenSkew float64, recAvg float64, latency float64, readRate float64, confRate float64) int {
 	cPartAvg := C.double(partAvg)
 	cPartSkew := C.double(partSkew)
 	cPartLenSkew := C.double(partLenSkew)
 	cRecAvg := C.double(recAvg)
-	cHitRate := C.double(hitRate)
+	cLatency := C.double(latency)
 	cReadRate := C.double(readRate)
 	cConfRate := C.double(confRate)
 
-	c := C.SBPartPredict(sbc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cHitRate, cReadRate)
+	c := C.SBPartPredict(sbc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cLatency, cReadRate)
 	if c < 0 {
 		clog.Error("Smallbank Part Predict Error")
 	}
 	if c != 0 {
-		c = C.SBOCCPredict(sbc.occClf, cRecAvg, cHitRate, cReadRate, cConfRate)
+		c = C.SBOCCPredict(sbc.occClf, cRecAvg, cLatency, cReadRate, cConfRate)
 		if c < 0 {
 			clog.Error("Smallbank OCC Predict Error")
 		}

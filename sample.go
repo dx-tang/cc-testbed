@@ -110,12 +110,12 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store)
 		tableCount:   len(IDToKeyRange),
 		IDToKeyRange: IDToKeyRange,
 		sampleRate:   sampleRate,
-		lruAr:        make([]*LRU, len(IDToKeyRange)),
+		//lruAr:        make([]*LRU, len(IDToKeyRange)),
 	}
 
-	for i := 0; i < len(IDToKeyRange); i++ {
-		st.lruAr[i] = NewLRU(CACHESIZE)
-	}
+	//for i := 0; i < len(IDToKeyRange); i++ {
+	//	st.lruAr[i] = NewLRU(CACHESIZE)
+	//}
 
 	st.ap = make([]int, nParts+2*PADDINGINT)
 	st.ap = st.ap[PADDINGINT:PADDINGINT]
@@ -128,7 +128,7 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store)
 	return st
 }
 
-func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isRead bool) {
+func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store, ri *ReportInfo) {
 	// We need acquire more locks
 	if st.state == 0 {
 		for _, rec := range st.recBuf {
@@ -185,11 +185,11 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 	}
 }
 
-func (st *SampleTool) oneSample(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isRead bool) {
+func (st *SampleTool) oneSample(tableID int, ri *ReportInfo, isRead bool) {
 	ri.recStat[tableID]++
-	if st.lruAr[tableID].Insert(key) {
-		ri.hits++
-	}
+	//if st.lruAr[tableID].Insert(key) {
+	//	ri.hits++
+	//}
 
 	if isRead {
 		ri.readCount++
@@ -263,9 +263,9 @@ func (st *SampleTool) Reset() {
 	}
 	st.recBuf = st.recBuf[0:0]
 
-	for i := 0; i < len(st.lruAr); i++ {
-		st.lruAr[i] = NewLRU(st.lruAr[i].size)
-	}
+	//for i := 0; i < len(st.lruAr); i++ {
+	//	st.lruAr[i] = NewLRU(st.lruAr[i].size)
+	//}
 
 	for i := 0; i < st.cur; i++ {
 		st.s.wfLock[st.ap[i]].lock.Unlock(0)

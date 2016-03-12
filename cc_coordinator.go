@@ -117,10 +117,12 @@ func (coord *Coordinator) process() {
 
 				summary.readCount = ri.readCount
 				summary.writeCount = ri.writeCount
-				summary.hits = ri.hits
+				//summary.hits = ri.hits
 
 				summary.accessCount = ri.accessCount
 				summary.conflicts = ri.conflicts
+
+				summary.latency = ri.latency
 			}
 
 			for i := 1; i < len(coord.reports); i++ {
@@ -144,10 +146,12 @@ func (coord *Coordinator) process() {
 
 					summary.readCount += ri.readCount
 					summary.writeCount += ri.writeCount
-					summary.hits += ri.hits
+					//summary.hits += ri.hits
 
 					summary.accessCount += ri.accessCount
 					summary.conflicts += ri.conflicts
+
+					summary.latency += ri.latency
 				}
 			}
 
@@ -196,7 +200,8 @@ func (coord *Coordinator) process() {
 				recAvg = float64(sum) / float64(txn)
 
 				rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
-				hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
+				//hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
+				latency := float64(summary.latency) / float64(summary.accessCount)
 				var confRate float64
 				if summary.conflicts != 0 {
 					confRate = float64(summary.conflicts*100) / float64(summary.accessCount+summary.conflicts)
@@ -205,8 +210,8 @@ func (coord *Coordinator) process() {
 				//clog.Info("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
 
 				// Use Classifier to Predict Features
-				mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
-				//clog.Info("Mode: %v; PartAvg: %.2f; PartVar: %.2f; PartLenPar: %.2f; RecAvg: %.2f; HitRate: %.2f; RR: %.2f; ConfRate: %.2f", mode, partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
+				//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
+				mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, latency, rr, confRate)
 				var change bool = false
 				if mode != coord.mode {
 					if !(mode == 3 && coord.mode != 0) {
@@ -415,6 +420,7 @@ type Feature struct {
 	PartConf   float64
 	RecAvg     float64
 	HitRate    float64
+	Latency    float64
 	ReadRate   float64
 	ConfRate   float64
 	Txn        float64
@@ -431,6 +437,7 @@ func (f *Feature) Reset() {
 	f.RecAvg = 0
 	//f.RecVar = 0
 	f.HitRate = 0
+	f.Latency = 0
 	f.ReadRate = 0
 	f.ConfRate = 0
 	f.Txn = 0
@@ -446,6 +453,7 @@ func (ft *Feature) Add(tmpFt *Feature) {
 	ft.RecAvg += tmpFt.RecAvg
 	//ft.RecVar += tmpFt.RecVar
 	ft.HitRate += tmpFt.HitRate
+	ft.Latency += tmpFt.Latency
 	ft.ReadRate += tmpFt.ReadRate
 	ft.ConfRate += tmpFt.ConfRate
 	ft.Txn += tmpFt.Txn
@@ -460,6 +468,7 @@ func (ft *Feature) Set(tmpFt *Feature) {
 	ft.RecAvg = tmpFt.RecAvg
 	//ft.RecVar = tmpFt.RecVar
 	ft.HitRate = tmpFt.HitRate
+	ft.Latency = tmpFt.Latency
 	ft.ReadRate = tmpFt.ReadRate
 	ft.ConfRate = tmpFt.ConfRate
 	ft.Txn = tmpFt.Txn
@@ -475,6 +484,7 @@ func (ft *Feature) Avg(count float64) {
 	ft.RecAvg /= count
 	//ft.RecVar /= count
 	ft.HitRate /= count
+	ft.Latency /= count
 	ft.ReadRate /= count
 	ft.ConfRate /= count
 	ft.Txn /= count
@@ -583,6 +593,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.RecAvg = recAvg
 	//coord.feature.RecVar = recVar
 	coord.feature.HitRate = hitRate
+	coord.feature.Latency = latency
 	coord.feature.ReadRate = rr
 	coord.feature.ConfRate = confRate
 	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / coord.NExecute.Seconds()
@@ -598,8 +609,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, Latency %.4f, Mode %v\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, latency, coord.GetMode())
+	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode())
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())

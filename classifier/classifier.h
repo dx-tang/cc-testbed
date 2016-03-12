@@ -9,10 +9,10 @@ PyObject* SingleOCCTrain(char *f);
 PyObject* SinglePartTrain(char *f);
 PyObject* SBOCCTrain(char *f);
 PyObject* SBPartTrain(char *f);
-long SingleOCCPredict(PyObject *pInstance, double recAvg, double hitRate, double readRate, double confRate);
-long SinglePartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double hitRate, double readRate);
-long SBOCCPredict(PyObject *pInstance, double recAvg, double hitRate, double readRate, double confRate);
-long SBPartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double hitRate, double readRate);
+long SingleOCCPredict(PyObject *pInstance, double recAvg, double latency, double readRate, double confRate);
+long SinglePartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double latency, double readRate);
+long SBOCCPredict(PyObject *pInstance, double recAvg, double latency, double readRate, double confRate);
+long SBPartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double latency, double readRate);
 void Final();
 
 #endif

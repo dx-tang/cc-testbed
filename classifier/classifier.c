@@ -98,32 +98,32 @@ PyObject* SBOCCTrain(char *f) {
     return pInstance;
 }
 
-long SingleOCCPredict(PyObject *pInstance, double recAvg, double hitRate, double readRate, double confRate) {
-	PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d)", recAvg, hitRate, readRate, confRate);
+long SingleOCCPredict(PyObject *pInstance, double recAvg, double latency, double readRate, double confRate) {
+	PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d)", recAvg, latency, readRate, confRate);
     if (result == NULL) {
         return -1;
     }
 	return PyLong_AsLong(result);
 }
 
-long SinglePartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double hitRate, double readRate) {
-    PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d,d,d)", partAvg, partSkew, partLenSkew, recAvg, hitRate, readRate);
+long SinglePartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double latency, double readRate) {
+    PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d,d,d)", partAvg, partSkew, partLenSkew, recAvg, latency, readRate);
     if (result == NULL) {
         return -1;
     }
     return PyLong_AsLong(result);
 }
 
-long SBOCCPredict(PyObject *pInstance, double recAvg, double hitRate, double readRate, double confRate) {
-    PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d)", recAvg, hitRate, readRate, confRate);
+long SBOCCPredict(PyObject *pInstance, double recAvg, double latency, double readRate, double confRate) {
+    PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d)", recAvg, latency, readRate, confRate);
     if (result == NULL) {
         return -1;
     }
     return PyLong_AsLong(result);
 }
 
-long SBPartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double hitRate, double readRate) {
-    PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d,d,d)", partAvg, partSkew, partLenSkew, recAvg, hitRate, readRate);
+long SBPartPredict(PyObject *pInstance, double partAvg, double partSkew, double partLenSkew, double recAvg, double latency, double readRate) {
+    PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(d,d,d,d,d,d)", partAvg, partSkew, partLenSkew, recAvg, latency, readRate);
     if (result == NULL) {
         return -1;
     }

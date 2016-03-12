@@ -72,15 +72,15 @@ func (p *PTransaction) Reset(t Trans) {
 func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
-			p.st.oneSample(tableID, k, partNum, p.s, p.w.riMaster, true)
+			p.st.oneSample(tableID, p.w.riMaster, true)
 		}
 
 		if p.st.state == 0 {
-			p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+			p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
 		} else {
 			p.st.sampleAccess++
 			if p.st.sampleAccess >= RECSR {
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
 				p.st.sampleAccess = 0
 			}
 		}
@@ -110,15 +110,15 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
-			p.st.oneSample(tableID, k, partNum, p.s, p.w.riMaster, true)
+			p.st.oneSample(tableID, p.w.riMaster, false)
 		}
 
 		if p.st.state == 0 {
-			p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+			p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
 		} else {
 			p.st.sampleAccess++
 			if p.st.sampleAccess >= RECSR {
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
 				p.st.sampleAccess = 0
 			}
 		}
@@ -287,15 +287,15 @@ func (o *OTransaction) Reset(t Trans) {
 func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
-			o.st.oneSample(tableID, k, partNum, o.s, o.w.riMaster, true)
+			o.st.oneSample(tableID, o.w.riMaster, true)
 		}
 
 		if o.st.state == 0 {
-			o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster, true)
+			o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
 		} else {
 			o.st.sampleAccess++
 			if o.st.sampleAccess >= RECSR {
-				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster, true)
+				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
 				o.st.sampleAccess = 0
 			}
 		}
@@ -364,16 +364,16 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
-			o.st.oneSample(tableID, k, partNum, o.s, o.w.riMaster, true)
+			o.st.oneSample(tableID, o.w.riMaster, false)
 		}
 
 		if o.st.state == 0 {
-			o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster, true)
+			o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
 		} else {
 			o.st.sampleAccess++
 			if o.st.sampleAccess >= RECSR {
 				o.st.sampleAccess = 0
-				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster, true)
+				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
 			}
 		}
 	}
@@ -625,15 +625,15 @@ func (l *LTransaction) Reset(t Trans) {
 func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
-			l.st.oneSample(tableID, k, partNum, l.s, l.w.riMaster, true)
+			l.st.oneSample(tableID, l.w.riMaster, true)
 		}
 
 		if l.st.state == 0 {
-			l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster, true)
+			l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
 		} else {
 			l.st.sampleAccess++
 			if l.st.sampleAccess >= RECSR {
-				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster, true)
+				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
 				l.st.sampleAccess = 0
 			}
 		}
@@ -720,15 +720,15 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
-			l.st.oneSample(tableID, k, partNum, l.s, l.w.riMaster, true)
+			l.st.oneSample(tableID, l.w.riMaster, false)
 		}
 
 		if l.st.state == 0 {
-			l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster, true)
+			l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
 		} else {
 			l.st.sampleAccess++
 			if l.st.sampleAccess >= RECSR {
-				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster, true)
+				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
 				l.st.sampleAccess = 0
 			}
 		}
