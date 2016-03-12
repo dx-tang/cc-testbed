@@ -38,6 +38,7 @@ type ReportInfo struct {
 	conflicts   int64
 	partAccess  int64
 	partSuccess int64
+	latency     int64
 	padding1    [PADDING]byte
 }
 
@@ -68,6 +69,8 @@ func (ri *ReportInfo) Reset() {
 
 	ri.partAccess = 0
 	ri.partSuccess = 0
+
+	ri.latency = 0
 
 }
 
@@ -149,21 +152,21 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 		return
 	}
 
+	ri.accessCount++
 	var ok bool = false
 	for _, rec := range st.recBuf {
 		if rec.key == key {
-			ri.accessCount++
 			ok = true
 			break
 		}
 	}
 
+	tm := time.Now()
 	rec := s.GetRecByID(tableID, key, partNum)
+	ri.latency += time.Since(tm).Nanoseconds()
 	tmpRec := rec.(*ARecord)
 	x := tmpRec.conflict.CheckLock()
-	if x == 0 {
-		ri.accessCount++
-	} else {
+	if x != 0 {
 		if ok {
 			ri.conflicts += int64(x - 1)
 		} else {

@@ -511,6 +511,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 		summary.partAccess += master.partAccess
 		summary.partSuccess += master.partSuccess
+
+		summary.latency += master.latency
 	}
 
 	txn := summary.txnSample
@@ -565,8 +567,10 @@ func (coord *Coordinator) GetFeature() *Feature {
 	hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
 	var confRate float64
 	if summary.conflicts != 0 {
-		confRate = float64(summary.conflicts*100) / float64(summary.accessCount+summary.conflicts)
+		confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
 	}
+
+	latency := float64(summary.latency) / float64(summary.accessCount)
 	/*
 		f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\t ", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
 		f.WriteString(fmt.Sprintf("%.4f\t %.4f\n",
@@ -594,8 +598,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, Mode %v\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.GetMode())
+	clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, Latency %.4f, Mode %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, latency, coord.GetMode())
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
