@@ -13,7 +13,7 @@ const (
 	HISTOGRAMLEN = 100
 	CACHESIZE    = 1000
 	BUFSIZE      = 10
-	TRIAL        = 10
+	TRIAL        = 20
 	RECSR        = 100
 )
 

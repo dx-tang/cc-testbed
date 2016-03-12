@@ -204,7 +204,7 @@ func (coord *Coordinator) process() {
 				latency := float64(summary.latency) / float64(summary.accessCount)
 				var confRate float64
 				if summary.conflicts != 0 {
-					confRate = float64(summary.conflicts*100) / float64(summary.accessCount+summary.conflicts)
+					confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
 				}
 
 				//clog.Info("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)

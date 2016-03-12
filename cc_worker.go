@@ -73,7 +73,7 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		NStats:     make([]int64, LAST_STAT),
 		finished:   false,
 		mode:       mode,
-		done:       make(chan bool),
+		done:       make(chan bool, 1),
 		modeChange: make(chan bool, 1),
 		modeChan:   make(chan int, 1),
 	}
