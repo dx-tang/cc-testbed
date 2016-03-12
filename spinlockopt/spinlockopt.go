@@ -32,6 +32,16 @@ func (l *WDRWSpinlock) RUnlock() {
 	atomic.AddInt32(&l.readerCount, -1)
 }
 
+func (l *WDRWSpinlock) CheckLock() int32 {
+	readCount := atomic.LoadInt32(&l.readerCount)
+	if readCount > 0 {
+		return readCount
+	} else {
+		return 0
+	}
+
+}
+
 func (l *WDRWSpinlock) Lock(trial int) bool {
 	i := trial
 	for atomic.LoadInt32(&l.readerCount) > 0 {
