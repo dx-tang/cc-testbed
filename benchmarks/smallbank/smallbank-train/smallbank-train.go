@@ -179,7 +179,7 @@ func main() {
 
 				if *np {
 					if j == testbed.PARTITION {
-						break
+						continue
 					}
 				}
 
