@@ -47,7 +47,7 @@ func (sc *SingleClassifier) Predict(partAvg float64, partSkew float64, partLenSk
 	cReadRate := C.double(readRate)
 	cConfRate := C.double(confRate)
 
-	c := C.SinglePartPredict(sc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cLatency, cReadRate)
+	c := C.SinglePartPredict(sc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cLatency, cReadRate, cConfRate)
 	if c < 0 {
 		clog.Error("Single Part Predict Error")
 	}
@@ -97,7 +97,7 @@ func (sbc *SmallbankClassifier) Predict(partAvg float64, partSkew float64, partL
 	cReadRate := C.double(readRate)
 	cConfRate := C.double(confRate)
 
-	c := C.SBPartPredict(sbc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cLatency, cReadRate)
+	c := C.SBPartPredict(sbc.partClf, cPartAvg, cPartSkew, cPartLenSkew, cRecAvg, cLatency, cReadRate, cConfRate)
 	if c < 0 {
 		clog.Error("Smallbank Part Predict Error")
 	}

@@ -20,7 +20,10 @@ class SmallbankPart(object):
 		Y = []
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[START:]]
-			X.append(columns[0:6])
+			tmpX = []
+			tmpX.extend(columns[0:1])
+			tmpX.extend(columns[3:7])
+			X.append(tmpX)
 			if (columns[FEATURELEN] == 0):
 				Y.extend([0])
 			else:
@@ -29,8 +32,8 @@ class SmallbankPart(object):
 		clf = clf.fit(X, Y)
 		return clf
 
-	def Predict(self, partAvg, partSkew, partLenSkew, recAvg, hitRate, readRate):
-		X = [[partAvg, partSkew, partLenSkew, recAvg, hitRate, readRate]]
+	def Predict(self, partAvg, partSkew, partLenSkew, recAvg, hitRate, readRate, confRate):
+		X = [[partAvg, recAvg, hitRate, readRate, confRate]]
 		return self.clf.predict(X)[0]
 
 class SmallbankOCC(object):
