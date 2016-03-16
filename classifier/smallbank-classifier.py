@@ -46,6 +46,7 @@ class SmallbankOCC(object):
 		Y = []
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[START:]]
+			tmpY = columns[FEATURELEN:]
 			if (columns[FEATURELEN] != 0):
 				if (len(columns) <= FEATURELEN + 1 or (len(columns) > FEATURELEN + 1 and columns[FEATURELEN+1] != 0)):
 					tmp = []
@@ -63,7 +64,7 @@ class SmallbankOCC(object):
 			#	Y.extend([2])
 		#clf = tree.DecisionTreeClassifier(max_depth=6)
 		clf = OneVsRestClassifier(tree.DecisionTreeClassifier(max_depth=6))
-		clf = clf.fit(X, Y)
+		clf = clf.fit(np.array(X), np.array(Y))
 		return clf
 
 	def Predict(self, recAvg, hitRate, readRate, confRate):

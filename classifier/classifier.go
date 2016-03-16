@@ -82,8 +82,8 @@ func NewSBClassifier(path string, partTS string, occTS string) *SmallbankClassif
 		clog.Error("Smallbank Part Training Error")
 	}
 	sbc.occClf = C.SBOCCTrain(occ)
-	if sbc.partClf == nil {
-		clog.Error("Smallbank Part Training Error")
+	if sbc.occClf == nil {
+		clog.Error("Smallbank OCC Training Error")
 	}
 	return sbc
 }
