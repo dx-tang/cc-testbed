@@ -3,10 +3,11 @@ package testbed
 import (
 	"errors"
 	"runtime/debug"
-	"sync"
+	//"sync"
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/spinlock"
 )
 
 const (
@@ -32,7 +33,7 @@ type TransactionFunc func(Trans, ETransaction) (Value, error)
 
 type Worker struct {
 	padding [PADDING]byte
-	sync.RWMutex
+	spinlock.RWSpinlock
 	ID           int
 	next         TID
 	epoch        TID
@@ -77,6 +78,8 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		modeChange: make(chan bool, 1),
 		modeChan:   make(chan int, 1),
 	}
+
+	w.SetTrial(500)
 
 	kr := make([][]int64, len(IDToKeyRange))
 	for i := 0; i < len(IDToKeyRange); i++ {
