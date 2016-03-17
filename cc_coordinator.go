@@ -109,6 +109,8 @@ func (coord *Coordinator) process() {
 					summary.partStat[i] = ps
 				}
 
+				summary.partTotal = ri.partTotal
+
 				summary.partLenStat = ri.partLenStat
 
 				for i, rs := range ri.recStat {
@@ -137,6 +139,8 @@ func (coord *Coordinator) process() {
 					for i, ps := range ri.partStat {
 						summary.partStat[i] += ps
 					}
+
+					summary.partTotal += ri.partTotal
 
 					summary.partLenStat += ri.partLenStat
 
