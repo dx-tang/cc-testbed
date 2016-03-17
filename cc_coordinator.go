@@ -188,7 +188,7 @@ func (coord *Coordinator) process() {
 					sumpow += p * p
 				}
 
-				partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
+				partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 				partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
 				partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
 
@@ -506,6 +506,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 			summary.partStat[j] += ps
 		}
 
+		summary.partTotal += summary.partTotal
+
 		summary.partLenStat += master.partLenStat
 
 		for i, rs := range master.recStat {
@@ -536,7 +538,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	//f.WriteString(fmt.Sprintf("%v %v %v\n", sum, sumpow, txn))
 
-	partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
+	//partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
+	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
 	partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))

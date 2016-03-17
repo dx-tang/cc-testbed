@@ -28,6 +28,7 @@ type ReportInfo struct {
 	prevTxn     int64
 	prevAborts  int64
 	txnSample   int64
+	partTotal   int64
 	partStat    []int64
 	partLenStat int64
 	recStat     []int64
@@ -54,6 +55,8 @@ func (ri *ReportInfo) Reset() {
 		ri.partStat[i] = 0
 	}
 	ri.partLenStat = 0
+
+	ri.partTotal = 0
 
 	for i, _ := range ri.recStat {
 		ri.recStat[i] = 0
@@ -202,11 +205,13 @@ func (st *SampleTool) oneSample(tableID int, ri *ReportInfo, isRead bool) {
 func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	ri.txnSample++
 
+	plus := int64((len(ap) - 1))
+	ri.partTotal += plus*plus + 1
 	for _, p := range ap {
 		ri.partStat[p]++
 	}
 
-	ri.partLenStat += int64(len(ap) * len(ap))
+	//ri.partLenStat += int64(len(ap) * len(ap))
 
 	// Part Conflicts
 	/*if st.cur >= len(st.ap) {
