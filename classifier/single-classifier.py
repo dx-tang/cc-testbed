@@ -5,6 +5,7 @@ from sklearn.svm import SVC
 from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.multiclass import OneVsRestClassifier
+import math
 
 START = 7
 FEATURELEN = 7
@@ -22,7 +23,8 @@ class SinglePart(object):
 			columns = [float(x) for x in line.strip().split('\t')[START:]]
 			tmpX = []
 			tmpX.extend(columns[0:1])
-			tmpX.extend(columns[3:7])
+			tmpX.extend([math.ceil(columns[3])])
+			tmpX.extend(columns[4:7])
 			X.append(tmpX)
 			if (columns[FEATURELEN] == 0):
 				Y.extend([0])

@@ -168,15 +168,6 @@ func (coord *Coordinator) process() {
 
 			coord.rc++
 
-			// Done
-			if coord.rc%coord.perTest == 0 {
-				// Done with tests
-				for i := 0; i < len(coord.Workers); i++ {
-					coord.Workers[i].done <- true
-				}
-				return
-			}
-
 			// Switch
 			if *SysType == ADAPTIVE {
 				//for _, ps := range summary.partStat {
@@ -240,6 +231,16 @@ func (coord *Coordinator) process() {
 					}
 				}
 			}
+
+			// Done
+			if coord.rc%coord.perTest == 0 {
+				// Done with tests
+				for i := 0; i < len(coord.Workers); i++ {
+					coord.Workers[i].done <- true
+				}
+				return
+			}
+
 		}
 	}
 }
@@ -510,7 +511,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 			summary.partStat[j] += ps
 		}
 
-		summary.partTotal += summary.partTotal
+		summary.partTotal += master.partTotal
 
 		summary.partLenStat += master.partLenStat
 
@@ -616,8 +617,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode())
+	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartAvg %v\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), partAvg)
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
