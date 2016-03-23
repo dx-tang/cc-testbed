@@ -214,7 +214,7 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	//ri.partLenStat += int64(len(ap) * len(ap))
 
 	// Part Conflicts
-	/*if st.cur >= len(st.ap) {
+	if st.cur >= len(st.ap) {
 		for _, p := range st.ap {
 			st.s.wfLock[p].lock.Unlock(0)
 		}
@@ -242,9 +242,9 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 		cur++
 	}
 
-	ri.partAccess++
+	ri.partAccess += int64((len(st.ap) - cur))
 
-	st.cur = cur*/
+	st.cur = cur
 
 }
 

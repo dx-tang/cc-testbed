@@ -597,7 +597,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.PartAvg = partAvg
 	coord.feature.PartVar = partVar
 	coord.feature.PartLenVar = partLenVar
-	//coord.feature.PartConf = float64(summary.partAccess) / float64(summary.partSuccess)
+	coord.feature.PartConf = float64(summary.partAccess) / float64(summary.partSuccess)
 	coord.feature.RecAvg = recAvg
 	//coord.feature.RecVar = recVar
 	coord.feature.HitRate = hitRate
@@ -617,8 +617,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartAvg %v\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), partAvg)
+	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartConf %.4f\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), coord.feature.PartConf)
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
