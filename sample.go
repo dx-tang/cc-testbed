@@ -122,12 +122,12 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store)
 	//}
 
 	st.ap = make([]int, nParts+2*PADDINGINT)
-	//st.ap = st.ap[PADDINGINT:PADDINGINT]
-	st.ap = st.ap[PADDINGINT : PADDINGINT+nParts]
+	st.ap = st.ap[PADDINGINT:PADDINGINT]
+	//st.ap = st.ap[PADDINGINT : PADDINGINT+nParts]
 	st.s = s
-	//st.cur = -1
-	st.cur = 0
-	st.partTrial = 0
+	st.cur = -1
+	//st.cur = 0
+	//st.partTrial = 0
 
 	st.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
 	st.recBuf = st.recBuf[PADDINGINT64:PADDINGINT64]
@@ -223,46 +223,44 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	//	ri.partAccess += int64(st.cur)
 	//}
 
-	/*
-		if st.cur >= len(st.ap) {
-			for _, p := range st.ap {
-				st.s.wfLock[p].lock.Unlock(0)
-			}
-			st.cur = -1
-			st.ap = st.ap[0:0]
-			//ri.partSuccess++
-			return
+	if st.cur >= len(st.ap) {
+		for _, p := range st.ap {
+			st.s.wfLock[p].lock.Unlock(0)
 		}
+		st.cur = -1
+		st.ap = st.ap[0:0]
+		//ri.partSuccess++
+		return
+	}
 
-		if st.cur == -1 {
-			st.cur = 0
-			st.ap = st.ap[0:len(ap)]
-			for i, p := range ap {
-				st.ap[i] = p
-			}
-			ri.partSuccess += int64(len(ap))
+	if st.cur == -1 {
+		st.cur = 0
+		st.ap = st.ap[0:len(ap)]
+		for i, p := range ap {
+			st.ap[i] = p
 		}
+		ri.partSuccess += int64(len(ap))
+	}
 
-		cur := st.cur
-		// Try Locking
-		for cur < len(st.ap) {
-			ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
-			if !ok {
-				ri.partAccess++
-				if cur > 1 {
-					ri.partAccess += int64(cur + 1)
-				}
-				break
+	cur := st.cur
+	// Try Locking
+	for cur < len(st.ap) {
+		ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
+		if !ok {
+			ri.partAccess++
+			if cur > 1 {
+				ri.partAccess += int64(cur + 1)
 			}
-			cur++
+			break
 		}
+		cur++
+	}
 
-		//ri.partAccess += int64((len(st.ap) - cur))
+	//ri.partAccess += int64((len(st.ap) - cur))
 
-		st.cur = cur
-	*/
+	st.cur = cur
 
-	if st.cur < 5 {
+	/*if st.cur < 5 {
 		for _, p := range ap {
 			st.s.confLock[p].lock.RLock(0)
 			st.ap[p]++
@@ -285,7 +283,7 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 			st.partTrial = 0
 			st.cur = 0
 		}
-	}
+	}*/
 }
 
 func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
@@ -312,11 +310,11 @@ func (st *SampleTool) Reset() {
 	//	st.lruAr[i] = NewLRU(st.lruAr[i].size)
 	//}
 
-	//for i := 0; i < st.cur; i++ {
-	//	st.s.wfLock[st.ap[i]].lock.Unlock(0)
-	//}
-	//st.ap = st.ap[0:0]
-	ap := st.ap
+	for i := 0; i < st.cur; i++ {
+		st.s.wfLock[st.ap[i]].lock.Unlock(0)
+	}
+	st.ap = st.ap[0:0]
+	/*ap := st.ap
 	for i := 0; i < len(ap); i++ {
 		//for j := 0; j < ap[i]; j++ {
 		if ap[i] != 0 {
@@ -324,9 +322,9 @@ func (st *SampleTool) Reset() {
 		}
 		ap[i] = 0
 		//}
-	}
-	//st.cur = -1
-	st.cur = 0
+	}*/
+	st.cur = -1
+	//st.cur = 0
 	st.partTrial = 0
 }
 
