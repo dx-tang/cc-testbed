@@ -12,9 +12,9 @@ import (
 const (
 	HISTOGRAMLEN = 100
 	CACHESIZE    = 1000
-	BUFSIZE      = 10
+	BUFSIZE      = 5
 	TRIAL        = 20
-	RECSR        = 100
+	RECSR        = 1000
 )
 
 var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
@@ -103,6 +103,7 @@ type SampleTool struct {
 	lruAr        []*LRU
 	ap           []int
 	cur          int
+	partTrial    int
 	s            *Store
 	padding1     [PADDING]byte
 }
@@ -121,9 +122,12 @@ func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store)
 	//}
 
 	st.ap = make([]int, nParts+2*PADDINGINT)
-	st.ap = st.ap[PADDINGINT:PADDINGINT]
+	//st.ap = st.ap[PADDINGINT:PADDINGINT]
+	st.ap = st.ap[PADDINGINT : PADDINGINT+nParts]
 	st.s = s
-	st.cur = -1
+	//st.cur = -1
+	st.cur = 0
+	st.partTrial = 0
 
 	st.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
 	st.recBuf = st.recBuf[PADDINGINT64:PADDINGINT64]
@@ -157,10 +161,11 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 
 	ri.accessCount++
 	var ok bool = false
+	conf := int32(0)
 	for _, rec := range st.recBuf {
 		if rec.key == key {
 			ok = true
-			break
+			conf++
 		}
 	}
 
@@ -171,7 +176,7 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 	x := tmpRec.conflict.CheckLock()
 	if x != 0 {
 		if ok {
-			ri.conflicts += int64(x - 1)
+			ri.conflicts += int64(x - conf)
 		} else {
 			ri.conflicts += int64(x)
 		}
@@ -214,42 +219,73 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 	//ri.partLenStat += int64(len(ap) * len(ap))
 
 	// Part Conflicts
-	if st.cur > 0 {
-		ri.partAccess += int64(st.cur)
-	}
+	//if st.cur > 0 {
+	//	ri.partAccess += int64(st.cur)
+	//}
 
-	if st.cur >= len(st.ap) {
-		for _, p := range st.ap {
-			st.s.wfLock[p].lock.Unlock(0)
+	/*
+		if st.cur >= len(st.ap) {
+			for _, p := range st.ap {
+				st.s.wfLock[p].lock.Unlock(0)
+			}
+			st.cur = -1
+			st.ap = st.ap[0:0]
+			//ri.partSuccess++
+			return
 		}
-		st.cur = -1
-		st.ap = st.ap[0:0]
+
+		if st.cur == -1 {
+			st.cur = 0
+			st.ap = st.ap[0:len(ap)]
+			for i, p := range ap {
+				st.ap[i] = p
+			}
+			ri.partSuccess += int64(len(ap))
+		}
+
+		cur := st.cur
+		// Try Locking
+		for cur < len(st.ap) {
+			ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
+			if !ok {
+				ri.partAccess++
+				if cur > 1 {
+					ri.partAccess += int64(cur + 1)
+				}
+				break
+			}
+			cur++
+		}
+
+		//ri.partAccess += int64((len(st.ap) - cur))
+
+		st.cur = cur
+	*/
+
+	if st.cur < 5 {
+		for _, p := range ap {
+			st.s.confLock[p].lock.RLock(0)
+			st.ap[p]++
+		}
+		st.cur++
+	} else {
 		ri.partSuccess++
-		return
-	}
-
-	if st.cur == -1 {
-		st.cur = 0
-		st.ap = st.ap[0:len(ap)]
-		for i, p := range ap {
-			st.ap[i] = p
+		for _, p := range ap {
+			x := st.s.confLock[p].lock.CheckLock()
+			ri.partAccess += int64(int(x) - st.ap[p])
+		}
+		st.partTrial++
+		if st.partTrial >= 10 {
+			for i, p := range st.ap {
+				if p != 0 {
+					st.s.confLock[i].lock.RUnlockN(int32(p))
+				}
+				st.ap[i] = 0
+			}
+			st.partTrial = 0
+			st.cur = 0
 		}
 	}
-
-	cur := st.cur
-	// Try Locking
-	for cur < len(st.ap) {
-		ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
-		if !ok {
-			break
-		}
-		cur++
-	}
-
-	//ri.partAccess += int64((len(st.ap) - cur))
-
-	st.cur = cur
-
 }
 
 func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
@@ -276,11 +312,22 @@ func (st *SampleTool) Reset() {
 	//	st.lruAr[i] = NewLRU(st.lruAr[i].size)
 	//}
 
-	for i := 0; i < st.cur; i++ {
-		st.s.wfLock[st.ap[i]].lock.Unlock(0)
+	//for i := 0; i < st.cur; i++ {
+	//	st.s.wfLock[st.ap[i]].lock.Unlock(0)
+	//}
+	//st.ap = st.ap[0:0]
+	ap := st.ap
+	for i := 0; i < len(ap); i++ {
+		//for j := 0; j < ap[i]; j++ {
+		if ap[i] != 0 {
+			st.s.confLock[i].lock.RUnlockN(int32(ap[i]))
+		}
+		ap[i] = 0
+		//}
 	}
-	st.ap = st.ap[0:0]
-	st.cur = -1
+	//st.cur = -1
+	st.cur = 0
+	st.partTrial = 0
 }
 
 type LRU struct {

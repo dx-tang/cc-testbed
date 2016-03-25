@@ -11,6 +11,7 @@ import (
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
+	"github.com/totemtang/cc-testbed/spinlockopt"
 	"github.com/totemtang/cc-testbed/wfmutex"
 )
 
@@ -104,6 +105,12 @@ type WFMuTexPAD struct {
 	padding2 [PADDING]byte
 }
 
+type WDRWSpinlockPAD struct {
+	padding1 [PADDING]byte
+	lock     spinlockopt.WDRWSpinlock
+	padding2 [PADDING]byte
+}
+
 type Table struct {
 	padding1    [PADDING]byte
 	data        []*Partition
@@ -118,6 +125,7 @@ type Store struct {
 	tables       []*Table
 	spinLock     []*SpinLockPad
 	wfLock       []*WFMuTexPAD
+	confLock     []*WDRWSpinlockPAD
 	mutexLock    []*RWMutex
 	nParts       int
 	isPhysical   bool
@@ -160,6 +168,7 @@ func NewStore(schema string, nParts int, isPhysical bool) *Store {
 		tables:       make([]*Table, tableCount),
 		tableToIndex: make(map[string]int),
 		wfLock:       make([]*WFMuTexPAD, nParts),
+		confLock:     make([]*WDRWSpinlockPAD, nParts),
 		mutexLock:    make([]*RWMutex, nParts),
 		spinLock:     make([]*SpinLockPad, nParts),
 		nParts:       nParts,
@@ -168,6 +177,7 @@ func NewStore(schema string, nParts int, isPhysical bool) *Store {
 
 	for i := 0; i < nParts; i++ {
 		s.wfLock[i] = &WFMuTexPAD{}
+		s.confLock[i] = &WDRWSpinlockPAD{}
 		if *SpinLock {
 			s.spinLock[i] = &SpinLockPad{}
 			s.spinLock[i].SetTrial(SLTRIAL)
