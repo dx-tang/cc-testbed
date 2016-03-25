@@ -620,14 +620,14 @@ func (coord *Coordinator) GetFeature() *Feature {
 	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartConf %.4f\n",
 		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), coord.feature.PartConf)
 
-	if coord.GetMode() == 0 {
+	/*if coord.GetMode() == 0 {
 		f, err := os.OpenFile("partconf.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			clog.Error("Open File Error %s\n", err.Error())
 		}
 		defer f.Close()
 		f.WriteString(fmt.Sprintf("%.4f\t%.4f\n", float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.PartConf))
-	}
+	}*/
 
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]), coord.feature.AR, coord.GetMode())
