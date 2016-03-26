@@ -28,11 +28,11 @@ const (
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
 var wl = flag.String("wl", "", "workload to be used")
-var tp = flag.String("tp", "50:50", "Percetage of Each Transaction")
+var tp = flag.String("tp", "0:100", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var trainOut = flag.String("train", "train.out", "training set")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
-var sr = flag.Int("sr", 100, "Sample Rate")
+var sr = flag.Int("sr", 500, "Sample Rate")
 var tc = flag.String("tc", "train.conf", "configuration for training")
 var np = flag.Bool("np", false, "Whether not test partition")
 var prune = flag.Bool("prune", false, "Whether prune tests")
