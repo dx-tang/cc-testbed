@@ -169,9 +169,9 @@ func main() {
 			continue
 		}
 
-		if *np && tmpMP != tmpTlen {
-			continue
-		}
+		//if *np && tmpMP != tmpTlen {
+		//	continue
+		//}
 
 		if *prune {
 			if tmpCR > prevCR {

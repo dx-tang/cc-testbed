@@ -44,9 +44,10 @@ func (w *WDLock) RLock(tid uint64) bool {
 			if tid > oldtid {
 				//log.Fatalf("Here %v, %v, %v, %v", tid, oldtid, maxreaders, readers)
 				return false
-			} else if tid == oldtid {
-				log.Fatalf("RLock itself\n")
 			}
+			//else if tid == oldtid {
+			//	log.Fatalf("RLock itself\n")
+			//}
 		}
 	}
 }
@@ -81,9 +82,10 @@ func (w *WDLock) Lock(tid uint64) bool {
 			oldtid := oldlock >> readeroffset
 			if tid > oldtid {
 				return false
-			} else if tid == oldtid {
-				log.Fatalf("WLock itself\n")
 			}
+			//else if tid == oldtid {
+			//	log.Fatalf("WLock itself\n")
+			//}
 		}
 	}
 }
