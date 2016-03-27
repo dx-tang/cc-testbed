@@ -5,6 +5,7 @@ import (
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlockopt"
+	"github.com/totemtang/cc-testbed/wdlock"
 	"github.com/totemtang/cc-testbed/wfmutex"
 )
 
@@ -44,11 +45,11 @@ type Record interface {
 	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
-	WLock(trial int) bool
+	WLock(tid TID) bool
 	WUnlock()
-	RLock(trial int) bool
+	RLock(tid TID) bool
 	RUnlock()
-	Upgrade(trial int) bool
+	Upgrade(tid TID) bool
 }
 
 /*
@@ -99,24 +100,29 @@ func MakeRecord(table *Table, k Key, tuple Tuple) Record {
 		return or
 	} else if *SysType == LOCKING {
 		lr := &LRecord{
-			table:  table,
-			key:    k,
-			tuple:  tuple,
-			rwLock: spinlockopt.WDRWSpinlock{},
+			table: table,
+			key:   k,
+			tuple: tuple,
 		}
-		lr.rwLock.SetTrial(WDTRIAL)
+		if *NoWait {
+			lr.rwLock.SetTrial(WDTRIAL)
+		} else {
+			lr.wd.Initialize()
+		}
 
 		return lr
 	} else if *SysType == ADAPTIVE {
 		ar := &ARecord{
-			table:  table,
-			key:    k,
-			tuple:  tuple,
-			last:   wfmutex.WFMutex{},
-			rwLock: spinlockopt.WDRWSpinlock{},
+			table: table,
+			key:   k,
+			tuple: tuple,
+			last:  wfmutex.WFMutex{},
 		}
-		ar.rwLock.SetTrial(WDTRIAL)
-
+		if *NoWait {
+			ar.rwLock.SetTrial(WDTRIAL)
+		} else {
+			ar.wd.Initialize()
+		}
 		return ar
 	} else {
 		clog.Error("System Type %v Not Supported Yet", *SysType)
@@ -170,7 +176,7 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
-func (pr *PRecord) WLock(trial int) bool {
+func (pr *PRecord) WLock(tid TID) bool {
 	clog.Error("Partition mode does not support WLock Operation")
 	return false
 }
@@ -179,7 +185,7 @@ func (pr *PRecord) WUnlock() {
 	clog.Error("Partition mode does not support WUnlock Operation")
 }
 
-func (pr *PRecord) RLock(trial int) bool {
+func (pr *PRecord) RLock(tid TID) bool {
 	clog.Error("Partition mode does not support RLock Operation")
 	return false
 }
@@ -188,7 +194,7 @@ func (pr *PRecord) RUnlock() {
 	clog.Error("Partition mode does not support RUnlock Operation")
 }
 
-func (pr *PRecord) Upgrade(trial int) bool {
+func (pr *PRecord) Upgrade(tid TID) bool {
 	clog.Error("Partition mode does not support Upgrade Operation")
 	return false
 }
@@ -241,7 +247,7 @@ func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
 }
 
-func (or *ORecord) WLock(trial int) bool {
+func (or *ORecord) WLock(tid TID) bool {
 	clog.Error("OCC mode does not support WLock Operation")
 	return false
 }
@@ -250,7 +256,7 @@ func (or *ORecord) WUnlock() {
 	clog.Error("OCC mode does not support WUnlock Operation")
 }
 
-func (or *ORecord) RLock(trial int) bool {
+func (or *ORecord) RLock(tid TID) bool {
 	debug.PrintStack()
 	clog.Error("OCC mode does not support RLock Operation")
 	return false
@@ -260,7 +266,7 @@ func (or *ORecord) RUnlock() {
 	clog.Error("OCC mode does not support RUnlock Operation")
 }
 
-func (or *ORecord) Upgrade(trial int) bool {
+func (or *ORecord) Upgrade(tid TID) bool {
 	clog.Error("OCC mode does not support Upgrade Operation")
 	return false
 }
@@ -311,7 +317,7 @@ func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
 }
 
-func (dr *DRecord) WLock(trial int) bool {
+func (dr *DRecord) WLock(tid TID) bool {
 	clog.Error("Dummy mode does not support WLock Operation")
 	return false
 }
@@ -320,7 +326,7 @@ func (dr *DRecord) WUnlock() {
 	clog.Error("Dummy mode does not support WUnlock Operation")
 }
 
-func (dr *DRecord) RLock(trial int) bool {
+func (dr *DRecord) RLock(tid TID) bool {
 	clog.Error("Dummy mode does not support RLock Operation")
 	return false
 }
@@ -329,7 +335,7 @@ func (dr *DRecord) RUnlock() {
 	clog.Error("Dummy mode does not support RUnlock Operation")
 }
 
-func (dr *DRecord) Upgrade(trial int) bool {
+func (dr *DRecord) Upgrade(tid TID) bool {
 	clog.Error("Dummy mode does not support Upgrade Operation")
 	return false
 }
@@ -358,6 +364,7 @@ type LRecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
+	wd       wdlock.WDLock
 	rwLock   spinlockopt.WDRWSpinlock
 	table    *Table
 	padding2 [PADDING]byte
@@ -398,34 +405,53 @@ func (lr *LRecord) SetTID(tid TID) {
 	clog.Error("Lock mode does not support SetTID Operation")
 }
 
-func (lr *LRecord) WLock(trial int) bool {
-	return lr.rwLock.Lock(trial)
+func (lr *LRecord) WLock(tid TID) bool {
+	if *NoWait {
+		return lr.rwLock.Lock(0)
+	} else {
+		return lr.wd.Lock(uint64(tid))
+	}
 	//return true
 }
 
 func (lr *LRecord) WUnlock() {
-	lr.rwLock.Unlock()
+	if *NoWait {
+		lr.rwLock.Unlock()
+	} else {
+		lr.wd.Unlock()
+	}
 }
 
-func (lr *LRecord) RLock(trial int) bool {
-	return lr.rwLock.RLock(trial)
-	//return true
+func (lr *LRecord) RLock(tid TID) bool {
+	if *NoWait {
+		return lr.rwLock.RLock(0)
+	} else {
+		return lr.wd.RLock(uint64(tid))
+	}
 }
 
 func (lr *LRecord) RUnlock() {
-	lr.rwLock.RUnlock()
+	if *NoWait {
+		lr.rwLock.RUnlock()
+	} else {
+		lr.wd.RUnlock()
+	}
 	//return
 }
 
-func (lr *LRecord) Upgrade(trial int) bool {
-	return lr.rwLock.Upgrade(trial)
-	//return true
+func (lr *LRecord) Upgrade(tid TID) bool {
+	if *NoWait {
+		return lr.rwLock.Upgrade(0)
+	} else {
+		return lr.wd.Upgrade(uint64(tid))
+	}
 }
 
 type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
+	wd       wdlock.WDLock
 	rwLock   spinlockopt.WDRWSpinlock
 	last     wfmutex.WFMutex
 	table    *Table
@@ -469,26 +495,43 @@ func (ar *ARecord) SetTID(tid TID) {
 	clog.Error("Adaptive mode does not support SetTID Operation")
 }
 
-func (ar *ARecord) WLock(trial int) bool {
-	return ar.rwLock.Lock(trial)
+func (ar *ARecord) WLock(tid TID) bool {
+	if *NoWait {
+		return ar.rwLock.Lock(0)
+	} else {
+		return ar.wd.Lock(uint64(tid))
+	}
 	//return true
 }
 
 func (ar *ARecord) WUnlock() {
-	ar.rwLock.Unlock()
+	if *NoWait {
+		ar.rwLock.Unlock()
+	} else {
+		ar.wd.Unlock()
+	}
 }
 
-func (ar *ARecord) RLock(trial int) bool {
-	return ar.rwLock.RLock(trial)
-	//return true
+func (ar *ARecord) RLock(tid TID) bool {
+	if *NoWait {
+		return ar.rwLock.RLock(0)
+	} else {
+		return ar.wd.RLock(uint64(tid))
+	}
 }
 
 func (ar *ARecord) RUnlock() {
-	ar.rwLock.RUnlock()
-	//return
+	if *NoWait {
+		ar.rwLock.RUnlock()
+	} else {
+		ar.wd.RUnlock()
+	}
 }
 
-func (ar *ARecord) Upgrade(trial int) bool {
-	return ar.rwLock.Upgrade(trial)
-	//return true
+func (ar *ARecord) Upgrade(tid TID) bool {
+	if *NoWait {
+		return ar.rwLock.Upgrade(0)
+	} else {
+		return ar.wd.Upgrade(uint64(tid))
+	}
 }

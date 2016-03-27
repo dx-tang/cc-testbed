@@ -15,9 +15,9 @@ const (
 
 type ETransaction interface {
 	Reset(t Trans)
-	ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error)
-	WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error
-	MayWrite(tableID int, k Key, partNum int, trial int) error
+	ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error)
+	WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error
+	MayWrite(tableID int, k Key, partNum int, ts TID) error
 	Abort() TID
 	Commit() TID
 	Store() *Store
@@ -69,7 +69,7 @@ func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, true)
@@ -107,7 +107,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	return v, true, nil
 }
 
-func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
+func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, false)
@@ -156,7 +156,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 }
 
-func (p *PTransaction) MayWrite(tableID int, k Key, partNum int, trial int) error {
+func (p *PTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
 	return nil
 }
 
@@ -284,7 +284,7 @@ func (o *OTransaction) Reset(t Trans) {
 
 }
 
-func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, true)
@@ -361,7 +361,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	return r.GetValue(colNum), true, nil
 }
 
-func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
+func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, false)
@@ -444,7 +444,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	return nil
 }
 
-func (o *OTransaction) MayWrite(tableID int, k Key, partNum int, trial int) error {
+func (o *OTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
 	return nil
 }
 
@@ -622,7 +622,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 func (l *LTransaction) Reset(t Trans) {
 }
 
-func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, trial int) (Value, bool, error) {
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, true)
@@ -683,23 +683,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 		return nil, true, ENOKEY
 	}
 
-	if !rec.RLock(trial) {
-		//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
-		/*
-			clog.Info("Current Table %v; Key %v; NTXN %v\n", tableID, ParseKey(k, 0), w.NStats[NTXN])
-			for i := 0; i < len(l.rt); i++ {
-				t := &l.rt[i]
-				clog.Info("Read Records of %v\n", i)
-				for j := 0; j < len(t.rRecs); j++ {
-					clog.Info("%v", ParseKey(t.rRecs[j].k, 0))
-				}
-				clog.Info("Write Records of %v\n", i)
-				for j := 0; j < len(t.wRecs); j++ {
-					clog.Info("%v", ParseKey(t.wRecs[j].k, 0))
-				}
-			}
-			clog.Error("\n")
-		*/
+	if !rec.RLock(ts) {
 		w.NStats[NRLOCKABORTS]++
 		l.Abort()
 		return nil, true, EABORT
@@ -717,7 +701,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, tr
 	return rec.GetValue(colNum), true, nil
 }
 
-func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, trial int) error {
+func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, false)
@@ -771,7 +755,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	// Has been RLocked
 	if ok {
 		rr.exist = false
-		if rr.rec.Upgrade(trial) {
+		if rr.rec.Upgrade(ts) {
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -798,7 +782,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		return ENOKEY
 	}
 
-	if rec.WLock(trial) {
+	if rec.WLock(ts) {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -818,7 +802,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 }
 
-func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) error {
+func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
 	if !*Spec {
 		return nil
 	}
@@ -847,7 +831,7 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) erro
 	// Has been RLocked
 	if ok {
 		rr.exist = false
-		if rr.rec.Upgrade(trial) {
+		if rr.rec.Upgrade(ts) {
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -870,7 +854,7 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, trial int) erro
 		return ENOKEY
 	}
 
-	if rec.WLock(trial) {
+	if rec.WLock(ts) {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]

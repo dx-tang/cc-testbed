@@ -176,6 +176,7 @@ func main() {
 
 		clog.Info("CR %v PS %v Contention %v TransPer %v \n", tmpCR, tmpPS, tmpContention, tmpTP)
 
+		ts := testbed.TID(0)
 		var wg sync.WaitGroup
 		coord.SetMode(curMode)
 		coord.Start()
@@ -192,6 +193,11 @@ func main() {
 					t = gen.GenOneTrans()
 
 					w.NGen += time.Since(tm)
+
+					if curMode == testbed.LOCKING && !*testbed.NoWait {
+						tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
+						t.SetTID(tid)
+					}
 
 					_, err := w.One(t)
 					if err == testbed.FINISHED {

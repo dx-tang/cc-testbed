@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/totemtang/cc-testbed"
@@ -225,6 +226,7 @@ func main() {
 					}
 				}
 
+				ts := testbed.TID(0)
 				var wg sync.WaitGroup
 				coord.SetMode(j)
 				for i := 0; i < nWorkers; i++ {
@@ -244,6 +246,11 @@ func main() {
 							t = gen.GenOneTrans()
 
 							w.NGen += time.Since(tm)
+
+							if j == testbed.LOCKING && !*testbed.NoWait {
+								tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
+								t.SetTID(tid)
+							}
 
 							w.One(t)
 						}

@@ -146,6 +146,7 @@ type SBTrans struct {
 	fv          []FloatValue
 	ret         FloatValue
 	trial       int
+	tid         TID
 	padding2    [PADDING]byte
 }
 
@@ -155,6 +156,10 @@ func (t *SBTrans) GetTXN() int {
 
 func (s *SBTrans) GetAccessParts() []int {
 	return s.accessParts
+}
+
+func (s *SBTrans) SetTID(tid TID) {
+	s.tid = tid
 }
 
 func (s *SBTrans) DoNothing() {

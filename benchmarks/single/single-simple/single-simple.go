@@ -88,6 +88,7 @@ func main() {
 	clog.Info("Done with Populating Store\n")
 
 	coord.Start()
+	ts := testbed.TID(0)
 	var wg sync.WaitGroup
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)
@@ -118,6 +119,12 @@ func main() {
 
 				//tm = time.Now()
 				//_, err := w.One(t)
+
+				if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
+					tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
+					t.SetTID(tid)
+				}
+
 				w.One(t)
 				//w.NExecute += time.Since(tm)
 				/*

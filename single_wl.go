@@ -68,6 +68,7 @@ type SingleTrans struct {
 	trial       int
 	rnd         *rand.Rand
 	rr          int
+	tid         TID
 	padding2    [PADDING]byte
 }
 
@@ -81,6 +82,10 @@ func (s *SingleTrans) GetAccessParts() []int {
 
 func (s *SingleTrans) DoNothing() {
 
+}
+
+func (s *SingleTrans) SetTID(tid TID) {
+	s.tid = tid
 }
 
 type SingleTransGen struct {
