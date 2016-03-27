@@ -80,19 +80,29 @@ func (s *SingleTrans) GetAccessParts() []int {
 	return s.accessParts
 }
 
-func (s *SingleTrans) DoNothing() {
-
-}
-
 func (s *SingleTrans) SetTID(tid TID) {
 	s.tid = tid
+}
+
+func (s *SingleTrans) SetTrial(trial int) {
+	s.trial = trial
+}
+
+func (s *SingleTrans) GetTrial() int {
+	return s.trial
+}
+
+func (s *SingleTrans) DecTrial() {
+	s.trial--
 }
 
 type SingleTransGen struct {
 	rnd             *rand.Rand
 	transPercentage [SINGLETRANSNUM]int
 	gen             *Generator
-	trans           *SingleTrans
+	transBuf        []*SingleTrans
+	head            int
+	tail            int
 	cr              float64
 	partIndex       int
 	nParts          int
@@ -103,7 +113,9 @@ type SingleTransGen struct {
 }
 
 func (s *SingleTransGen) GenOneTrans() Trans {
-	t := s.trans
+	t := s.transBuf[s.head]
+	s.head = (s.head + 1) % QUEUESIZE
+
 	rnd := s.rnd
 	gen := s.gen
 	cr := int(s.cr)
@@ -204,6 +216,11 @@ func (s *SingleTransGen) GenOneTrans() Trans {
 	return t
 }
 
+func (s *SingleTransGen) ReleaseOneTrans(t Trans) {
+	s.tail = (s.tail + 1) % QUEUESIZE
+	s.transBuf[s.tail] = t.(*SingleTrans)
+}
+
 type SingelWorkload struct {
 	transPercentage [SINGLETRANSNUM]int
 	basic           *BasicWorkload
@@ -289,18 +306,24 @@ func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool,
 		} else {
 			tg.partIndex = 0
 		}
-		trans := &SingleTrans{
-			accessParts: make([]int, 0, mp+2*PADDINGINT),
-			keys:        make([]Key, 0, SINGLEMAXKEYS+2*PADDINGKEY),
-			parts:       make([]int, 0, SINGLEMAXKEYS+2*PADDINGINT),
-			iv:          make([]IntValue, SINGLEMAXKEYS),
+		tg.transBuf = make([]*SingleTrans, QUEUESIZE+2*PADDINGINT64)
+		tg.transBuf = tg.transBuf[PADDINGINT64 : PADDINGINT64+QUEUESIZE]
+		for p := 0; p < QUEUESIZE; p++ {
+			trans := &SingleTrans{
+				accessParts: make([]int, 0, mp+2*PADDINGINT),
+				keys:        make([]Key, 0, SINGLEMAXKEYS+2*PADDINGKEY),
+				parts:       make([]int, 0, SINGLEMAXKEYS+2*PADDINGINT),
+				iv:          make([]IntValue, SINGLEMAXKEYS),
+			}
+			trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
+			trans.keys = trans.keys[PADDINGKEY:PADDINGKEY]
+			trans.parts = trans.parts[PADDINGINT:PADDINGINT]
+			trans.rnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i*17+19)))
+			trans.rr = rr
+			tg.transBuf[p] = trans
 		}
-		trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
-		trans.keys = trans.keys[PADDINGKEY:PADDINGKEY]
-		trans.parts = trans.parts[PADDINGINT:PADDINGINT]
-		trans.rnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i*17+19)))
-		trans.rr = rr
-		tg.trans = trans
+		tg.head = 0
+		tg.tail = -1
 		singleWL.transGen[i] = tg
 	}
 
@@ -351,6 +374,8 @@ func (singleWL *SingelWorkload) ResetConf(transPercentage string, cr float64, mp
 		tg.tlen = tlen
 		tg.rr = rr
 		tg.mp = mp
+		tg.head = 0
+		tg.tail = -1
 	}
 }
 

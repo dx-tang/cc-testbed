@@ -252,7 +252,13 @@ func main() {
 								t.SetTID(tid)
 							}
 
-							w.One(t)
+							for i := 0; i < 5; i++ {
+								_, err := w.One(t)
+								if err == nil {
+									break
+								}
+							}
+
 						}
 						w.Finish()
 						wg.Done()

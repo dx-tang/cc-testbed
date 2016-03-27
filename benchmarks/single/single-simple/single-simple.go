@@ -31,6 +31,7 @@ var ps = flag.Float64("ps", 1, "Skew For Partition")
 var p = flag.Bool("p", false, "Whether Index Partition")
 
 const (
+	TRIALS  = 3
 	BUFSIZE = 5
 )
 
@@ -94,10 +95,8 @@ func main() {
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)
 		go func(n int) {
-			//var txn int64
-			//txn := 100000
 			var t testbed.Trans
-			//tq := testbed.NewTransQueue(BUFSIZE)
+			tq := testbed.NewTransQueue(BUFSIZE)
 			w := coord.Workers[n]
 			gen := single.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
@@ -107,40 +106,38 @@ func main() {
 				if !end_time.After(tm) {
 					break
 				}
-				//if txn <= 0 {
-				//	break
-				//}
-				//tm := time.Now()
-				//if tq.IsFull() {
-				//	t = tq.Dequeue()
-				//} else {
-				t = gen.GenOneTrans()
-				//}
+				if tq.IsFull() {
+					t = tq.Dequeue()
+				} else {
+					t = gen.GenOneTrans()
+					t.SetTrial(TRIALS)
+					if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
+						tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
+						t.SetTID(tid)
+					}
+				}
 				w.NGen += time.Since(tm)
 
 				//tm = time.Now()
-				//_, err := w.One(t)
-
-				if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
-					tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
-					t.SetTID(tid)
-				}
-
-				w.One(t)
+				_, err := w.One(t)
 				//w.NExecute += time.Since(tm)
-				/*
-					if err != nil {
-						if err == testbed.EABORT {
+
+				if err != nil {
+					if err == testbed.EABORT {
+						t.DecTrial()
+						if t.GetTrial() == 0 {
+							gen.ReleaseOneTrans(t)
+						} else {
 							tq.Enqueue(t)
-						} else if err == testbed.ENOKEY {
-							clog.Error("%s\n", err.Error())
-						} else if err != testbed.EABORT {
-							clog.Error("%s\n", err.Error())
 						}
-					}*/
+					} else if err != testbed.EABORT {
+						clog.Error("%s\n", err.Error())
+					}
+				} else {
+					gen.ReleaseOneTrans(t)
+				}
 				//txn--
 			}
-			//clog.Info("Worker %d issues %d transactions\n", n, txn)
 			w.Finish()
 			wg.Done()
 		}(i)
@@ -148,6 +145,8 @@ func main() {
 	wg.Wait()
 
 	coord.Finish()
+
+	single.PrintSum()
 
 	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
@@ -168,6 +167,6 @@ func main() {
 		st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
 	}
 
-	clog.Info("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds())
+	clog.Info("TXN %.4f; Abort %.4f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds(), float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN]))
 
 }

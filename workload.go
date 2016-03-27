@@ -14,6 +14,10 @@ const (
 	SMALLBANKWL
 )
 
+const (
+	QUEUESIZE = 10
+)
+
 type Generator struct {
 	keyGens     []KeyGen
 	partitioner []Partitioner

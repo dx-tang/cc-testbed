@@ -162,15 +162,25 @@ func (s *SBTrans) SetTID(tid TID) {
 	s.tid = tid
 }
 
-func (s *SBTrans) DoNothing() {
+func (s *SBTrans) SetTrial(trial int) {
+	s.trial = trial
+}
 
+func (s *SBTrans) GetTrial() int {
+	return s.trial
+}
+
+func (s *SBTrans) DecTrial() {
+	s.trial--
 }
 
 type SBTransGen struct {
 	rnd             *rand.Rand
 	transPercentage [SBTRANSNUM]int
 	gen             *Generator
-	trans           *SBTrans
+	transBuf        []*SBTrans
+	head            int
+	tail            int
 	cr              float64
 	partIndex       int
 	nParts          int
@@ -178,7 +188,8 @@ type SBTransGen struct {
 }
 
 func (s *SBTransGen) GenOneTrans() Trans {
-	t := s.trans
+	t := s.transBuf[s.head]
+	s.head = (s.head + 1) % QUEUESIZE
 	rnd := s.rnd
 	gen := s.gen
 	cr := int(s.cr)
@@ -302,6 +313,11 @@ func (s *SBTransGen) GenOneTrans() Trans {
 	return t
 }
 
+func (s *SBTransGen) ReleaseOneTrans(t Trans) {
+	s.tail = (s.tail + 1) % QUEUESIZE
+	s.transBuf[s.tail] = t.(*SBTrans)
+}
+
 type SBWorkload struct {
 	transPercentage [SBTRANSNUM]int
 	basic           *BasicWorkload
@@ -405,16 +421,22 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 		} else {
 			tg.partIndex = 0
 		}
-		trans := &SBTrans{
-			accessParts: make([]int, 0, SBMAXPARTS+2*PADDINGINT),
-			accoutID:    make([]Key, 0, SBMAXPARTS+2*PADDINGKEY),
-			//ammount:     FloatValue{},
-			fv: make([]FloatValue, SBMAXPARTS),
-			//ret:         FloatValue{},
+		tg.transBuf = make([]*SBTrans, QUEUESIZE+2*PADDINGINT64)
+		tg.transBuf = tg.transBuf[PADDINGINT64 : QUEUESIZE+PADDINGINT64]
+		for p := 0; p < QUEUESIZE; p++ {
+			trans := &SBTrans{
+				accessParts: make([]int, 0, SBMAXPARTS+2*PADDINGINT),
+				accoutID:    make([]Key, 0, SBMAXPARTS+2*PADDINGKEY),
+				//ammount:     FloatValue{},
+				fv: make([]FloatValue, SBMAXPARTS),
+				//ret:         FloatValue{},
+			}
+			trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
+			trans.accoutID = trans.accoutID[PADDINGKEY:PADDINGKEY]
+			tg.transBuf[p] = trans
 		}
-		trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
-		trans.accoutID = trans.accoutID[PADDINGKEY:PADDINGKEY]
-		tg.trans = trans
+		tg.head = 0
+		tg.tail = -1
 		sbWorkload.transGen[i] = tg
 	}
 
@@ -458,6 +480,8 @@ func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
 		tg.gen = s.basic.generators[i]
 		tg.transPercentage = s.transPercentage
 		tg.cr = cr
+		tg.head = 0
+		tg.tail = -1
 	}
 
 }

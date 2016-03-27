@@ -24,12 +24,15 @@ const (
 type Trans interface {
 	GetTXN() int
 	GetAccessParts() []int
-	DoNothing()
 	SetTID(tid TID)
+	SetTrial(trials int)
+	GetTrial() int
+	DecTrial()
 }
 
 type TransGen interface {
 	GenOneTrans() Trans
+	ReleaseOneTrans(t Trans)
 }
 
 type TransQueue struct {
