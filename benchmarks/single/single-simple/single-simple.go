@@ -32,7 +32,7 @@ var p = flag.Bool("p", false, "Whether Index Partition")
 
 const (
 	TRIALS  = 3
-	BUFSIZE = 5
+	BUFSIZE = 3
 )
 
 func main() {

@@ -47,7 +47,8 @@ var rr []int
 var tests []int
 
 const (
-	BUFSIZE = 5
+	TRIALS  = 3
+	BUFSIZE = 3
 )
 
 func main() {
@@ -203,22 +204,41 @@ func main() {
 				var t testbed.Trans
 				w := coord.Workers[n]
 				gen := single.GetTransGen(n)
+				tq := testbed.NewTransQueue(BUFSIZE)
 				w.Start()
 				for {
 					tm := time.Now()
-
-					t = gen.GenOneTrans()
-
+					if tq.IsFull() {
+						t = tq.Dequeue()
+					} else {
+						t = gen.GenOneTrans()
+						t.SetTrial(TRIALS)
+						if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
+							tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
+							t.SetTID(tid)
+						}
+					}
 					w.NGen += time.Since(tm)
 
-					if curMode == testbed.LOCKING && !*testbed.NoWait {
-						tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
-						t.SetTID(tid)
-					}
-
+					//tm = time.Now()
 					_, err := w.One(t)
-					if err == testbed.FINISHED {
-						break
+					//w.NExecute += time.Since(tm)
+
+					if err != nil {
+						if err == testbed.EABORT {
+							t.DecTrial()
+							if t.GetTrial() == 0 {
+								gen.ReleaseOneTrans(t)
+							} else {
+								tq.Enqueue(t)
+							}
+						} else if err == testbed.FINISHED {
+							break
+						} else if err != testbed.EABORT {
+							clog.Error("%s\n", err.Error())
+						}
+					} else {
+						gen.ReleaseOneTrans(t)
 					}
 				}
 				w.Finish()
