@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	CLASSIFERPATH   = "/home/totemtang/Multicore-CC/workspace/src/github.com/totemtang/cc-testbed/classifier"
+	CLASSIFERPATH   = "/home/totemtang/ACC/workspace/src/github.com/totemtang/cc-testbed/classifier"
 	SINGLEPARTTRAIN = "single-part-train.out"
 	SINGLEOCCTRAIN  = "single-occ-train.out"
 	SBPARTTRAIN     = "sb-part-train.out"

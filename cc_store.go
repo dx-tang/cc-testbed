@@ -278,7 +278,7 @@ func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Rec
 	return r, nil
 }
 
-func (s *Store) GetValueByID(tableID int, k Key, partNum int, colNum int) Value {
+func (s *Store) GetValueByID(tableID int, k Key, partNum int, val Value, colNum int) error {
 	table := s.tables[tableID]
 
 	//chunk := table.data[partNum].partData[k[0]]
@@ -291,9 +291,10 @@ func (s *Store) GetValueByID(tableID int, k Key, partNum int, colNum int) Value 
 	}
 	r, ok := part.rows[k]
 	if !ok {
-		return nil
+		return ENOKEY
 	}
-	return r.GetValue(colNum)
+	r.GetValue(val, colNum)
+	return nil
 }
 
 func (s *Store) GetRecByID(tableID int, k Key, partNum int) Record {
@@ -318,7 +319,7 @@ func (s *Store) GetRecByID(tableID int, k Key, partNum int) Record {
 	return r
 }
 
-func (s *Store) GetValueByName(tableName string, k Key, partNum int, colNum int) Value {
+func (s *Store) GetValueByName(tableName string, k Key, partNum int, val Value, colNum int) error {
 	if partNum >= s.nParts {
 		clog.Error("Partition Number %v Out of Index", partNum)
 	}
@@ -328,7 +329,7 @@ func (s *Store) GetValueByName(tableName string, k Key, partNum int, colNum int)
 		clog.Error("Table %s, Not Exist \n", tableName)
 	}
 
-	return s.GetValueByID(tableID, k, partNum, colNum)
+	return s.GetValueByID(tableID, k, partNum, val, colNum)
 }
 
 func (s *Store) SetValueByID(tableID int, k Key, partNum int, value Value, colNum int) bool {

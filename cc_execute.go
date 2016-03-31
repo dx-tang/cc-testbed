@@ -15,8 +15,8 @@ const (
 
 type ETransaction interface {
 	Reset(t Trans)
-	ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error)
-	WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error
+	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error)
+	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) error
 	MayWrite(tableID int, k Key, partNum int, ts TID) error
 	Abort() TID
 	Commit() TID
@@ -69,7 +69,7 @@ func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error) {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, true)
@@ -100,11 +100,11 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts
 	}
 
 	s := p.s
-	v := s.GetValueByID(tableID, k, partNum, colNum)
-	if v == nil {
-		return nil, true, ENOKEY
+	err := s.GetValueByID(tableID, k, partNum, val, colNum)
+	if err != nil {
+		return nil, true, err
 	}
-	return v, true, nil
+	return val, true, nil
 }
 
 func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
@@ -284,7 +284,7 @@ func (o *OTransaction) Reset(t Trans) {
 
 }
 
-func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error) {
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, true)
@@ -330,7 +330,8 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts
 				o.w.NStats[NREADABORTS]++
 				return nil, true, EABORT
 			}
-			return rk.rec.GetValue(colNum), true, nil
+			rk.rec.GetValue(val, colNum)
+			return val, true, nil
 		}
 	}
 
@@ -358,7 +359,8 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts
 	t.rKeys[n].last = tid
 	t.rKeys[n].rec = r
 
-	return r.GetValue(colNum), true, nil
+	r.GetValue(val, colNum)
+	return val, true, nil
 }
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
@@ -622,7 +624,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 func (l *LTransaction) Reset(t Trans) {
 }
 
-func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts TID) (Value, bool, error) {
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, true)
@@ -659,7 +661,8 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts
 	}
 	// Has been Locked
 	if ok {
-		return wr.rec.GetValue(colNum), true, nil
+		wr.rec.GetValue(val, colNum)
+		return val, true, nil
 	}
 
 	var rec Record
@@ -673,7 +676,9 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts
 	}
 	// Has been RLocked
 	if ok {
-		return rr.rec.GetValue(colNum), true, nil
+		//return rr.rec.GetValue(colNum), true, nil
+		rr.rec.GetValue(val, colNum)
+		return val, true, nil
 	}
 
 	// Try RLock
@@ -698,7 +703,8 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, colNum int, ts
 	rt.rRecs[n].rec = rec
 	rt.rRecs[n].exist = true
 
-	return rec.GetValue(colNum), true, nil
+	rec.GetValue(val, colNum)
+	return val, true, nil
 }
 
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {

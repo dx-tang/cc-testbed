@@ -14,7 +14,7 @@ const (
 )
 
 type Tuple interface {
-	GetValue(col int) Value
+	GetValue(val Value, col int)
 	SetValue(val Value, col int)
 }
 
@@ -40,7 +40,7 @@ type Record interface {
 	Lock() (bool, TID)
 	Unlock(tid TID)
 	IsUnlocked() (bool, TID)
-	GetValue(colNum int) Value
+	GetValue(val Value, colNum int)
 	GetKey() Key
 	SetValue(val Value, colNum int)
 	GetTID() TID
@@ -156,8 +156,8 @@ func (pr *PRecord) IsUnlocked() (bool, TID) {
 	return false, 0
 }
 
-func (pr *PRecord) GetValue(colNum int) Value {
-	return pr.tuple.GetValue(colNum)
+func (pr *PRecord) GetValue(val Value, colNum int) {
+	pr.tuple.GetValue(val, colNum)
 }
 
 func (pr *PRecord) SetValue(val Value, colNum int) {
@@ -225,8 +225,8 @@ func (or *ORecord) IsUnlocked() (bool, TID) {
 	return true, TID(x)
 }
 
-func (or *ORecord) GetValue(colNum int) Value {
-	return or.tuple.GetValue(colNum)
+func (or *ORecord) GetValue(val Value, colNum int) {
+	or.tuple.GetValue(val, colNum)
 }
 
 func (or *ORecord) GetKey() Key {
@@ -299,8 +299,8 @@ func (dr *DRecord) IsUnlocked() (bool, TID) {
 	return false, 0
 }
 
-func (dr *DRecord) GetValue(colNum int) Value {
-	return dr.value
+func (dr *DRecord) GetValue(val Value, colNum int) {
+	//return dr.value
 }
 
 func (dr *DRecord) SetValue(val Value, colNum int) {
@@ -384,8 +384,8 @@ func (lr *LRecord) IsUnlocked() (bool, TID) {
 	return false, TID(0)
 }
 
-func (lr *LRecord) GetValue(colNum int) Value {
-	return lr.tuple.GetValue(colNum)
+func (lr *LRecord) GetValue(val Value, colNum int) {
+	lr.tuple.GetValue(val, colNum)
 }
 
 func (lr *LRecord) GetKey() Key {
@@ -476,8 +476,8 @@ func (ar *ARecord) IsUnlocked() (bool, TID) {
 	return true, TID(x)
 }
 
-func (ar *ARecord) GetValue(colNum int) Value {
-	return ar.tuple.GetValue(colNum)
+func (ar *ARecord) GetValue(val Value, colNum int) {
+	ar.tuple.GetValue(val, colNum)
 }
 
 func (ar *ARecord) GetKey() Key {

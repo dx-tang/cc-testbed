@@ -26,35 +26,118 @@ const (
 const (
 	SINGLE_ID = iota
 	SINGLE_VAL
+	SINGLE_STR1
+	SINGLE_STR2
+	SINGLE_STR3
+	SINGLE_STR4
+	SINGLE_STR5
+	SINGLE_STR6
+	SINGLE_STR7
+	SINGLE_STR8
+	SINGLE_STR9
+	SINGLE_STR10
 )
 
+// Length for Single string
+const (
+	CAP_SINGLE_STR = 10
+)
+
+var CONST_STR_SINGLE = [CAP_SINGLE_STR]byte{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'}
+
 type SingleTuple struct {
-	padding1 [64]byte
+	padding1 [PADDING]byte
 	id       int64
 	val      int64
-	padding2 [64]byte
+	str1     [CAP_SINGLE_STR]byte
+	str2     [CAP_SINGLE_STR]byte
+	str3     [CAP_SINGLE_STR]byte
+	str4     [CAP_SINGLE_STR]byte
+	str5     [CAP_SINGLE_STR]byte
+	str6     [CAP_SINGLE_STR]byte
+	str7     [CAP_SINGLE_STR]byte
+	str8     [CAP_SINGLE_STR]byte
+	str9     [CAP_SINGLE_STR]byte
+	str10    [CAP_SINGLE_STR]byte
+	padding2 [PADDING]byte
 }
 
-func (st *SingleTuple) GetValue(col int) Value {
+func (st *SingleTuple) GetValue(val Value, col int) {
+	var str *[CAP_SINGLE_STR]byte
 	switch col {
-	case 0:
-		return &st.id
-	case 1:
-		return &st.val
+	case SINGLE_ID:
+		val.(*IntValue).intVal = st.id
+		return
+	case SINGLE_VAL:
+		val.(*IntValue).intVal = st.val
+		return
+	case SINGLE_STR1:
+		str = &st.str1
+	case SINGLE_STR2:
+		str = &st.str2
+	case SINGLE_STR3:
+		str = &st.str3
+	case SINGLE_STR4:
+		str = &st.str4
+	case SINGLE_STR5:
+		str = &st.str5
+	case SINGLE_STR6:
+		str = &st.str6
+	case SINGLE_STR7:
+		str = &st.str7
+	case SINGLE_STR8:
+		str = &st.str8
+	case SINGLE_STR9:
+		str = &st.str9
+	case SINGLE_STR10:
+		str = &st.str10
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
-	return nil
+
+	sv := val.(*StringValue)
+	sv.stringVal = sv.stringVal[:CAP_SINGLE_STR]
+	for i, b := range *str {
+		sv.stringVal[i] = b
+	}
 }
 
 func (st *SingleTuple) SetValue(val Value, col int) {
+	var str *[CAP_SINGLE_STR]byte
 	switch col {
-	case 0:
+	case SINGLE_ID:
 		st.id = val.(*IntValue).intVal
-	case 1:
+		return
+	case SINGLE_VAL:
 		st.val = val.(*IntValue).intVal
+		return
+	case SINGLE_STR1:
+		str = &st.str1
+	case SINGLE_STR2:
+		str = &st.str2
+	case SINGLE_STR3:
+		str = &st.str3
+	case SINGLE_STR4:
+		str = &st.str4
+	case SINGLE_STR5:
+		str = &st.str5
+	case SINGLE_STR6:
+		str = &st.str6
+	case SINGLE_STR7:
+		str = &st.str7
+	case SINGLE_STR8:
+		str = &st.str8
+	case SINGLE_STR9:
+		str = &st.str9
+	case SINGLE_STR10:
+		str = &st.str10
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
+	}
+
+	sv := val.(*StringValue)
+	for i, b := range sv.stringVal {
+		(*str)[i] = b
 	}
 }
 
@@ -65,6 +148,9 @@ type SingleTrans struct {
 	keys        []Key
 	parts       []int
 	iv          []IntValue
+	sv          []StringValue
+	intRB       IntValue
+	strRB       StringValue
 	trial       int
 	rnd         *rand.Rand
 	rr          int
@@ -314,12 +400,19 @@ func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool,
 				keys:        make([]Key, 0, SINGLEMAXKEYS+2*PADDINGKEY),
 				parts:       make([]int, 0, SINGLEMAXKEYS+2*PADDINGINT),
 				iv:          make([]IntValue, SINGLEMAXKEYS),
+				sv:          make([]StringValue, SINGLEMAXKEYS),
 			}
 			trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
 			trans.keys = trans.keys[PADDINGKEY:PADDINGKEY]
 			trans.parts = trans.parts[PADDINGINT:PADDINGINT]
 			trans.rnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i*17+19)))
 			trans.rr = rr
+			for q := 0; q < SINGLEMAXKEYS; q++ {
+				trans.sv[q].stringVal = make([]byte, CAP_SINGLE_STR+2*PADDINGBYTE)
+				trans.sv[q].stringVal = trans.sv[q].stringVal[PADDINGBYTE : PADDINGBYTE+CAP_SINGLE_STR]
+			}
+			trans.strRB.stringVal = make([]byte, CAP_SINGLE_STR+2*PADDINGBYTE)
+			trans.strRB.stringVal = trans.strRB.stringVal[PADDINGBYTE : PADDINGBYTE+CAP_SINGLE_STR]
 			tg.transBuf[p] = trans
 		}
 		tg.head = 0
@@ -425,14 +518,17 @@ func (s *SingelWorkload) PrintSum() {
 	keyLen := len(keyRange)
 	compKey := make([]OneKey, keyLen)
 	store := s.basic.store
+	intRB := &IntValue{}
 
-	var val Value
 	var k int = 0
 	for i := int64(0); i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(SINGLE, key)
-		val = store.GetValueByID(SINGLE, key, partNum, SINGLE_VAL)
-		total += *val.(*int64)
+		err := store.GetValueByID(SINGLE, key, partNum, intRB, SINGLE_VAL)
+		if err != nil {
+			clog.Info("Get Value Error")
+		}
+		total += intRB.intVal
 
 		for int64(compKey[k]+1) >= keyRange[k] {
 			compKey[k] = 0

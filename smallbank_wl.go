@@ -37,6 +37,11 @@ const (
 	S_BAL
 )
 
+// Define CAPACITY For String Fields
+const (
+	CAP_A_NAME = 4
+)
+
 const (
 	SBTRANSNUM  = 6
 	SBMAXPARTS  = 2
@@ -44,31 +49,34 @@ const (
 )
 
 type AccoutsTuple struct {
-	padding1 [64]byte
+	padding1 [PADDING]byte
 	accoutID int64
-	name     []byte
-	padding2 [64]byte
+	name     [CAP_A_NAME]byte
+	padding2 [PADDING]byte
 }
 
-func (at *AccoutsTuple) GetValue(col int) Value {
+func (at *AccoutsTuple) GetValue(val Value, col int) {
 	switch col {
-	case 0:
-		return &at.accoutID
-	case 1:
-		return &at.name
+	case A_ID:
+		iv := val.(*IntValue)
+		iv.intVal = at.accoutID
+	case A_NAME:
+		sv := val.(*StringValue)
+		sv.stringVal = sv.stringVal[:CAP_A_NAME]
+		for i := 0; i < CAP_A_NAME; i++ {
+			sv.stringVal[i] = at.name[i]
+		}
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
-	return nil
 }
 
 func (at *AccoutsTuple) SetValue(val Value, col int) {
 	switch col {
-	case 0:
+	case A_ID:
 		at.accoutID = val.(*IntValue).intVal
-	case 1:
+	case A_NAME:
 		newOne := val.(*StringValue).stringVal
-		at.name = at.name[0:len(newOne)]
 		for i, b := range newOne {
 			at.name[i] = b
 		}
@@ -78,29 +86,30 @@ func (at *AccoutsTuple) SetValue(val Value, col int) {
 }
 
 type CheckingTuple struct {
-	padding1 [64]byte
+	padding1 [PADDING]byte
 	accoutID int64
 	balance  float64
-	padding2 [64]byte
+	padding2 [PADDING]byte
 }
 
-func (ct *CheckingTuple) GetValue(col int) Value {
+func (ct *CheckingTuple) GetValue(val Value, col int) {
 	switch col {
-	case 0:
-		return &ct.accoutID
-	case 1:
-		return &ct.balance
+	case C_ID:
+		iv := val.(*IntValue)
+		iv.intVal = ct.accoutID
+	case C_BAL:
+		fv := val.(*FloatValue)
+		fv.floatVal = ct.balance
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
-	return nil
 }
 
 func (ct *CheckingTuple) SetValue(val Value, col int) {
 	switch col {
-	case 0:
+	case C_ID:
 		ct.accoutID = val.(*IntValue).intVal
-	case 1:
+	case C_BAL:
 		ct.balance = val.(*FloatValue).floatVal
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
@@ -108,29 +117,30 @@ func (ct *CheckingTuple) SetValue(val Value, col int) {
 }
 
 type SavingsTuple struct {
-	padding1 [64]byte
+	padding1 [PADDING]byte
 	accoutID int64
 	balance  float64
-	padding2 [64]byte
+	padding2 [PADDING]byte
 }
 
-func (st *SavingsTuple) GetValue(col int) Value {
+func (st *SavingsTuple) GetValue(val Value, col int) {
 	switch col {
-	case 0:
-		return &st.accoutID
-	case 1:
-		return &st.balance
+	case S_ID:
+		iv := val.(*IntValue)
+		iv.intVal = st.accoutID
+	case S_BAL:
+		fv := val.(*FloatValue)
+		fv.floatVal = st.balance
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
-	return nil
 }
 
 func (st *SavingsTuple) SetValue(val Value, col int) {
 	switch col {
-	case 0:
+	case S_ID:
 		st.accoutID = val.(*IntValue).intVal
-	case 1:
+	case S_BAL:
 		st.balance = val.(*FloatValue).floatVal
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
@@ -142,6 +152,8 @@ type SBTrans struct {
 	TXN         int
 	accessParts []int
 	accoutID    []Key
+	intRB       IntValue
+	floatRB     FloatValue
 	ammount     FloatValue
 	fv          []FloatValue
 	ret         FloatValue
@@ -369,11 +381,11 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 			if i == ACCOUNTS {
 				at := &AccoutsTuple{
 					accoutID: int64(compKey[0]),
-					name:     make([]byte, 0, SBSTRMAXLEN+2*PADDINGBYTE),
+					//name:     make([]byte, 0, SBSTRMAXLEN+2*PADDINGBYTE),
 				}
-				at.name = at.name[PADDINGBYTE:PADDINGBYTE]
-				at.name = at.name[:4]
-				for p := 0; p < 4; p++ {
+				//at.name = at.name[PADDINGBYTE:PADDINGBYTE]
+				//at.name = at.name[:4]
+				for p := 0; p < CAP_SINGLE_STR; p++ {
 					at.name[p] = "name"[p]
 				}
 				store.CreateRecByID(i, key, partNum, at)
@@ -519,14 +531,15 @@ func (s *SBWorkload) PrintChecking() {
 	keyLen := len(keyRange)
 	compKey := make([]OneKey, keyLen)
 	store := s.basic.store
+	floatRB := &FloatValue{}
 
 	var val Value
 	var k int = 0
 	for i := int64(0); i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
-		val = store.GetValueByID(CHECKING, key, partNum, C_BAL)
-		total += *val.(*float64)
+		val = store.GetValueByID(CHECKING, key, partNum, floatRB, C_BAL)
+		total += val.(*FloatValue).floatVal
 
 		for int64(compKey[k]+1) >= keyRange[k] {
 			compKey[k] = 0

@@ -146,6 +146,8 @@ func main() {
 
 	coord.Finish()
 
+	//single.PrintSum()
+
 	f, err := os.OpenFile(*out, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		clog.Error("Open File Error %s\n", err.Error())
