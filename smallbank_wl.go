@@ -385,7 +385,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 				}
 				//at.name = at.name[PADDINGBYTE:PADDINGBYTE]
 				//at.name = at.name[:4]
-				for p := 0; p < CAP_SINGLE_STR; p++ {
+				for p := 0; p < CAP_A_NAME; p++ {
 					at.name[p] = "name"[p]
 				}
 				store.CreateRecByID(i, key, partNum, at)
