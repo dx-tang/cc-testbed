@@ -40,10 +40,11 @@ const (
 
 // Length for Single string
 const (
-	CAP_SINGLE_STR = 100
+	CAP_SINGLE_STR = 10
 )
 
-const CONST_STR_SINGLE = "afsldfjskdflsjdkfljsdklfsjdklfsjdkslfdjsklfjdsklfjdsklfjdsklfjsdklfjsdlfksjdkfsdjfiwekfwe,fdjsifdsj"
+//const CONST_STR_SINGLE = "afsldfjskdflsjdkfljsdklfsjdklfsjdkslfdjsklfjdsklfjdsklfjdsklfjsdklfjsdlfksjdkfsdjfiwekfwe,fdjsifdsj"
+const CONST_STR_SINGLE = "abcdekdifd"
 
 type SingleTuple struct {
 	padding1 [PADDING]byte
