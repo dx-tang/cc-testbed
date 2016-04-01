@@ -36,6 +36,16 @@ const (
 	SINGLE_STR8
 	SINGLE_STR9
 	SINGLE_STR10
+	SINGLE_STR11
+	SINGLE_STR12
+	SINGLE_STR13
+	SINGLE_STR14
+	SINGLE_STR15
+	SINGLE_STR16
+	SINGLE_STR17
+	SINGLE_STR18
+	SINGLE_STR19
+	SINGLE_STR20
 )
 
 // Length for Single string
@@ -60,6 +70,16 @@ type SingleTuple struct {
 	str8     [CAP_SINGLE_STR]byte
 	str9     [CAP_SINGLE_STR]byte
 	str10    [CAP_SINGLE_STR]byte
+	str11    [CAP_SINGLE_STR]byte
+	str12    [CAP_SINGLE_STR]byte
+	str13    [CAP_SINGLE_STR]byte
+	str14    [CAP_SINGLE_STR]byte
+	str15    [CAP_SINGLE_STR]byte
+	str16    [CAP_SINGLE_STR]byte
+	str17    [CAP_SINGLE_STR]byte
+	str18    [CAP_SINGLE_STR]byte
+	str19    [CAP_SINGLE_STR]byte
+	str20    [CAP_SINGLE_STR]byte
 	padding2 [PADDING]byte
 }
 
@@ -92,6 +112,26 @@ func (st *SingleTuple) GetValue(val Value, col int) {
 		str = &st.str9
 	case SINGLE_STR10:
 		str = &st.str10
+	case SINGLE_STR11:
+		str = &st.str11
+	case SINGLE_STR12:
+		str = &st.str12
+	case SINGLE_STR13:
+		str = &st.str13
+	case SINGLE_STR14:
+		str = &st.str14
+	case SINGLE_STR15:
+		str = &st.str15
+	case SINGLE_STR16:
+		str = &st.str16
+	case SINGLE_STR17:
+		str = &st.str17
+	case SINGLE_STR18:
+		str = &st.str18
+	case SINGLE_STR19:
+		str = &st.str19
+	case SINGLE_STR20:
+		str = &st.str20
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
@@ -132,6 +172,26 @@ func (st *SingleTuple) SetValue(val Value, col int) {
 		str = &st.str9
 	case SINGLE_STR10:
 		str = &st.str10
+	case SINGLE_STR11:
+		str = &st.str11
+	case SINGLE_STR12:
+		str = &st.str12
+	case SINGLE_STR13:
+		str = &st.str13
+	case SINGLE_STR14:
+		str = &st.str14
+	case SINGLE_STR15:
+		str = &st.str15
+	case SINGLE_STR16:
+		str = &st.str16
+	case SINGLE_STR17:
+		str = &st.str17
+	case SINGLE_STR18:
+		str = &st.str18
+	case SINGLE_STR19:
+		str = &st.str19
+	case SINGLE_STR20:
+		str = &st.str20
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}

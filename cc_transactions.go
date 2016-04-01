@@ -533,7 +533,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 	for i := 0; i < len(singleTrans.keys); i++ {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
-		col = singleTrans.rnd.Intn(10) + SINGLE_VAL + 1
+		col = singleTrans.rnd.Intn(20) + SINGLE_VAL + 1
 
 		if singleTrans.rnd.Intn(100) < singleTrans.rr {
 			val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, tid)
