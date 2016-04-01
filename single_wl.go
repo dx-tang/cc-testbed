@@ -40,10 +40,10 @@ const (
 
 // Length for Single string
 const (
-	CAP_SINGLE_STR = 10
+	CAP_SINGLE_STR = 100
 )
 
-var CONST_STR_SINGLE = [CAP_SINGLE_STR]byte{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'}
+const CONST_STR_SINGLE = "afsldfjskdflsjdkfljsdklfsjdklfsjdkslfdjsklfjdsklfjdsklfjdsklfjsdklfjsdlfksjdkfsdjfiwekfwe,fdjsifdsj"
 
 type SingleTuple struct {
 	padding1 [PADDING]byte

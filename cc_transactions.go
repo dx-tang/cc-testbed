@@ -546,7 +546,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 		} else {
 			sv[i].stringVal = sv[i].stringVal[:CAP_SINGLE_STR]
 			for p, b := range CONST_STR_SINGLE {
-				sv[i].stringVal[p] = b
+				sv[i].stringVal[p] = byte(b)
 			}
 			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, tid)
 			if err != nil {
