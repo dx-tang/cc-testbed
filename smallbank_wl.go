@@ -556,3 +556,35 @@ func (s *SBWorkload) PrintChecking() {
 
 	clog.Info("Total Checking Balance %v\n", total)
 }
+
+func (s *SBWorkload) ResetData() {
+	nKeys := s.basic.nKeys[CHECKING]
+	gen := s.basic.generators[0]
+	keyRange := s.basic.IDToKeyRange[CHECKING]
+	keyLen := len(keyRange)
+	compKey := make([]OneKey, keyLen)
+	store := s.basic.store
+	floatRB := &FloatValue{}
+
+	var k int = 0
+	for i := int64(0); i < nKeys; i++ {
+		key := CKey(compKey)
+		partNum := gen.GetPart(CHECKING, key)
+
+		floatRB.floatVal = BAL
+		store.SetValueByID(CHECKING, key, partNum, floatRB, C_BAL)
+		store.SetValueByID(SAVINGS, key, partNum, floatRB, S_BAL)
+
+		for int64(compKey[k]+1) >= keyRange[k] {
+			compKey[k] = 0
+			k++
+			if k >= keyLen {
+				break
+			}
+		}
+		if k < keyLen {
+			compKey[k]++
+			k = 0
+		}
+	}
+}

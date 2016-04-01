@@ -8,7 +8,13 @@ from sklearn.multiclass import OneVsRestClassifier
 import math
 
 START = 7
-FEATURELEN = 7
+FEATURELEN = 6
+PARTAVG = 0
+PARTSKEW = 1
+RECAVG = 2
+LATENCY = 3
+READRATE = 4
+CONFRATE = 5
 
 class SinglePart(object):
 
@@ -22,9 +28,9 @@ class SinglePart(object):
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[START:]]
 			tmpX = []
-			tmpX.extend(columns[0:1])
-			tmpX.extend([math.ceil(columns[3])])
-			tmpX.extend(columns[4:7])
+			tmpX.extend(columns[:FEATURELEN])
+			#tmpX.extend([math.ceil(columns[3])])
+			#tmpX.extend(columns[4:7])
 			X.append(tmpX)
 			if (columns[FEATURELEN] == 0):
 				Y.extend([0])
@@ -34,8 +40,8 @@ class SinglePart(object):
 		clf = clf.fit(X, Y)
 		return clf
 
-	def Predict(self, partAvg, partSkew, partLenSkew, recAvg, latency, readRate, confRate):
-		X = [[partAvg, recAvg, latency, readRate, confRate]]
+	def Predict(self, partAvg, partSkew, recAvg, latency, readRate, confRate):
+		X = [[partAvg, partSkew, recAvg, latency, readRate, confRate]]
 		return self.clf.predict(X)[0]
 
 class SingleOCC(object):
@@ -51,7 +57,7 @@ class SingleOCC(object):
 			if (columns[FEATURELEN] != 0):
 				if (len(columns) <= FEATURELEN + 1 or (len(columns) > FEATURELEN + 1 and columns[FEATURELEN+1] != 0)):
 					tmp = []
-					tmp.extend(columns[3:7])
+					tmp.extend(columns[RECAVG:FEATURELEN])
 					X.append(tmp)
 					#if (len(columns) > FEATURELEN + 1):
 					#	Y.extend([3])

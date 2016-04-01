@@ -28,13 +28,13 @@ const (
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
-var wl = flag.String("wl", "", "workload to be used")
+var wl = flag.String("wl", "../single.txt", "workload to be used")
 var tp = flag.String("tp", "50:50", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var ro = flag.String("ro", "report.out", "report out")
 var tc = flag.String("tc", "test.conf", "Test Configuration")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
-var sr = flag.Int("sr", 100, "Sample Rate")
+var sr = flag.Int("sr", 500, "Sample Rate")
 var rc = flag.String("rc", "report.conf", "configuration for reporting")
 var isPart = flag.Bool("p", true, "Whether index partition")
 

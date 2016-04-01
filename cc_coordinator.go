@@ -109,9 +109,9 @@ func (coord *Coordinator) process() {
 					summary.partStat[i] = ps
 				}
 
-				summary.partTotal = ri.partTotal
+				//summary.partTotal = ri.partTotal
 
-				summary.partLenStat = ri.partLenStat
+				//summary.partLenStat = ri.partLenStat
 
 				for i, rs := range ri.recStat {
 					summary.recStat[i] = rs
@@ -125,6 +125,9 @@ func (coord *Coordinator) process() {
 				summary.conflicts = ri.conflicts
 
 				summary.latency = ri.latency
+
+				summary.partAccess = ri.partAccess
+				summary.partSuccess = ri.partSuccess
 			}
 
 			for i := 1; i < len(coord.reports); i++ {
@@ -140,9 +143,9 @@ func (coord *Coordinator) process() {
 						summary.partStat[i] += ps
 					}
 
-					summary.partTotal += ri.partTotal
+					//summary.partTotal += ri.partTotal
 
-					summary.partLenStat += ri.partLenStat
+					//summary.partLenStat += ri.partLenStat
 
 					for i, rs := range ri.recStat {
 						summary.recStat[i] += rs
@@ -156,6 +159,9 @@ func (coord *Coordinator) process() {
 					summary.conflicts += ri.conflicts
 
 					summary.latency += ri.latency
+
+					summary.partAccess += ri.partAccess
+					summary.partSuccess += ri.partSuccess
 				}
 			}
 
@@ -183,9 +189,10 @@ func (coord *Coordinator) process() {
 					sumpow += p * p
 				}
 
-				partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
+				//partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 				partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
-				partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
+				//partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
+				partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
 				var recAvg float64
 				sum = 0
@@ -206,7 +213,7 @@ func (coord *Coordinator) process() {
 
 				// Use Classifier to Predict Features
 				//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
-				mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, latency, rr, confRate)
+				mode := coord.clf.Predict(partConf, partVar, recAvg, latency, rr, confRate)
 				var change bool = false
 				if mode != coord.mode {
 					if !(mode == 3 && coord.mode != 0) {

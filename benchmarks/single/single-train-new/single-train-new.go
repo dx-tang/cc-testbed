@@ -28,7 +28,7 @@ const (
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
-var wl = flag.String("wl", "", "workload to be used")
+var wl = flag.String("wl", "../single.txt", "workload to be used")
 var tp = flag.String("tp", "0:100", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var trainOut = flag.String("train", "train.out", "training set")
@@ -36,6 +36,7 @@ var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var tc = flag.String("tc", "train.conf", "configuration for training")
 var np = flag.Bool("np", false, "Whether not test partition")
+var prune = flag.Bool("prune", false, "Whether prune tests")
 var isPart = flag.Bool("p", true, "Whether partition index")
 
 var cr []float64
@@ -143,29 +144,35 @@ func main() {
 		tmpRR := rr[d]
 
 		// Prune
-		if tmpTlen == 1 {
-			if tmpMP != 1 || tmpPS != 0 {
-				continue
-			}
-		} else {
-			if tmpMP == 1 {
+		if *prune {
+			if tmpTlen == 1 {
 				if tmpMP != 1 || tmpPS != 0 {
 					continue
 				}
+			} else {
+				if tmpMP == 1 {
+					if tmpMP != 1 || tmpPS != 0 {
+						continue
+					}
+				}
+			}
+
+			if tmpMP > tmpTlen {
+				continue
+			}
+
+			if *np && tmpMP != tmpTlen {
+				continue
 			}
 		}
 
-		if tmpMP > tmpTlen {
-			continue
-		}
-
-		if *np && tmpMP != tmpTlen {
-			continue
-		}
-
 		startCR := 0
-		endCR := 100
+		endCR := 50
 		curCR := 0
+
+		if *np {
+			curCR = 100
+		}
 
 		for {
 
@@ -355,7 +362,6 @@ func main() {
 				}
 				curCR = (startCR + endCR) / 2
 			}
-
 		}
 
 	}

@@ -28,7 +28,7 @@ const (
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
-var wl = flag.String("wl", "", "workload to be used")
+var wl = flag.String("wl", "../single.txt", "workload to be used")
 var tp = flag.String("tp", "0:100", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var trainOut = flag.String("train", "train.out", "training set")

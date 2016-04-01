@@ -7,7 +7,13 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.multiclass import OneVsRestClassifier
 
 START = 5
-FEATURELEN = 7
+FEATURELEN = 6
+PARTAVG = 0
+PARTSKEW = 1
+RECAVG = 2
+LATENCY = 3
+READRATE = 4
+CONFRATE = 5
 
 class SmallbankPart(object):
 
@@ -21,8 +27,8 @@ class SmallbankPart(object):
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[START:]]
 			tmpX = []
-			tmpX.extend(columns[0:1])
-			tmpX.extend(columns[3:7])
+			tmpX.extend(columns[:FEATURELEN])
+			#tmpX.extend(columns[3:7])
 			X.append(tmpX)
 			if (columns[FEATURELEN] == 0):
 				Y.extend([0])
@@ -32,8 +38,8 @@ class SmallbankPart(object):
 		clf = clf.fit(X, Y)
 		return clf
 
-	def Predict(self, partAvg, partSkew, partLenSkew, recAvg, hitRate, readRate, confRate):
-		X = [[partAvg, recAvg, hitRate, readRate, confRate]]
+	def Predict(self, partAvg, partSkew, recAvg, hitRate, readRate, confRate):
+		X = [[partAvg, partSkew, recAvg, hitRate, readRate, confRate]]
 		return self.clf.predict(X)[0]
 
 class SmallbankOCC(object):
@@ -50,7 +56,7 @@ class SmallbankOCC(object):
 			if (columns[FEATURELEN] != 0):
 				if (len(columns) <= FEATURELEN + 1 or (len(columns) > FEATURELEN + 1 and columns[FEATURELEN+1] != 0)):
 					tmp = []
-					tmp.extend(columns[3:7])
+					tmp.extend(columns[RECAVG:FEATURELEN])
 					X.append(tmp)
 					Z = [0, 0]
 					for y in tmpY:
