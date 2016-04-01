@@ -137,17 +137,17 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		}
 	}
 
-	/*s := p.s
+	s := p.s
 	r := s.GetRecByID(tableID, k, partNum)
 	if r == nil {
 		return ENOKEY
-	}*/
+	}
 
 	n := len(t.wRecs)
 	t.wRecs = t.wRecs[0 : n+1]
 	t.wRecs[n].k = k
 	t.wRecs[n].partNum = partNum
-	//t.wRecs[n].rec = r
+	t.wRecs[n].rec = r
 	t.wRecs[n].cols = t.wRecs[n].cols[0:1]
 	t.wRecs[n].cols[0] = colNum
 	t.wRecs[n].vals = t.wRecs[n].vals[0:1]
@@ -174,15 +174,15 @@ func (p *PTransaction) Abort() TID {
 }
 
 func (p *PTransaction) Commit() TID {
-	s := p.Store()
+	//s := p.Store()
 	for i := 0; i < len(p.tt); i++ {
 		t := &p.tt[i]
 		for j := 0; j < len(t.wRecs); j++ {
 			wr := &t.wRecs[j]
-			rec := s.GetRecByID(i, wr.k, wr.partNum)
+			//rec := s.GetRecByID(i, wr.k, wr.partNum)
 			for p := 0; p < len(wr.cols); p++ {
-				//wr.rec.SetValue(wr.vals[p], wr.cols[p])
-				rec.SetValue(wr.vals[p], wr.cols[p])
+				wr.rec.SetValue(wr.vals[p], wr.cols[p])
+				//rec.SetValue(wr.vals[p], wr.cols[p])
 			}
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
