@@ -104,7 +104,7 @@ func main() {
 				if tq.IsFull() {
 					t = tq.Dequeue()
 				} else {
-					t = gen.GenOneTrans()
+					t = gen.GenOneTrans(*testbed.SysType)
 					t.SetTrial(TRIALS)
 					if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
 						tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))

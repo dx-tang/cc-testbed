@@ -259,14 +259,20 @@ type SingleTransGen struct {
 	mp              int
 }
 
-func (s *SingleTransGen) GenOneTrans() Trans {
+func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
 
 	rnd := s.rnd
 	gen := s.gen
 	cr := int(s.cr)
-	pi := s.partIndex
+	var pi int
+	if mode == PARTITION {
+		pi = s.partIndex
+	} else {
+		pi = rnd.Intn(s.nParts)
+	}
+	//pi := s.partIndex
 	nParts := s.nParts
 	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1 && s.mp > 1
 	tlen := s.tlen

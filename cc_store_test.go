@@ -52,14 +52,14 @@ func BenchmarkStore(b *testing.B) {
 		UKey(rndKey, &inputKey)
 
 		// Substract 10 from checking acccount
-		val := s.GetValueByID(CHECKING, inputKey, partNum, C_BAL)
+		val := s.GetValueByID(CHECKING, inputKey, partNum, CHECK_BAL)
 		fv.floatVal = *val.(*float64) - float64(10.0)
-		s.SetValueByID(CHECKING, inputKey, partNum, fv, C_BAL)
+		s.SetValueByID(CHECKING, inputKey, partNum, fv, CHECK_BAL)
 
 		// Add 10 to saving account
-		val = s.GetValueByID(SAVINGS, inputKey, partNum, S_BAL)
+		val = s.GetValueByID(SAVINGS, inputKey, partNum, SAVING_BAL)
 		fv.floatVal = *val.(*float64) + float64(10.0)
-		s.SetValueByID(SAVINGS, inputKey, partNum, fv, S_BAL)
+		s.SetValueByID(SAVINGS, inputKey, partNum, fv, SAVING_BAL)
 	}
 }
 
@@ -111,29 +111,29 @@ func BenchmarkStoreLock(b *testing.B) {
 		UKey(rndKey, &inputKey)
 
 		// Substract 10 from checking acccount
-		//val := s.GetValueByID(CHECKING, inputKey, partNum, C_BAL)
+		//val := s.GetValueByID(CHECKING, inputKey, partNum, CHECK_BAL)
 		rec := s.GetRecByID(CHECKING, inputKey, partNum)
 
 		for !rec.RLock() {
 
 		}
-		val := rec.GetValue(C_BAL)
+		val := rec.GetValue(CHECK_BAL)
 		fv.floatVal = *val.(*float64) - float64(10.0)
 
 		for !rec.Upgrade() {
 
 		}
-		s.SetValueByID(CHECKING, inputKey, partNum, fv, C_BAL)
+		s.SetValueByID(CHECKING, inputKey, partNum, fv, CHECK_BAL)
 		rec.WUnlock()
 
 		// Add 10 to saving account
-		//val = s.GetValueByID(SAVINGS, inputKey, partNum, S_BAL)
+		//val = s.GetValueByID(SAVINGS, inputKey, partNum, SAVING_BAL)
 		rec = s.GetRecByID(SAVINGS, inputKey, partNum)
 		for !rec.WLock() {
 
 		}
 		fv.floatVal = *val.(*float64) + float64(10.0)
-		s.SetValueByID(SAVINGS, inputKey, partNum, fv, S_BAL)
+		s.SetValueByID(SAVINGS, inputKey, partNum, fv, SAVING_BAL)
 		rec.WUnlock()
 	}
 }

@@ -2,6 +2,7 @@ package testbed
 
 import (
 	"runtime/debug"
+	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlockopt"
@@ -34,6 +35,12 @@ type FloatValue struct {
 
 type StringValue struct {
 	stringVal []byte
+}
+
+type DateValue struct {
+	padding1 [PADDING]byte
+	dateVal  time.Duration
+	padding2 [PADDING]byte
 }
 
 type Record interface {

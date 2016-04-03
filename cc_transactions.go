@@ -31,7 +31,7 @@ type Trans interface {
 }
 
 type TransGen interface {
-	GenOneTrans() Trans
+	GenOneTrans(mode int) Trans
 	ReleaseOneTrans(t Trans)
 }
 
@@ -121,12 +121,12 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	_, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -141,14 +141,14 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, S_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, SAVING_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
 	//sum := val.(*FloatValue).floatVal
 	fv0.floatVal = val.(*FloatValue).floatVal
 
-	val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, C_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -176,12 +176,12 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		}
 	*/
 
-	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, C_BAL, tid)
+	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, S_BAL, tid)
+	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -225,12 +225,12 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	_, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +245,7 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, C_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -258,18 +258,18 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 
 	fv0.floatVal = bal - ammt.floatVal
 
-	val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, C_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
 	fv1.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-	err = exec.WriteValue(CHECKING, send, part0, fv0, C_BAL, tid)
+	err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.WriteValue(CHECKING, dest, part1, fv1, C_BAL, tid)
+	err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -299,18 +299,18 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, C_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
 	ret.floatVal = val.(*FloatValue).floatVal
 
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, S_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -344,19 +344,19 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, C_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
 	checkBal := val.(*FloatValue).floatVal
 	sum := checkBal
 
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, S_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -401,18 +401,18 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, C_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
 	fv0.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-	err = exec.WriteValue(CHECKING, acct, part, fv0, C_BAL, tid)
+	err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -445,12 +445,12 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, A_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, S_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, tid)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +460,7 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 		return nil, ENEGSAVINGS
 	} else {
 		fv0.floatVal = sum
-		err = exec.WriteValue(SAVINGS, acct, part, fv0, S_BAL, tid)
+		err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, tid)
 		if err != nil {
 			return nil, err
 		}

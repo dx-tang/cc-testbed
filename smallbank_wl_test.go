@@ -40,10 +40,10 @@ func BenchmarkSmallBank(b *testing.B) {
 		for i, key := range sbTrans.accoutID {
 			if len(ap) > 1 {
 				part = ap[i]
-				val = s.GetValueByID(CHECKING, key, part, C_BAL)
+				val = s.GetValueByID(CHECKING, key, part, CHECK_BAL)
 			} else {
 				part = ap[0]
-				val = s.GetValueByID(CHECKING, key, part, C_BAL)
+				val = s.GetValueByID(CHECKING, key, part, CHECK_BAL)
 			}
 			//if val == nil {
 			//	clog.Error("key is %v; Part is %v\n", ParseKey(key, 0), part)

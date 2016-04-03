@@ -24,7 +24,7 @@ const (
 	CONTENTION   = "CONTENTION"
 	TRANLEN      = "TRANLEN"
 	READRATE     = "READRATE"
-	PERFDIFF     = 0.05
+	PERFDIFF     = 0.03
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
@@ -236,7 +236,7 @@ func main() {
 								if tq.IsFull() {
 									t = tq.Dequeue()
 								} else {
-									t = gen.GenOneTrans()
+									t = gen.GenOneTrans(j)
 									t.SetTrial(TRIALS)
 									if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
 										tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))

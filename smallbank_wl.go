@@ -23,23 +23,23 @@ const (
 
 // Column Reference Constants
 const (
-	A_ID = iota
-	A_NAME
+	ACCT_ID = iota
+	ACCT_NAME
 )
 
 const (
-	C_ID = iota
-	C_BAL
+	CHECK_ID = iota
+	CHECK_BAL
 )
 
 const (
-	S_ID = iota
-	S_BAL
+	SAVING_ID = iota
+	SAVING_BAL
 )
 
 // Define CAPACITY For String Fields
 const (
-	CAP_A_NAME = 4
+	CAP_ACCT_NAME = 4
 )
 
 const (
@@ -51,19 +51,19 @@ const (
 type AccoutsTuple struct {
 	padding1 [PADDING]byte
 	accoutID int64
-	name     [CAP_A_NAME]byte
+	name     [CAP_ACCT_NAME]byte
 	padding2 [PADDING]byte
 }
 
 func (at *AccoutsTuple) GetValue(val Value, col int) {
 	switch col {
-	case A_ID:
+	case ACCT_ID:
 		iv := val.(*IntValue)
 		iv.intVal = at.accoutID
-	case A_NAME:
+	case ACCT_NAME:
 		sv := val.(*StringValue)
-		sv.stringVal = sv.stringVal[:CAP_A_NAME]
-		for i := 0; i < CAP_A_NAME; i++ {
+		sv.stringVal = sv.stringVal[:CAP_ACCT_NAME]
+		for i := 0; i < CAP_ACCT_NAME; i++ {
 			sv.stringVal[i] = at.name[i]
 		}
 	default:
@@ -73,9 +73,9 @@ func (at *AccoutsTuple) GetValue(val Value, col int) {
 
 func (at *AccoutsTuple) SetValue(val Value, col int) {
 	switch col {
-	case A_ID:
+	case ACCT_ID:
 		at.accoutID = val.(*IntValue).intVal
-	case A_NAME:
+	case ACCT_NAME:
 		newOne := val.(*StringValue).stringVal
 		for i, b := range newOne {
 			at.name[i] = b
@@ -94,10 +94,10 @@ type CheckingTuple struct {
 
 func (ct *CheckingTuple) GetValue(val Value, col int) {
 	switch col {
-	case C_ID:
+	case CHECK_ID:
 		iv := val.(*IntValue)
 		iv.intVal = ct.accoutID
-	case C_BAL:
+	case CHECK_BAL:
 		fv := val.(*FloatValue)
 		fv.floatVal = ct.balance
 	default:
@@ -107,9 +107,9 @@ func (ct *CheckingTuple) GetValue(val Value, col int) {
 
 func (ct *CheckingTuple) SetValue(val Value, col int) {
 	switch col {
-	case C_ID:
+	case CHECK_ID:
 		ct.accoutID = val.(*IntValue).intVal
-	case C_BAL:
+	case CHECK_BAL:
 		ct.balance = val.(*FloatValue).floatVal
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
@@ -125,10 +125,10 @@ type SavingsTuple struct {
 
 func (st *SavingsTuple) GetValue(val Value, col int) {
 	switch col {
-	case S_ID:
+	case SAVING_ID:
 		iv := val.(*IntValue)
 		iv.intVal = st.accoutID
-	case S_BAL:
+	case SAVING_BAL:
 		fv := val.(*FloatValue)
 		fv.floatVal = st.balance
 	default:
@@ -138,9 +138,9 @@ func (st *SavingsTuple) GetValue(val Value, col int) {
 
 func (st *SavingsTuple) SetValue(val Value, col int) {
 	switch col {
-	case S_ID:
+	case SAVING_ID:
 		st.accoutID = val.(*IntValue).intVal
-	case S_BAL:
+	case SAVING_BAL:
 		st.balance = val.(*FloatValue).floatVal
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
@@ -199,13 +199,18 @@ type SBTransGen struct {
 	isPartition     bool
 }
 
-func (s *SBTransGen) GenOneTrans() Trans {
+func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
 	rnd := s.rnd
 	gen := s.gen
 	cr := int(s.cr)
-	pi := s.partIndex
+	var pi int
+	if mode == PARTITION {
+		pi = s.partIndex
+	} else {
+		pi = rnd.Intn(s.nParts)
+	}
 	isPart := s.isPartition
 
 	txn := rnd.Intn(100)
@@ -385,7 +390,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 				}
 				//at.name = at.name[PADDINGBYTE:PADDINGBYTE]
 				//at.name = at.name[:4]
-				for p := 0; p < CAP_A_NAME; p++ {
+				for p := 0; p < CAP_ACCT_NAME; p++ {
 					at.name[p] = "name"[p]
 				}
 				store.CreateRecByID(i, key, partNum, at)
@@ -538,7 +543,7 @@ func (s *SBWorkload) PrintChecking() {
 	for i := int64(0); i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
-		val = store.GetValueByID(CHECKING, key, partNum, floatRB, C_BAL)
+		val = store.GetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
 		total += val.(*FloatValue).floatVal
 
 		for int64(compKey[k]+1) >= keyRange[k] {
@@ -572,8 +577,8 @@ func (s *SBWorkload) ResetData() {
 		partNum := gen.GetPart(CHECKING, key)
 
 		floatRB.floatVal = BAL
-		store.SetValueByID(CHECKING, key, partNum, floatRB, C_BAL)
-		store.SetValueByID(SAVINGS, key, partNum, floatRB, S_BAL)
+		store.SetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
+		store.SetValueByID(SAVINGS, key, partNum, floatRB, SAVING_BAL)
 
 		for int64(compKey[k]+1) >= keyRange[k] {
 			compKey[k] = 0
