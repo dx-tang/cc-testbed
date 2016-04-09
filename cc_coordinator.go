@@ -25,6 +25,7 @@ type Coordinator struct {
 	NGen         time.Duration
 	NExecute     time.Duration
 	NWait        time.Duration
+	NCrossWait   time.Duration
 	NLockAcquire int64
 	stat         *os.File
 	mode         int
@@ -343,6 +344,7 @@ func (coord *Coordinator) gatherStats() {
 		coord.NGen += worker.NGen
 		coord.NExecute += worker.NExecute
 		coord.NWait += worker.NWait
+		coord.NCrossWait += worker.NCrossWait
 		coord.NLockAcquire += worker.NLockAcquire
 	}
 }
@@ -358,6 +360,7 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 	f.WriteString(fmt.Sprintf("Issue %v Transactions in Total\n", coord.NStats[NTXN]))
 	f.WriteString(fmt.Sprintf("Transaction Generation Spends %v secs\n", float64(coord.NGen.Nanoseconds())/float64(PERSEC)))
 	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NExecute.Nanoseconds())/float64(PERSEC)))
+	f.WriteString(fmt.Sprintf("Commit Spends %v secs\n", float64(coord.NCrossWait.Nanoseconds())/float64(PERSEC)))
 
 	if *SysType == PARTITION || (*SysType == ADAPTIVE && mode == PARTITION) {
 		f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))
@@ -468,8 +471,8 @@ func (ft *Feature) Add(tmpFt *Feature) {
 	ft.Latency += tmpFt.Latency
 	ft.ReadRate += tmpFt.ReadRate
 	ft.ConfRate += tmpFt.ConfRate
-	ft.Txn += tmpFt.Txn
-	ft.AR += tmpFt.AR
+	//ft.Txn += tmpFt.Txn
+	//ft.AR += tmpFt.AR
 }
 
 func (ft *Feature) Set(tmpFt *Feature) {
@@ -499,8 +502,8 @@ func (ft *Feature) Avg(count float64) {
 	ft.Latency /= count
 	ft.ReadRate /= count
 	ft.ConfRate /= count
-	ft.Txn /= count
-	ft.AR /= count
+	//ft.Txn /= count
+	//ft.AR /= count
 }
 
 // Currently, we support 8 features
@@ -596,6 +599,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	}
 
 	latency := float64(summary.latency) / float64(summary.accessCount)
+	//clog.Info("Access %v\n", summary.accessCount)
 	/*
 		f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\t ", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
 		f.WriteString(fmt.Sprintf("%.4f\t %.4f\n",

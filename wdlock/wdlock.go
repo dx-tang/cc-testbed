@@ -39,6 +39,7 @@ func (w *WDLock) RLock(tid uint64) bool {
 			if done {
 				return true
 			}
+			log.Printf("tid %v\n", tid)	
 		} else {
 			oldtid := oldlock >> readeroffset
 			if tid > oldtid {

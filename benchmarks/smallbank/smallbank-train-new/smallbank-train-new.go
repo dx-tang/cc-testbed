@@ -142,13 +142,11 @@ func main() {
 			curCR = 100
 		}
 
-		// Single Pruning
-		tp := strings.Split(tmpTP, ":")
-		if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 {
-			continue
-		}
+		
 
 		for {
+		
+
 			if sb == nil {
 				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS)
 				coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), -1, -1, testbed.SMALLBANKWL)
@@ -332,6 +330,12 @@ func main() {
 					endCR = curCR
 				}
 				curCR = (startCR + endCR) / 2
+			}
+
+			// Single Pruning
+			tp := strings.Split(tmpTP, ":")
+			if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 {
+				break
 			}
 
 		}

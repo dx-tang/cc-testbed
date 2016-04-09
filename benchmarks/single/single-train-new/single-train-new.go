@@ -330,6 +330,8 @@ func main() {
 				ft[0][1].Avg(float64(9))
 			}
 
+			fmt.Printf("Fist %.4f; Second %.4f\n",ft[0][1].Txn, ft[1][1].Txn)
+
 			// One Test Finished
 			// ID
 			f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))

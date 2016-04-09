@@ -47,7 +47,7 @@ var tlen []int
 var rr []int
 
 const (
-	TRIALS  = 3
+	TRIALS  = 10000
 	BUFSIZE = 3
 )
 
@@ -249,7 +249,7 @@ func main() {
 							} else {
 								t = gen.GenOneTrans(j)
 								t.SetTrial(TRIALS)
-								if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
+								if j == testbed.LOCKING && !*testbed.NoWait {
 									tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
 									t.SetTID(tid)
 								}
@@ -276,6 +276,9 @@ func main() {
 							}
 						}
 						w.Finish()
+						for !tq.IsEmpty() {
+							gen.ReleaseOneTrans(tq.Dequeue())
+						}
 						wg.Done()
 					}(i)
 				}
@@ -342,6 +345,8 @@ func main() {
 		} else {
 			ft[0][1].Avg(float64(9))
 		}
+
+		fmt.Printf("Fist %.4f; Second %.4f\n",ft[0][1].Txn, ft[1][1].Txn)
 
 		// One Test Finished
 		// ID

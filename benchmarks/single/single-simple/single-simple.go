@@ -48,14 +48,6 @@ func main() {
 		clog.Error("Report not Needed\n")
 	}
 
-	if *prof {
-		f, err := os.Create("single.prof")
-		if err != nil {
-			clog.Error(err.Error())
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
 
 	nParts := nWorkers
 	isPhysical := false
@@ -88,6 +80,16 @@ func main() {
 	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1, testbed.SINGLEWL)
 
 	clog.Info("Done with Populating Store\n")
+
+	if *prof {
+		clog.Info("Starting Profiling\n")
+		f, err := os.Create("single.prof")
+		if err != nil {
+			clog.Error(err.Error())
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	coord.Start()
 	ts := testbed.TID(0)

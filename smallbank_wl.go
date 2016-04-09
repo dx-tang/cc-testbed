@@ -206,11 +206,11 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	gen := s.gen
 	cr := int(s.cr)
 	var pi int
-	if mode == PARTITION {
-		pi = s.partIndex
-	} else {
-		pi = rnd.Intn(s.nParts)
-	}
+	//if mode == PARTITION {
+	pi = s.partIndex
+	//} else {
+	//	pi = rnd.Intn(s.nParts)
+	//}
 	isPart := s.isPartition
 
 	txn := rnd.Intn(100)
