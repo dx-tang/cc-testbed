@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/spinlock"
 	"github.com/totemtang/cc-testbed/spinlockopt"
 	"github.com/totemtang/cc-testbed/wdlock"
 	"github.com/totemtang/cc-testbed/wfmutex"
@@ -39,7 +40,7 @@ type StringValue struct {
 
 type DateValue struct {
 	padding1 [PADDING]byte
-	dateVal  time.Duration
+	dateVal  time.Time
 	padding2 [PADDING]byte
 }
 
@@ -57,6 +58,7 @@ type Record interface {
 	RLock(tid TID) bool
 	RUnlock()
 	Upgrade(tid TID) bool
+	GetTuple() Tuple
 }
 
 /*
@@ -86,7 +88,7 @@ func allocAttr(valType BTYPE, val Value) Value {
 	}
 }*/
 
-func MakeRecord(table *Table, k Key, tuple Tuple) Record {
+func MakeRecord(table Table, k Key, tuple Tuple) Record {
 
 	if *SysType == PARTITION {
 		pr := &PRecord{
@@ -284,6 +286,8 @@ type DRecord struct {
 	key      Key
 	value    Value
 	colNum   int
+	tuple    Tuple
+	lock     spinlock.Spinlock
 	padding2 [PADDING]byte
 }
 
@@ -325,12 +329,12 @@ func (dr *DRecord) SetTID(tid TID) {
 }
 
 func (dr *DRecord) WLock(tid TID) bool {
-	clog.Error("Dummy mode does not support WLock Operation")
-	return false
+	dr.lock.Lock()
+	return true
 }
 
 func (dr *DRecord) WUnlock() {
-	clog.Error("Dummy mode does not support WUnlock Operation")
+	dr.lock.Unlock()
 }
 
 func (dr *DRecord) RLock(tid TID) bool {

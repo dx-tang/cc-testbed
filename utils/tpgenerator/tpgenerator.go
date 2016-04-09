@@ -9,13 +9,17 @@ import (
 	"strings"
 )
 
+const (
+	TABLENUM = 3
+)
+
 var input = flag.String("ti", "ti.conf", "transaction information")
 var out = flag.String("to", "tp.out", "output transaction combinaion")
 
 type TXN struct {
-	MP   int
-	RR   float64
-	TLEN int
+	MP     [TABLENUM]int
+	Reads  [TABLENUM]int
+	Writes [TABLENUM]int
 }
 
 type txnPair struct {
@@ -43,12 +47,14 @@ func main() {
 	var txnArray []TXN
 	var strbytes []byte
 	var totalNum int
+	var tableNum int = TABLENUM
 
 	strbytes, _, err = reader.ReadLine()
 	if err != nil {
 		fmt.Printf("Read Line Error %v\n", err.Error())
 	}
-	totalNum, err = strconv.Atoi(string(strbytes))
+	strAr := strings.Split(string(strbytes), "\t")
+	totalNum, err = strconv.Atoi(strAr[0])
 	if err != nil {
 		fmt.Printf("Parse Integer Error %v\n", string(strbytes))
 	}
@@ -60,27 +66,34 @@ func main() {
 	// Parse Input Data
 	for i := 0; i < totalNum; i++ {
 		one := TXN{}
+
 		strbytes, _, err = reader.ReadLine()
 		if err != nil {
 			fmt.Printf("Read Line Error %v\n", err.Error())
 		}
 		valStrs := strings.Split(string(strbytes), "\t")
-		one.MP, err = strconv.Atoi(valStrs[0])
-		if err != nil {
-			fmt.Printf("String To Int Error %v\n", valStrs[0])
-		}
-		var r, w int
-		r, err = strconv.Atoi(valStrs[1])
-		if err != nil {
-			fmt.Printf("String To Int Error %v\n", valStrs[1])
-		}
-		w, err = strconv.Atoi(valStrs[2])
-		if err != nil {
-			fmt.Printf("String To Int Error %v\n", valStrs[2])
+
+		for j := 0; j < tableNum; j++ {
+
+			startIndex := j * 3
+			one.MP[j], err = strconv.Atoi(valStrs[startIndex])
+			if err != nil {
+				fmt.Printf("String To Int Error %v\n", valStrs[startIndex])
+			}
+			var r, w int
+			r, err = strconv.Atoi(valStrs[startIndex+1])
+			if err != nil {
+				fmt.Printf("String To Int Error %v\n", valStrs[startIndex+1])
+			}
+			w, err = strconv.Atoi(valStrs[startIndex+2])
+			if err != nil {
+				fmt.Printf("String To Int Error %v\n", valStrs[startIndex+2])
+			}
+
+			one.Reads[j] = r
+			one.Writes[j] = w
 		}
 
-		one.TLEN = r + w
-		one.RR = float64(r) / float64(r+w)
 		txnId, ok := txnMap[one]
 		if ok {
 			n := len(txnId)
@@ -108,7 +121,16 @@ func main() {
 	for i := 0; i < len(txnArray); i++ {
 		for j := i + 1; j < len(txnArray); j++ {
 
-			if txnArray[i].MP <= 1 && txnArray[j].MP <= 1 {
+			ok := false
+			for p := 0; p < tableNum; p++ {
+				if txnArray[i].MP[p] != 0 && txnArray[j].MP[p] != 0 {
+					if txnArray[i].MP[p] >= 2 || txnArray[j].MP[p] >= 2 {
+						ok = true
+					}
+				}
+			}
+
+			if !ok {
 				continue
 			}
 
@@ -116,12 +138,28 @@ func main() {
 				start: i,
 				end:   j,
 			}
+
+			iReads := 0
+			iWrites := 0
+			jReads := 0
+			jWrites := 0
+			for p := 0; p < tableNum; p++ {
+				if txnArray[i].MP[p] != 0 && txnArray[j].MP[p] != 0 {
+					if txnArray[i].MP[p] >= 2 || txnArray[j].MP[p] >= 2 {
+						iReads += txnArray[i].Reads[p]
+						iWrites += txnArray[i].Writes[p]
+						jReads += txnArray[j].Reads[p]
+						jWrites += txnArray[j].Writes[p]
+					}
+				}
+			}
+
 			pd := &pairData{}
-			pd.RRDist = txnArray[i].RR - txnArray[j].RR
+			pd.RRDist = float64(iReads)/float64(iReads+iWrites) - float64(jReads)/float64(jReads+jWrites)
 			if pd.RRDist < 0 {
 				pd.RRDist = -pd.RRDist
 			}
-			pd.TLENDist = txnArray[i].TLEN - txnArray[j].TLEN
+			pd.TLENDist = iReads + iWrites - jReads - jWrites
 			if pd.TLENDist < 0 {
 				pd.TLENDist = -pd.TLENDist
 			}
@@ -152,19 +190,20 @@ func main() {
 		pd := pairMap[tp]
 		rrper := pd.RRDist / maxRRDist
 		tlenper := float64(pd.TLENDist) / float64(maxTLENDist)
-		if rrper > 0.85 || tlenper > 0.85 {
-			str := formatStr(totalNum, txnArray, txnMap, tp, 0.25)
-			o.WriteString(str + "\n")
-			str = formatStr(totalNum, txnArray, txnMap, tp, 0.5)
-			o.WriteString(str + "\n")
-			str = formatStr(totalNum, txnArray, txnMap, tp, 0.75)
-			o.WriteString(str + "\n")
-		} else if rrper > 0.5 || tlenper > 0.5 {
+		//if rrper > 0.85 || tlenper > 0.85 {
+		//	str := formatStr(totalNum, txnArray, txnMap, tp, 0.25)
+		//	o.WriteString(str + "\n")
+		//	str = formatStr(totalNum, txnArray, txnMap, tp, 0.5)
+		//	o.WriteString(str + "\n")
+		//	str = formatStr(totalNum, txnArray, txnMap, tp, 0.75)
+		//	o.WriteString(str + "\n")
+		//} else if rrper > 0.5 || tlenper > 0.5 {
+		if rrper > 0.8 || tlenper > 0.8 {
 			str := formatStr(totalNum, txnArray, txnMap, tp, 0.33)
 			o.WriteString(str + "\n")
 			str = formatStr(totalNum, txnArray, txnMap, tp, 0.67)
 			o.WriteString(str + "\n")
-		} else if rrper > 0.15 || tlenper > 0.15 {
+		} else if rrper > 0.20 || tlenper > 0.20 {
 			str := formatStr(totalNum, txnArray, txnMap, tp, 0.5)
 			o.WriteString(str + "\n")
 		} else {

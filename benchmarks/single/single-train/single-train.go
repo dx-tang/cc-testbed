@@ -276,6 +276,9 @@ func main() {
 							}
 						}
 						w.Finish()
+						for !tq.IsEmpty() {
+							gen.ReleaseOneTrans(tq.Dequeue())
+						}
 						wg.Done()
 					}(i)
 				}

@@ -56,6 +56,7 @@ var (
 	EABORT  = errors.New("abort")
 	ENOKEY  = errors.New("no entry")
 	EDUPKEY = errors.New("key has existed")
+	ENODEL  = errors.New("No Delete Key")
 
 	// Error for Smallbank
 	ELACKBALANCE = errors.New("Checking Balance Not Enough")
@@ -70,60 +71,9 @@ var SysType = flag.Int("sys", PARTITION, "System Type we will use")
 var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
 var NoWait = flag.Bool("nw", true, "Use Waitdie or NoWait for 2PL")
 
-type Chunk struct {
-	padding1 [PADDING]byte
-	rows     map[Key]Record
-	padding2 [PADDING]byte
-}
-
-/*type Partition struct {
-	padding1 [PADDING]byte
-	partData []*Chunk
-	padding2 [PADDING]byte
-}*/
-
-type Partition struct {
-	padding1 [PADDING]byte
-	rows     map[Key]Record
-	padding2 [PADDING]byte
-}
-
-type RWMutex struct {
-	padding1 [PADDING]byte
-	sync.RWMutex
-	padding2 [PADDING]byte
-}
-
-type SpinLockPad struct {
-	padding1 [PADDING]byte
-	spinlock.Spinlock
-	padding2 [PADDING]byte
-}
-
-type WFMuTexPAD struct {
-	padding1 [PADDING]byte
-	lock     wfmutex.WFMutex
-	padding2 [PADDING]byte
-}
-
-type WDRWSpinlockPAD struct {
-	padding1 [PADDING]byte
-	lock     spinlockopt.WDRWSpinlock
-	padding2 [PADDING]byte
-}
-
-type Table struct {
-	padding1    [PADDING]byte
-	data        []*Partition
-	valueSchema []BTYPE
-	nKeys       int64
-	name        string
-	padding2    [PADDING]byte
-}
-
 type Store struct {
 	padding1     [PADDING]byte
-	tables       []*Table
+	tables       []Table
 	spinLock     []*SpinLockPad
 	wfLock       []*WFMuTexPAD
 	confLock     []*WDRWSpinlockPAD
@@ -255,68 +205,12 @@ func (s *Store) CreateRecByName(tableName string, k Key, partNum int, tuple Tupl
 
 func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Record, error) {
 	table := s.tables[tableID]
-	table.nKeys++
-
-	//chunk := table.data[partNum].partData[k[0]]
-	var part *Partition
-	if s.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
-	}
-	/*if _, ok := chunk.rows[k]; ok {
-		return nil, EDUPKEY //One record with that key has existed;
-	}*/
-
-	if _, ok := part.rows[k]; ok {
-		return nil, EDUPKEY //One record with that key has existed;
-	}
-
-	r := MakeRecord(table, k, tuple)
-	//chunk.rows[k] = r
-	part.rows[k] = r
-	return r, nil
+	return table.CreateRecByID(k, partNum, tuple)
 }
 
-func (s *Store) GetValueByID(tableID int, k Key, partNum int, val Value, colNum int) error {
+func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, error) {
 	table := s.tables[tableID]
-
-	//chunk := table.data[partNum].partData[k[0]]
-	//r, ok := chunk.rows[k]
-	var part *Partition
-	if s.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
-	}
-	r, ok := part.rows[k]
-	if !ok {
-		return ENOKEY
-	}
-	r.GetValue(val, colNum)
-	return nil
-}
-
-func (s *Store) GetRecByID(tableID int, k Key, partNum int) Record {
-	table := s.tables[tableID]
-
-	//chunk := table.data[partNum].partData[k[0]]
-	//r, ok := chunk.rows[k]
-	//if s.nParts == 1 {
-	//	clog.Info("ID %v, Key %v, PartNum %v, Part %v", tableID, k, partNum, len(table.data))
-	//}
-	var part *Partition
-	if s.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
-	}
-	r, ok := part.rows[k]
-	if !ok {
-		return nil
-	}
-
-	return r
+	return table.GetRecByID(k, partNum)
 }
 
 func (s *Store) GetValueByName(tableName string, k Key, partNum int, val Value, colNum int) error {
@@ -332,36 +226,12 @@ func (s *Store) GetValueByName(tableName string, k Key, partNum int, val Value, 
 	return s.GetValueByID(tableID, k, partNum, val, colNum)
 }
 
-func (s *Store) SetValueByID(tableID int, k Key, partNum int, value Value, colNum int) bool {
+func (s *Store) GetValueByID(tableID int, k Key, partNum int, val Value, colNum int) error {
 	table := s.tables[tableID]
-
-	if colNum >= len(table.valueSchema) {
-		clog.Error("Column Number %v Out of Index of %s", colNum, tableID)
-	}
-
-	if !checkType(value, table.valueSchema[colNum]) {
-		clog.Error("Column Type Not Match: Input %v, Require %v \n", value, table.valueSchema[colNum])
-	}
-
-	//chunk := table.data[partNum].partData[k[0]]
-	//r, ok := chunk.rows[k]
-	var part *Partition
-	if s.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
-	}
-	r, ok := part.rows[k]
-	if !ok {
-		return false // No such record; Fail
-	}
-
-	r.SetValue(value, colNum)
-	return true
+	return table.GetValueByID(k, partNum, val, colNum)
 }
 
-// Update
-func (s *Store) SetValueByName(tableName string, k Key, partNum int, value Value, colNum int) bool {
+func (s *Store) SetValueByName(tableName string, k Key, partNum int, value Value, colNum int) error {
 	if partNum >= s.nParts {
 		clog.Error("Partition Number %v Out of Index", partNum)
 	}
@@ -372,6 +242,178 @@ func (s *Store) SetValueByName(tableName string, k Key, partNum int, value Value
 	}
 
 	return s.SetValueByID(tableID, k, partNum, value, colNum)
+}
+
+func (s *Store) SetValueByID(tableID int, k Key, partNum int, value Value, colNum int) error {
+	table := s.tables[tableID]
+	return table.SetValueByID(k, partNum, value, colNum)
+}
+
+func (s *Store) PrepareDelete(tableID int, k Key, partNum int) (Record, error) {
+	table := s.tables[tableID]
+	return table.PrepareDelete(k, partNum)
+}
+
+func (s *Store) DeleteRecord(tableID int, k Key, partNum int) error {
+	table := s.tables[tableID]
+	return table.DeleteRecord(k, partNum)
+}
+
+func (s *Store) PrepareInsert(tableID int, k Key, partNum int) error {
+	table := s.tables[tableID]
+	return table.PrepareInsert(k, partNum)
+}
+
+func (s *Store) InsertRecord(tableID int, k Key, partNum int, rec Record) error {
+	table := s.tables[tableID]
+	return table.InsertRecord(k, partNum, rec)
+}
+
+type Table interface {
+	CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error)
+	GetRecByID(k Key, partNum int) (Record, error)
+	SetValueByID(k Key, partNum int, value Value, colNum int) error
+	GetValueByID(k Key, partNum int, val Value, colNum int) error
+	ReleaseDelete(k Key, partNum int)
+	PrepareDelete(k Key, partNum int) (Record, error)
+	DeleteRecord(k Key, partNum int) error
+	ReleaseInsert(k Key, partNum int)
+	PrepareInsert(k Key, partNum int) error
+	InsertRecord(k Key, partNum int, rec Record) error
+	GetValueBySec(k Key, partNum int, val Value) error
+}
+
+type Chunk struct {
+	padding1 [PADDING]byte
+	rows     map[Key]Record
+	padding2 [PADDING]byte
+}
+
+type Partition struct {
+	padding1 [PADDING]byte
+	rows     map[Key]Record
+	padding2 [PADDING]byte
+}
+
+type RWMutex struct {
+	padding1 [PADDING]byte
+	sync.RWMutex
+	padding2 [PADDING]byte
+}
+
+type SpinLockPad struct {
+	padding1 [PADDING]byte
+	spinlock.Spinlock
+	padding2 [PADDING]byte
+}
+
+type WFMuTexPAD struct {
+	padding1 [PADDING]byte
+	lock     wfmutex.WFMutex
+	padding2 [PADDING]byte
+}
+
+type WDRWSpinlockPAD struct {
+	padding1 [PADDING]byte
+	lock     spinlockopt.WDRWSpinlock
+	padding2 [PADDING]byte
+}
+
+type BasicTable struct {
+	padding1    [PADDING]byte
+	data        []*Partition
+	valueSchema []BTYPE
+	nKeys       int64
+	name        string
+	isPhysical  bool
+	padding2    [PADDING]byte
+}
+
+func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	bt.nKeys++
+
+	var part *Partition
+	if bt.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
+
+	if _, ok := part.rows[k]; ok {
+		return nil, EDUPKEY //One record with that key has existed;
+	}
+
+	r := MakeRecord(bt, k, tuple)
+	//chunk.rows[k] = r
+	part.rows[k] = r
+	return r, nil
+}
+
+func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, error) {
+	var part *Partition
+	if bt.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
+	r, ok := part.rows[k]
+	if !ok {
+		return nil, ENOKEY
+	} else {
+		return r, nil
+	}
+}
+
+func (bt *BasicTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
+
+	var part *Partition
+	if s.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
+	r, ok := part.rows[k]
+	if !ok {
+		return ENOKEY // No such record; Fail
+	}
+
+	r.SetValue(value, colNum)
+	return nil
+}
+
+func (bt *BasicTable) GetValueByID(k Key, partNum int, val Value, colNum int) error {
+	var part *Partition
+	if bt.isPhysical {
+		part = table.data[partNum]
+	} else {
+		part = table.data[0]
+	}
+	r, ok := part.rows[k]
+	if !ok {
+		return ENOKEY
+	}
+	r.GetValue(val, colNum)
+	return nil
+}
+
+func (bt *BasicTable) PrepareDelete(k Key, partNum int) (Record, error) {
+	clog.Error("Basic Table Not Support PrepareDelete")
+	return nil, nil
+}
+
+func (bt *BasicTable) DeleteRecord(k Key, partNum int) error {
+	clog.Error("Basic Table Not Support DeleteRecord")
+	return nil
+}
+
+func (bt *BasicTable) PrepareInsert(k Key, partNum int) error {
+	clog.Error("Basic Table Not Support PrepareInsert")
+	return nil, nil
+}
+
+func (bt *BasicTable) InsertRecord(k Key, partNum int, rec Record) error {
+	clog.Error("Basic Table Not Support InsertRecord")
+	return nil
 }
 
 func checkSchema(v []Value, valueSchema []BTYPE) bool {

@@ -13,14 +13,15 @@ const (
 )
 
 type Key [KEYLENTHBYTE]byte
-type OneKey int64
+
+//type int64 int64
 
 // Composite Keys; Not Used Yet
 type CompKey struct {
-	keysArray []OneKey
+	keysArray []int64
 }
 
-func CKey(x []OneKey) Key {
+func CKey(x []int64) Key {
 	var k Key
 	var i, j uint64
 	for j = 0; j < uint64(len(x)); j++ {
@@ -32,19 +33,16 @@ func CKey(x []OneKey) Key {
 }
 
 // Update an existing key
-func UKey(x []OneKey, k *Key) {
+func UKey(x [KEYLENTH]int64, k *Key) {
 	var i, j uint64
-	for i := 0; i < KEYLENTHBYTE; i++ {
-		(*k)[i] = byte(0)
-	}
-	for j = 0; j < uint64(len(x)); j++ {
+	for j = 0; j < KEYLENTH; j++ {
 		for i = 0; i < ONEKEYWIDTH; i++ {
 			(*k)[j*ONEKEYWIDTH+i] = byte(uint64(x[j]) >> (i * 8))
 		}
 	}
 }
 
-func ParseKey(key Key, index int) OneKey {
+func ParseKey(key Key, index int) int64 {
 	if index >= KEYLENTH {
 		clog.Error("Index %v out of range for key length %v\n", index, KEYLENTH)
 	}
@@ -58,5 +56,5 @@ func ParseKey(key Key, index int) OneKey {
 		onekey += int64(key[index*ONEKEYWIDTH+i]) << (uint(i) * 8)
 	}
 
-	return OneKey(onekey)
+	return int64(onekey)
 }

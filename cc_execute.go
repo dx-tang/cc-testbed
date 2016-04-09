@@ -18,6 +18,10 @@ type ETransaction interface {
 	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error)
 	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) error
 	MayWrite(tableID int, k Key, partNum int, ts TID) error
+	InsertRecord(tableID int, k Key, partNum int, rec Record) error
+	DeleteRecord(tableID int, k Key, partNum int) error
+	GetKeysBySecIndex(tableID int, partNum int, k Value) error
+	GetRecord(tableID int, k Key, partNum int, ts TID) (Record, error)
 	Abort() TID
 	Commit() TID
 	Store() *Store

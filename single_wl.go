@@ -412,7 +412,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool,
 	nKeys := singleWL.basic.nKeys[SINGLE]
 	store := singleWL.basic.store
 	keyLen := len(keyRange)
-	compKey := make([]OneKey, keyLen)
+	compKey := make([]int64, keyLen)
 
 	var k int = 0
 	for j := int64(0); j < nKeys; j++ {
@@ -544,7 +544,7 @@ func (singleWL *SingelWorkload) ResetData() {
 	gen := singleWL.basic.generators[0]
 	keyRange := singleWL.basic.IDToKeyRange[SINGLE]
 	keyLen := len(keyRange)
-	compKey := make([]OneKey, keyLen)
+	compKey := make([]int64, keyLen)
 	store := singleWL.basic.store
 	iv := &IntValue{
 		intVal: INITVAL,
@@ -583,7 +583,7 @@ func (s *SingelWorkload) PrintSum() {
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[SINGLE]
 	keyLen := len(keyRange)
-	compKey := make([]OneKey, keyLen)
+	compKey := make([]int64, keyLen)
 	store := s.basic.store
 	intRB := &IntValue{}
 

@@ -468,8 +468,8 @@ func (ft *Feature) Add(tmpFt *Feature) {
 	ft.Latency += tmpFt.Latency
 	ft.ReadRate += tmpFt.ReadRate
 	ft.ConfRate += tmpFt.ConfRate
-	ft.Txn += tmpFt.Txn
-	ft.AR += tmpFt.AR
+	//ft.Txn += tmpFt.Txn
+	//ft.AR += tmpFt.AR
 }
 
 func (ft *Feature) Set(tmpFt *Feature) {
@@ -499,8 +499,8 @@ func (ft *Feature) Avg(count float64) {
 	ft.Latency /= count
 	ft.ReadRate /= count
 	ft.ConfRate /= count
-	ft.Txn /= count
-	ft.AR /= count
+	//ft.Txn /= count
+	//ft.AR /= count
 }
 
 // Currently, we support 8 features

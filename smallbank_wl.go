@@ -374,7 +374,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 		nKeys := sbWorkload.basic.nKeys[i]
 		store := sbWorkload.basic.store
 		keyLen := len(keyRange)
-		compKey := make([]OneKey, keyLen)
+		compKey := make([]int64, keyLen)
 
 		var k int = 0
 		for j := int64(0); j < nKeys; j++ {
@@ -385,7 +385,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 			// Generate One Value
 			if i == ACCOUNTS {
 				at := &AccoutsTuple{
-					accoutID: int64(compKey[0]),
+					accoutID: compKey[0],
 					//name:     make([]byte, 0, SBSTRMAXLEN+2*PADDINGBYTE),
 				}
 				//at.name = at.name[PADDINGBYTE:PADDINGBYTE]
@@ -396,13 +396,13 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 				store.CreateRecByID(i, key, partNum, at)
 			} else if i == SAVINGS {
 				st := &SavingsTuple{
-					accoutID: int64(compKey[0]),
+					accoutID: compKey[0],
 					balance:  float64(BAL),
 				}
 				store.CreateRecByID(i, key, partNum, st)
 			} else { // CHECKING
 				ct := &CheckingTuple{
-					accoutID: int64(compKey[0]),
+					accoutID: compKey[0],
 					balance:  float64(BAL),
 				}
 				store.CreateRecByID(i, key, partNum, ct)
@@ -534,7 +534,7 @@ func (s *SBWorkload) PrintChecking() {
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[CHECKING]
 	keyLen := len(keyRange)
-	compKey := make([]OneKey, keyLen)
+	compKey := make([]int64, keyLen)
 	store := s.basic.store
 	floatRB := &FloatValue{}
 
@@ -567,7 +567,7 @@ func (s *SBWorkload) ResetData() {
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[CHECKING]
 	keyLen := len(keyRange)
-	compKey := make([]OneKey, keyLen)
+	compKey := make([]int64, keyLen)
 	store := s.basic.store
 	floatRB := &FloatValue{}
 

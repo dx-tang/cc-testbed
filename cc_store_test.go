@@ -10,10 +10,10 @@ func BenchmarkStore(b *testing.B) {
 	s := NewStore("workload.txt", nParts)
 	nAccounts := 10000
 
-	key := make([]OneKey, 1)
+	key := make([]int64, 1)
 	// create table ACCOUNTS
 	for i := 0; i < nAccounts; i++ {
-		key[0] = OneKey(i)
+		key[0] = int64(i)
 		partNum := i % *NumPart
 
 		at := &AccoutsTuple{
@@ -43,11 +43,11 @@ func BenchmarkStore(b *testing.B) {
 	rnd := rand.New(rand.NewSource(1))
 
 	var inputKey Key
-	rndKey := make([]OneKey, 1)
+	rndKey := make([]int64, 1)
 
 	fv := &FloatValue{}
 	for n := 0; n < b.N; n++ {
-		rndKey[0] = OneKey(rnd.Intn(nAccounts))
+		rndKey[0] = int64(rnd.Intn(nAccounts))
 		partNum := int(rndKey[0]) % *NumPart
 		UKey(rndKey, &inputKey)
 
@@ -69,10 +69,10 @@ func BenchmarkStoreLock(b *testing.B) {
 	s := NewStore("workload.txt", nParts)
 	nAccounts := 10000
 
-	key := make([]OneKey, 1)
+	key := make([]int64, 1)
 	// create table ACCOUNTS
 	for i := 0; i < nAccounts; i++ {
-		key[0] = OneKey(i)
+		key[0] = int64(i)
 		partNum := i % *NumPart
 
 		at := &AccoutsTuple{
@@ -102,11 +102,11 @@ func BenchmarkStoreLock(b *testing.B) {
 	rnd := rand.New(rand.NewSource(1))
 
 	var inputKey Key
-	rndKey := make([]OneKey, 1)
+	rndKey := make([]int64, 1)
 
 	fv := &FloatValue{}
 	for n := 0; n < b.N; n++ {
-		rndKey[0] = OneKey(rnd.Intn(nAccounts))
+		rndKey[0] = int64(rnd.Intn(nAccounts))
 		partNum := int(rndKey[0]) % *NumPart
 		UKey(rndKey, &inputKey)
 
