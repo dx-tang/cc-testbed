@@ -1,16 +1,15 @@
 package testbed
 
 import (
-	"fmt"
-	"sync"
+	//"fmt"
+	//"sync"
 	"sync/atomic"
 	"testing"
 )
 
+/*
 func TestWDLock(t *testing.T) {
-	/*rw := WDLock{
-		l: maxreaders,
-	}*/
+
 
 	*NoWait = false
 	*NumPart = 10
@@ -45,10 +44,7 @@ func TestWDLock(t *testing.T) {
 
 			for {
 				localtid := atomic.AddUint64(&tid, 1)
-				/*select {
-				case <-done:
-					break
-				default:*/
+
 				if localtid > 1000 {
 					break
 				}
@@ -137,5 +133,33 @@ func TestWDLock(t *testing.T) {
 	fmt.Printf("tid %v, Locked %v\n", tid, total_locked)
 	if total_locked != total_unlocked {
 		t.Errorf("Mismatched %v %v \n", total_locked, total_unlocked)
+	}
+}*/
+
+func BenchmarkWDLock(b *testing.B) {
+	*NoWait = false
+	*NumPart = 10
+	rec := &LRecord{}
+	rec.wd.Initialize()
+
+	var tid uint64 = 0
+
+	// Initilize GlobleBuf
+	globalBuf = make([]*LockReqBuffer, *NumPart)
+	for i := 0; i < *NumPart; i++ {
+		globalBuf[i] = NewLockReqBuffer(maxwaiters, i)
+	}
+
+	req := &LockReq{
+		id:    0,
+		state: make(chan int, 1),
+	}
+
+	for n := 0; n < b.N; n++ {
+		req.tid = TID(atomic.AddUint64(&tid, 1))
+		ok := rec.WLock(req)
+		if ok {
+			rec.WUnlock(req)
+		}
 	}
 }

@@ -10,10 +10,8 @@ const (
 )
 
 type LockReqList struct {
-	padding1 [PADDING]byte
-	header   *ReqEntry
-	tailer   *ReqEntry
-	padding2 [PADDING]byte
+	header *ReqEntry
+	tailer *ReqEntry
 }
 
 // ReqEntry is an element of a linked list.
@@ -115,12 +113,14 @@ func (l *LockReqList) Remove(oldE *ReqEntry) {
 }
 
 type LockReqBuffer struct {
+	padding1 [PADDING]byte
 	head     int
 	tail     int
 	capacity int
 	size     int
 	id       int
 	buf      []*ReqEntry
+	padding2 [PADDING]byte
 }
 
 func NewLockReqBuffer(size int, id int) *LockReqBuffer {

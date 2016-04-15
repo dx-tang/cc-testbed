@@ -497,6 +497,24 @@ func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool,
 }
 
 func (s *SingelWorkload) GetTransGen(partIndex int) TransGen {
+
+	globalBuf[partIndex].head = 0
+	globalBuf[partIndex].tail = -1
+	globalBuf[partIndex].size = maxwaiters
+	globalBuf[partIndex].capacity = maxwaiters
+	globalBuf[partIndex].buf = make([]*ReqEntry, maxwaiters+2*POINTPADDING)
+	globalBuf[partIndex].id = partIndex
+
+	globalBuf[partIndex].buf = globalBuf[partIndex].buf[POINTPADDING : POINTPADDING+maxwaiters]
+
+	//listBuf.buf = listBuf.buf[POINTPADDING : POINTPADDING+size]
+	for i := 0; i < maxwaiters; i++ {
+		globalBuf[partIndex].buf[i] = &ReqEntry{
+			state: make(chan int, 1),
+			id:    partIndex,
+		}
+	}
+
 	if partIndex >= len(s.transGen) {
 		clog.Error("Part Index %v Out of Range %v for TransGen\n", partIndex, len(s.transGen))
 	}

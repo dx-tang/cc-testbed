@@ -5,6 +5,8 @@ import (
 	"github.com/totemtang/cc-testbed/spinlock"
 )
 
+var nowait_flag bool = false
+
 const (
 	maxreaders   = 1 << 7
 	readermask   = 1<<8 - 1
@@ -13,15 +15,15 @@ const (
 
 type WDLock struct {
 	latch     spinlock.Spinlock
-	owners    *LockReqList
-	waiters   *LockReqList
+	owners    LockReqList
+	waiters   LockReqList
 	lock_type int
 }
 
 func (w *WDLock) Initialize() {
 	w.latch.SetTrial(spinlock.PREEMPT)
-	w.owners = NewLockReqList()
-	w.waiters = NewLockReqList()
+	//w.owners = NewLockReqList()
+	//w.waiters = NewLockReqList()
 	w.lock_type = LOCK_NONE
 }
 
@@ -33,8 +35,8 @@ func (w *WDLock) Lock(req *LockReq) int {
 
 	var retState int
 
-	waiters := w.waiters
-	owners := w.owners
+	waiters := &w.waiters
+	owners := &w.owners
 
 	noWaiters := false
 	if waiters.Header() == nil {
@@ -50,7 +52,7 @@ func (w *WDLock) Lock(req *LockReq) int {
 
 	conflict := Conflict_Req(req.reqType, w.lock_type)
 
-	if !conflict && !noWaiters { // SHARE vs. SHARE
+	if nowait_flag && !conflict && !noWaiters { // SHARE vs. SHARE
 		l := waiters.Header()
 		if req.tid < l.tid { // Older than waiters
 			conflict = true
@@ -58,6 +60,9 @@ func (w *WDLock) Lock(req *LockReq) int {
 	}
 
 	if conflict {
+		if !nowait_flag {
+			return LOCK_ABORT
+		}
 		canWait := true
 		entry := owners.Header()
 		for entry != nil {
@@ -107,8 +112,8 @@ func (w *WDLock) Unlock(req *LockReq) {
 
 	//clog.Info("Unlock %v, %v", req.id, req.tid)
 
-	owners := w.owners
-	waiters := w.waiters
+	owners := &w.owners
+	waiters := &w.waiters
 	en := owners.Header()
 	for en != nil && en.id != req.id {
 		en = en.Next
