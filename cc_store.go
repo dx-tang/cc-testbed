@@ -134,7 +134,27 @@ type Store struct {
 	padding2     [PADDING]byte
 }
 
+var globalBuf []*LockReqBuffer
+
+const (
+	maxwaiters = 10
+)
+
+func allocEntry(id int) *ReqEntry {
+	return globalBuf[id].AllocateReqEntry()
+}
+
+func releaseElem(id int, e *ReqEntry) {
+	globalBuf[id].ReleaseReqEntry(e)
+}
+
 func NewStore(schema string, nParts int, isPhysical bool) *Store {
+
+	// Initilize GlobleBuf
+	globalBuf = make([]*LockReqBuffer, *NumPart)
+	for i := 0; i < *NumPart; i++ {
+		globalBuf[i] = NewLockReqBuffer(maxwaiters, i)
+	}
 
 	// Open Schema File and Read Configuration
 	sch, err := os.OpenFile(schema, os.O_RDONLY, 0600)

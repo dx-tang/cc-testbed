@@ -215,7 +215,7 @@ type SingleTrans struct {
 	trial       int
 	rnd         *rand.Rand
 	rr          int
-	tid         TID
+	req         *LockReq
 	padding2    [PADDING]byte
 }
 
@@ -228,7 +228,7 @@ func (s *SingleTrans) GetAccessParts() []int {
 }
 
 func (s *SingleTrans) SetTID(tid TID) {
-	s.tid = tid
+	s.req.tid = tid
 }
 
 func (s *SingleTrans) SetTrial(trial int) {
@@ -480,6 +480,12 @@ func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool,
 			}
 			trans.strRB.stringVal = make([]byte, CAP_SINGLE_STR+2*PADDINGBYTE)
 			trans.strRB.stringVal = trans.strRB.stringVal[PADDINGBYTE : PADDINGBYTE+CAP_SINGLE_STR]
+
+			req := &LockReq{
+				id: i,
+			}
+			trans.req = req
+
 			tg.transBuf[p] = trans
 		}
 		tg.head = 0

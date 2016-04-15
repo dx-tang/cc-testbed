@@ -23,6 +23,29 @@ const (
 	LAST_TXN
 )
 
+// Request Type
+const (
+	LOCK_NONE = iota
+	LOCK_SH
+	LOCK_EX
+)
+
+// State
+const (
+	LOCK_OK = iota
+	LOCK_WAIT
+	LOCK_ABORT
+)
+
+type LockReq struct {
+	padding1 [PADDING]byte
+	id       int
+	tid      TID
+	reqType  int
+	state    chan int
+	padding2 [PADDING]byte
+}
+
 type Trans interface {
 	GetTXN() int
 	GetAccessParts() []int
@@ -105,7 +128,7 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 	intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 
-	tid := sbTrnas.tid
+	req := sbTrnas.req
 	fv0 := &sbTrnas.fv[0]
 	fv1 := &sbTrnas.fv[1]
 
@@ -123,34 +146,34 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, req)
 	if err != nil {
 		return nil, err
 	}
 
-	_, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, req)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.MayWrite(SAVINGS, acctId0, part0, tid)
+	err = exec.MayWrite(SAVINGS, acctId0, part0, req)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.MayWrite(CHECKING, acctId1, part1, tid)
+	err = exec.MayWrite(CHECKING, acctId1, part1, req)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, SAVING_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, SAVING_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 	//sum := val.(*FloatValue).floatVal
 	fv0.floatVal = val.(*FloatValue).floatVal
 
-	val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, CHECK_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -178,17 +201,17 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		}
 	*/
 
-	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, tid)
+	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, tid)
+	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 
@@ -208,7 +231,7 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 
-	tid := sbTrnas.tid
+	req := sbTrnas.req
 	fv0 := &sbTrnas.fv[0]
 	fv1 := &sbTrnas.fv[1]
 	ammt := &sbTrnas.ammount
@@ -227,56 +250,56 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, req)
 	if err != nil {
 		return nil, err
 	}
 
-	_, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, req)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.MayWrite(CHECKING, send, part0, tid)
+	err = exec.MayWrite(CHECKING, send, part0, req)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.MayWrite(CHECKING, dest, part1, tid)
+	err = exec.MayWrite(CHECKING, dest, part1, req)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, CHECK_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 	bal := val.(*FloatValue).floatVal
 
 	if bal < ammt.floatVal {
-		exec.Abort()
+		exec.Abort(req)
 		return nil, ELACKBALANCE
 	}
 
 	fv0.floatVal = bal - ammt.floatVal
 
-	val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, CHECK_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 	fv1.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-	err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, tid)
+	err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, tid)
+	err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 
@@ -294,32 +317,32 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 	intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 
-	tid := sbTrnas.tid
+	req := sbTrnas.req
 	ret := &sbTrnas.ret
 	part := sbTrnas.accessParts[0]
 	acct := sbTrnas.accoutID[0]
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 	ret.floatVal = val.(*FloatValue).floatVal
 
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 
 	ret.floatVal += val.(*FloatValue).floatVal
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 
@@ -338,7 +361,7 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 	intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 
-	tid := sbTrnas.tid
+	req := sbTrnas.req
 	part := sbTrnas.accessParts[0]
 	acct := sbTrnas.accoutID[0]
 	ammt := &sbTrnas.ammount
@@ -346,19 +369,19 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 	checkBal := val.(*FloatValue).floatVal
 	sum := checkBal
 
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -366,19 +389,19 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 
 	if sum < ammt.floatVal {
 		fv0.floatVal = checkBal - ammt.floatVal + float64(1)
-		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, tid)
+		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		fv0.floatVal = checkBal - ammt.floatVal
-		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, tid)
+		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 
@@ -395,7 +418,7 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 	intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 
-	tid := sbTrnas.tid
+	req := sbTrnas.req
 	part := sbTrnas.accessParts[0]
 	acct := sbTrnas.accoutID[0]
 	ammt := &sbTrnas.ammount
@@ -403,23 +426,23 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
 	if err != nil {
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, tid)
+	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 	fv0.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-	err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, tid)
+	err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 
@@ -439,7 +462,7 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 	intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 
-	tid := sbTrnas.tid
+	req := sbTrnas.req
 	part := sbTrnas.accessParts[0]
 	acct := sbTrnas.accoutID[0]
 	ammt := &sbTrnas.ammount
@@ -447,28 +470,32 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 
 	var val Value
 	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, tid)
+	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
 	if err != nil {
+		exec.Abort(req)
 		return nil, err
 	}
 
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, tid)
+	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
 	if err != nil {
+		exec.Abort(req)
 		return nil, err
 	}
 	sum := val.(*FloatValue).floatVal + ammt.floatVal
 
 	if sum < 0 {
+		exec.Abort(req)
 		return nil, ENEGSAVINGS
 	} else {
 		fv0.floatVal = sum
-		err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, tid)
+		err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, req)
 		if err != nil {
+			exec.Abort(req)
 			return nil, err
 		}
 	}
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 
@@ -479,7 +506,7 @@ func AddOne(t Trans, exec ETransaction) (Value, error) {
 	singleTrans := t.(*SingleTrans)
 	iv := singleTrans.iv
 
-	tid := singleTrans.tid
+	req := singleTrans.req
 	intRB := &singleTrans.intRB
 	var k Key
 	var part int
@@ -490,14 +517,16 @@ func AddOne(t Trans, exec ETransaction) (Value, error) {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
 
-		err = exec.MayWrite(SINGLE, k, part, tid)
+		err = exec.MayWrite(SINGLE, k, part, req)
 		if err != nil {
+			exec.Abort(req)
 			return nil, err
 		}
 
-		//val, fromStore, err = exec.ReadValue(SINGLE, k, part, intRB, SINGLE_VAL, tid)
-		val, _, err = exec.ReadValue(SINGLE, k, part, intRB, SINGLE_VAL, tid)
+		//val, fromStore, err = exec.ReadValue(SINGLE, k, part, intRB, SINGLE_VAL, req)
+		val, _, err = exec.ReadValue(SINGLE, k, part, intRB, SINGLE_VAL, req)
 		if err != nil {
+			exec.Abort(req)
 			return nil, err
 		}
 
@@ -508,14 +537,15 @@ func AddOne(t Trans, exec ETransaction) (Value, error) {
 		}*/
 		iv[i].intVal = val.(*IntValue).intVal + 1
 
-		err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, tid)
+		err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, req)
 		if err != nil {
+			exec.Abort(req)
 			return nil, err
 		}
 
 	}
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 
@@ -526,23 +556,26 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 	singleTrans := t.(*SingleTrans)
 	sv := singleTrans.sv
 	strRB := &singleTrans.strRB
-	tid := singleTrans.tid
+	req := singleTrans.req
 	var k Key
 	var part int
 	var err error
 	var val Value
 	var col int
+
 	for i := 0; i < len(singleTrans.keys); i++ {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
 		col = singleTrans.rnd.Intn(20) + SINGLE_VAL + 1
 
 		if singleTrans.rnd.Intn(100) < singleTrans.rr {
-			val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, tid)
+			val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req)
 			if err != nil {
+				exec.Abort(req)
 				return nil, err
 			}
 			if val == nil {
+				exec.Abort(req)
 				return nil, ENOKEY
 			}
 		} else {
@@ -550,14 +583,15 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 			//for p, b := range CONST_STR_SINGLE {
 			//	sv[i].stringVal[p] = byte(b)
 			//}
-			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, tid)
+			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, req)
 			if err != nil {
+				exec.Abort(req)
 				return nil, err
 			}
 		}
 	}
 
-	if exec.Commit() == 0 {
+	if exec.Commit(req) == 0 {
 		return nil, EABORT
 	}
 

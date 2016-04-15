@@ -6,7 +6,6 @@ import (
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlockopt"
-	"github.com/totemtang/cc-testbed/wdlock"
 	"github.com/totemtang/cc-testbed/wfmutex"
 )
 
@@ -52,11 +51,11 @@ type Record interface {
 	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
-	WLock(tid TID) bool
-	WUnlock()
-	RLock(tid TID) bool
-	RUnlock()
-	Upgrade(tid TID) bool
+	WLock(req *LockReq) bool
+	WUnlock(req *LockReq)
+	RLock(req *LockReq) bool
+	RUnlock(req *LockReq)
+	Upgrade(req *LockReq) bool
 }
 
 /*
@@ -183,25 +182,25 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
-func (pr *PRecord) WLock(tid TID) bool {
+func (pr *PRecord) WLock(req *LockReq) bool {
 	clog.Error("Partition mode does not support WLock Operation")
 	return false
 }
 
-func (pr *PRecord) WUnlock() {
+func (pr *PRecord) WUnlock(req *LockReq) {
 	clog.Error("Partition mode does not support WUnlock Operation")
 }
 
-func (pr *PRecord) RLock(tid TID) bool {
+func (pr *PRecord) RLock(req *LockReq) bool {
 	clog.Error("Partition mode does not support RLock Operation")
 	return false
 }
 
-func (pr *PRecord) RUnlock() {
+func (pr *PRecord) RUnlock(req *LockReq) {
 	clog.Error("Partition mode does not support RUnlock Operation")
 }
 
-func (pr *PRecord) Upgrade(tid TID) bool {
+func (pr *PRecord) Upgrade(req *LockReq) bool {
 	clog.Error("Partition mode does not support Upgrade Operation")
 	return false
 }
@@ -254,26 +253,26 @@ func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
 }
 
-func (or *ORecord) WLock(tid TID) bool {
+func (or *ORecord) WLock(req *LockReq) bool {
 	clog.Error("OCC mode does not support WLock Operation")
 	return false
 }
 
-func (or *ORecord) WUnlock() {
+func (or *ORecord) WUnlock(req *LockReq) {
 	clog.Error("OCC mode does not support WUnlock Operation")
 }
 
-func (or *ORecord) RLock(tid TID) bool {
+func (or *ORecord) RLock(req *LockReq) bool {
 	debug.PrintStack()
 	clog.Error("OCC mode does not support RLock Operation")
 	return false
 }
 
-func (or *ORecord) RUnlock() {
+func (or *ORecord) RUnlock(req *LockReq) {
 	clog.Error("OCC mode does not support RUnlock Operation")
 }
 
-func (or *ORecord) Upgrade(tid TID) bool {
+func (or *ORecord) Upgrade(req *LockReq) bool {
 	clog.Error("OCC mode does not support Upgrade Operation")
 	return false
 }
@@ -324,25 +323,25 @@ func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
 }
 
-func (dr *DRecord) WLock(tid TID) bool {
+func (dr *DRecord) WLock(req *LockReq) bool {
 	clog.Error("Dummy mode does not support WLock Operation")
 	return false
 }
 
-func (dr *DRecord) WUnlock() {
+func (dr *DRecord) WUnlock(req *LockReq) {
 	clog.Error("Dummy mode does not support WUnlock Operation")
 }
 
-func (dr *DRecord) RLock(tid TID) bool {
+func (dr *DRecord) RLock(req *LockReq) bool {
 	clog.Error("Dummy mode does not support RLock Operation")
 	return false
 }
 
-func (dr *DRecord) RUnlock() {
+func (dr *DRecord) RUnlock(req *LockReq) {
 	clog.Error("Dummy mode does not support RUnlock Operation")
 }
 
-func (dr *DRecord) Upgrade(tid TID) bool {
+func (dr *DRecord) Upgrade(req *LockReq) bool {
 	clog.Error("Dummy mode does not support Upgrade Operation")
 	return false
 }
@@ -371,7 +370,7 @@ type LRecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
-	wd       wdlock.WDLock
+	wd       WDLock
 	rwLock   spinlockopt.WDRWSpinlock
 	table    *Table
 	padding2 [PADDING]byte
@@ -412,45 +411,91 @@ func (lr *LRecord) SetTID(tid TID) {
 	clog.Error("Lock mode does not support SetTID Operation")
 }
 
-func (lr *LRecord) WLock(tid TID) bool {
+func (lr *LRecord) WLock(req *LockReq) bool {
 	if *NoWait {
 		return lr.rwLock.Lock(0)
 	} else {
-		return lr.wd.Lock(uint64(tid))
+		//return lr.wd.Lock(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := lr.wd.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 	//return true
 }
 
-func (lr *LRecord) WUnlock() {
+func (lr *LRecord) WUnlock(req *LockReq) {
 	if *NoWait {
 		lr.rwLock.Unlock()
 	} else {
-		lr.wd.Unlock()
+		req.reqType = LOCK_EX
+		lr.wd.Unlock(req)
 	}
 }
 
-func (lr *LRecord) RLock(tid TID) bool {
+func (lr *LRecord) RLock(req *LockReq) bool {
 	if *NoWait {
 		return lr.rwLock.RLock(0)
 	} else {
-		return lr.wd.RLock(uint64(tid))
+		req.reqType = LOCK_SH
+		retState := lr.wd.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 }
 
-func (lr *LRecord) RUnlock() {
+func (lr *LRecord) RUnlock(req *LockReq) {
 	if *NoWait {
 		lr.rwLock.RUnlock()
 	} else {
-		lr.wd.RUnlock()
+		req.reqType = LOCK_SH
+		lr.wd.Unlock(req)
 	}
 	//return
 }
 
-func (lr *LRecord) Upgrade(tid TID) bool {
+func (lr *LRecord) Upgrade(req *LockReq) bool {
 	if *NoWait {
 		return lr.rwLock.Upgrade(0)
 	} else {
-		return lr.wd.Upgrade(uint64(tid))
+		//return lr.wd.Lock(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := lr.wd.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 }
 
@@ -458,7 +503,7 @@ type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
-	wd       wdlock.WDLock
+	wd       WDLock
 	rwLock   spinlockopt.WDRWSpinlock
 	last     wfmutex.WFMutex
 	table    *Table
@@ -502,43 +547,90 @@ func (ar *ARecord) SetTID(tid TID) {
 	clog.Error("Adaptive mode does not support SetTID Operation")
 }
 
-func (ar *ARecord) WLock(tid TID) bool {
+func (ar *ARecord) WLock(req *LockReq) bool {
 	if *NoWait {
 		return ar.rwLock.Lock(0)
 	} else {
-		return ar.wd.Lock(uint64(tid))
+		//return ar.wd.Lock(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := ar.wd.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 	//return true
 }
 
-func (ar *ARecord) WUnlock() {
+func (ar *ARecord) WUnlock(req *LockReq) {
 	if *NoWait {
 		ar.rwLock.Unlock()
 	} else {
-		ar.wd.Unlock()
+		req.reqType = LOCK_EX
+		ar.wd.Unlock(req)
 	}
 }
 
-func (ar *ARecord) RLock(tid TID) bool {
+func (ar *ARecord) RLock(req *LockReq) bool {
 	if *NoWait {
 		return ar.rwLock.RLock(0)
 	} else {
-		return ar.wd.RLock(uint64(tid))
+		//return ar.wd.RLock(uint64(tid))
+		req.reqType = LOCK_SH
+		retState := ar.wd.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 }
 
-func (ar *ARecord) RUnlock() {
+func (ar *ARecord) RUnlock(req *LockReq) {
 	if *NoWait {
 		ar.rwLock.RUnlock()
 	} else {
-		ar.wd.RUnlock()
+		req.reqType = LOCK_SH
+		ar.wd.Unlock(req)
 	}
 }
 
-func (ar *ARecord) Upgrade(tid TID) bool {
+func (ar *ARecord) Upgrade(req *LockReq) bool {
 	if *NoWait {
 		return ar.rwLock.Upgrade(0)
 	} else {
-		return ar.wd.Upgrade(uint64(tid))
+		//return ar.wd.Upgrade(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := ar.wd.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 }

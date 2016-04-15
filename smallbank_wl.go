@@ -158,7 +158,7 @@ type SBTrans struct {
 	fv          []FloatValue
 	ret         FloatValue
 	trial       int
-	tid         TID
+	req         *LockReq
 	padding2    [PADDING]byte
 }
 
@@ -171,7 +171,7 @@ func (s *SBTrans) GetAccessParts() []int {
 }
 
 func (s *SBTrans) SetTID(tid TID) {
-	s.tid = tid
+	s.req.tid = tid
 }
 
 func (s *SBTrans) SetTrial(trial int) {
@@ -450,6 +450,11 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 			}
 			trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
 			trans.accoutID = trans.accoutID[PADDINGKEY:PADDINGKEY]
+			req := &LockReq{
+				id: i,
+			}
+			trans.req = req
+
 			tg.transBuf[p] = trans
 		}
 		tg.head = 0

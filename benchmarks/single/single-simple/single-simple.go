@@ -18,7 +18,7 @@ import (
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
 var cr = flag.Float64("cr", 0, "percentage of cross-partition transactions")
 var wl = flag.String("wl", "../single.txt", "workload to be used")
-var tp = flag.String("tp", "50:50", "Percetage of Each Transaction")
+var tp = flag.String("tp", "0:100", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
 var stat = flag.String("stat", "stat.out", "statistics")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
@@ -31,8 +31,8 @@ var ps = flag.Float64("ps", 1, "Skew For Partition")
 var p = flag.Bool("p", false, "Whether Index Partition")
 
 const (
-	TRIALS  = 3
-	BUFSIZE = 3
+	TRIALS  = 10000
+	BUFSIZE = 10
 )
 
 func main() {
