@@ -5,6 +5,8 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+var occ_wait bool = true
+
 var Spec = flag.Bool("spec", false, "Whether Speculatively Indicate MayWrite")
 
 const (
@@ -467,6 +469,17 @@ func (o *OTransaction) Abort(req *LockReq) TID {
 	return 0
 }
 
+func Compare(k1 Key, k2 Key) int {
+	for i, _ := range k1 {
+		if k1[i] < k2[i] {
+			return -1
+		} else if k1[i] > k2[i] {
+			return 1
+		}
+	}
+	return 0
+}
+
 func (o *OTransaction) Commit(req *LockReq) TID {
 
 	// Phase 1: Lock all write keys
@@ -474,14 +487,34 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 
 	for j := 0; j < len(o.tt); j++ {
 		t := &o.tt[j]
+
+		if occ_wait { // If wait on writes, sort by keys
+			for i := 1; i < len(t.wKeys); i++ {
+				wk := t.wKeys[i]
+				p := i - 1
+				for p >= 0 && Compare(wk.k, t.wKeys[p].k) < 0 {
+					t.wKeys[p+1] = t.wKeys[p]
+					p--
+				}
+				t.wKeys[p+1] = wk
+			}
+		}
+
 		for i := 0; i < len(t.wKeys); i++ {
 			wk := &t.wKeys[i]
 			var former TID
 			var ok bool
-			ok, former = wk.rec.Lock()
-			if !ok {
-				o.w.NStats[NLOCKABORTS]++
-				return o.Abort(req)
+
+			if occ_wait {
+				for !ok {
+					ok, former = wk.rec.Lock()
+				}
+			} else {
+				ok, former = wk.rec.Lock()
+				if !ok {
+					o.w.NStats[NLOCKABORTS]++
+					return o.Abort(req)
+				}
 			}
 			wk.locked = true
 			if former > o.maxSeen {

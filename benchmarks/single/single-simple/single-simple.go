@@ -31,7 +31,7 @@ var ps = flag.Float64("ps", 1, "Skew For Partition")
 var p = flag.Bool("p", false, "Whether Index Partition")
 
 const (
-	TRIALS  = 10000
+	TRIALS  = 10
 	BUFSIZE = 10
 )
 
@@ -47,7 +47,6 @@ func main() {
 	if *testbed.Report {
 		clog.Error("Report not Needed\n")
 	}
-
 
 	nParts := nWorkers
 	isPhysical := false

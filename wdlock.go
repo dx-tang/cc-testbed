@@ -5,7 +5,7 @@ import (
 	"github.com/totemtang/cc-testbed/spinlock"
 )
 
-var nowait_flag bool = false
+var locking_wait bool = false
 
 const (
 	maxreaders   = 1 << 7
@@ -52,7 +52,7 @@ func (w *WDLock) Lock(req *LockReq) int {
 
 	conflict := Conflict_Req(req.reqType, w.lock_type)
 
-	if nowait_flag && !conflict && !noWaiters { // SHARE vs. SHARE
+	if locking_wait && !conflict && !noWaiters { // SHARE vs. SHARE
 		l := waiters.Header()
 		if req.tid < l.tid { // Older than waiters
 			conflict = true
@@ -60,7 +60,7 @@ func (w *WDLock) Lock(req *LockReq) int {
 	}
 
 	if conflict {
-		if !nowait_flag {
+		if !locking_wait {
 			return LOCK_ABORT
 		}
 		canWait := true
