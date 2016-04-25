@@ -76,6 +76,7 @@ func main() {
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
+	lockInit := false
 
 	if *prof {
 		f, err := os.Create("single.prof")
@@ -100,7 +101,6 @@ func main() {
 	} else {
 		isPartition = true
 	}
-	isPhysical := false
 	clog.Info("Number of workers %v \n", nWorkers)
 	clog.Info("Adaptive CC Training\n")
 
@@ -177,7 +177,7 @@ func main() {
 		for {
 
 			if single == nil {
-				single = testbed.NewSingleWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, tmpPS)
+				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, tmpPS)
 				coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1, testbed.SINGLEWL)
 			} else {
 				basic := single.GetBasicWL()
@@ -222,6 +222,9 @@ func main() {
 					for i := 0; i < nWorkers; i++ {
 						wg.Add(1)
 						go func(n int) {
+							if !lockInit {
+								testbed.InitLockReqBuffer(n)
+							}
 							var t testbed.Trans
 							w := coord.Workers[n]
 							gen := single.GetTransGen(n)
@@ -271,6 +274,10 @@ func main() {
 					wg.Wait()
 
 					coord.Finish()
+
+					if !lockInit {
+						lockInit = true
+					}
 
 					if *np && j == testbed.PARTITION {
 						coord.Reset()

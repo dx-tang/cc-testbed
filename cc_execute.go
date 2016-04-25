@@ -5,33 +5,52 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+var occ_wait bool = true
+
 var Spec = flag.Bool("spec", false, "Whether Speculatively Indicate MayWrite")
 
 const (
 	MAXTABLENUM    = 20
 	MAXCOLUMN      = 20
-	MAXTRACKINGKEY = 100
+	MAXTRACKINGKEY = 250
 )
 
 type ETransaction interface {
 	Reset(t Trans)
-	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error)
-	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) error
-	MayWrite(tableID int, k Key, partNum int, ts TID) error
+	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error)
+	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) error
+	MayWrite(tableID int, k Key, partNum int, req *LockReq) error
 	InsertRecord(tableID int, k Key, partNum int, rec Record) error
-	DeleteRecord(tableID int, k Key, partNum int) error
-	GetKeysBySecIndex(tableID int, partNum int, k Value) error
-	GetRecord(tableID int, k Key, partNum int, ts TID) (Record, error)
-	Abort() TID
-	Commit() TID
+	DeleteRecord(tableID int, k Key, partNum int) (Record, error)
+	GetKeysBySecIndex(tableID int, k Key, partNum int, val Value) error
+	GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error)
+	Abort(req *LockReq) TID
+	Commit(req *LockReq) TID
 	Store() *Store
 	Worker() *Worker
 	GetType() int
 }
 
+type InsertRec struct {
+	padding1 [PADDING]byte
+	k        Key
+	partNum  int
+	rec      Record
+	padding2 [PADDING]byte
+}
+
+type DeleteRec struct {
+	padding1 [PADDING]byte
+	k        Key
+	partNum  int
+	padding2 [PADDING]byte
+}
+
 type PTrackTable struct {
 	padding1 [PADDING]byte
 	wRecs    []WriteRec
+	iRecs    []InsertRec
+	dRecs    []DeleteRec
 	padding2 [PADDING]byte
 }
 
@@ -64,6 +83,12 @@ func StartPTransaction(w *Worker, tableCount int) *PTransaction {
 			wr.cols = wr.cols[PADDINGINT:PADDINGINT]
 		}
 		t.wRecs = t.wRecs[0:0]
+
+		t.iRecs = make([]InsertRec, MAXTRACKINGKEY)
+		t.iRecs = t.iRecs[0:0]
+
+		t.dRecs = make([]DeleteRec, MAXTRACKINGKEY)
+		t.dRecs = t.dRecs[0:0]
 	}
 
 	return tx
@@ -73,7 +98,7 @@ func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error) {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, true)
@@ -111,7 +136,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
+func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq) error {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, false)
@@ -142,9 +167,9 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 
 	s := p.s
-	r := s.GetRecByID(tableID, k, partNum)
-	if r == nil {
-		return ENOKEY
+	r, err := s.GetRecByID(tableID, k, partNum)
+	if err != nil {
+		return err
 	}
 
 	n := len(t.wRecs)
@@ -160,11 +185,75 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 }
 
-func (p *PTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
+func (p *PTransaction) MayWrite(tableID int, k Key, partNum int, req *LockReq) error {
 	return nil
 }
 
-func (p *PTransaction) Abort() TID {
+func (p *PTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record) error {
+
+	s := p.s
+	err := s.PrepareInsert(tableID, k, partNum)
+	if err != nil {
+		return err
+	}
+
+	t := &p.tt[tableID]
+	n := len(t.iRecs)
+	t.iRecs = t.iRecs[0 : n+1]
+	t.iRecs[n].k = k
+	t.iRecs[n].partNum = partNum
+	t.iRecs[n].rec = rec
+
+	return nil
+}
+
+func (p *PTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, error) {
+
+	s := p.s
+	rec, err := s.PrepareDelete(tableID, k, partNum)
+	if err != nil {
+		return nil, err
+	}
+
+	t := &p.tt[tableID]
+	n := len(t.dRecs)
+	t.dRecs = t.dRecs[0 : n+1]
+	t.dRecs[n].k = k
+	t.dRecs[n].partNum = partNum
+
+	return rec, err
+}
+
+func (p *PTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Value) error {
+	return p.s.GetValueBySec(tableID, k, partNum, val)
+}
+
+func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error) {
+	if *SysType == ADAPTIVE {
+		if p.st.sampleCount == 0 {
+			p.st.oneSample(tableID, p.w.riMaster, true)
+		}
+
+		if p.st.state == 0 {
+			p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
+		} else {
+			p.st.sampleAccess++
+			if p.st.sampleAccess >= RECSR {
+				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
+				p.st.sampleAccess = 0
+			}
+		}
+	}
+
+	rec, err := p.s.GetRecByID(tableID, k, partNum)
+	if err != nil {
+		return nil, err
+	}
+	return rec, err
+}
+
+func (p *PTransaction) Abort(req *LockReq) TID {
+	s := p.s
 	for i := 0; i < len(p.tt); i++ {
 		t := &p.tt[i]
 		for j := 0; j < len(t.wRecs); j++ {
@@ -173,12 +262,22 @@ func (p *PTransaction) Abort() TID {
 			wr.cols = wr.cols[:0]
 		}
 		t.wRecs = t.wRecs[0:0]
+
+		for j := 0; j < len(t.iRecs); j++ {
+			s.ReleaseInsert(i, t.iRecs[j].k, t.iRecs[j].partNum)
+		}
+		t.iRecs = t.iRecs[0:0]
+
+		for j := 0; j < len(t.dRecs); j++ {
+			s.ReleaseDelete(i, t.dRecs[j].k, t.dRecs[j].partNum)
+		}
+		t.dRecs = t.dRecs[0:0]
 	}
 	return 0
 }
 
-func (p *PTransaction) Commit() TID {
-	//s := p.Store()
+func (p *PTransaction) Commit(req *LockReq) TID {
+	s := p.Store()
 	for i := 0; i < len(p.tt); i++ {
 		t := &p.tt[i]
 		for j := 0; j < len(t.wRecs); j++ {
@@ -192,6 +291,16 @@ func (p *PTransaction) Commit() TID {
 			wr.cols = wr.cols[:0]
 		}
 		t.wRecs = t.wRecs[0:0]
+
+		for j := 0; j < len(t.iRecs); j++ {
+			s.InsertRecord(i, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
+		}
+		t.iRecs = t.iRecs[0:0]
+
+		for j := 0; j < len(t.dRecs); j++ {
+			s.DeleteRecord(i, t.dRecs[j].k, t.dRecs[j].partNum)
+		}
+		t.dRecs = t.dRecs[0:0]
 	}
 	return 1
 }
@@ -232,6 +341,8 @@ type TrackTable struct {
 	tableID  int
 	rKeys    []ReadKey
 	wKeys    []WriteKey
+	iRecs    []InsertRec
+	dRecs    []DeleteRec
 	padding2 [PADDING]byte
 }
 
@@ -267,6 +378,12 @@ func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 			wk.cols = wk.cols[PADDINGINT:PADDINGINT]
 		}
 		t.wKeys = t.wKeys[0:0]
+
+		t.iRecs = make([]InsertRec, MAXTRACKINGKEY)
+		t.iRecs = t.iRecs[0:0]
+
+		t.dRecs = make([]DeleteRec, MAXTRACKINGKEY)
+		t.dRecs = t.dRecs[0:0]
 	}
 
 	//tx.tt = tx.tt[:0]
@@ -285,13 +402,16 @@ func (o *OTransaction) Reset(t Trans) {
 			wk.cols = wk.cols[:0]
 		}
 		t.wKeys = t.wKeys[:0]
+		t.iRecs = t.iRecs[:0]
+		t.dRecs = t.dRecs[:0]
+
 	}
 
 	//o.tt = o.tt[:0]
 
 }
 
-func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error) {
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, true)
@@ -312,6 +432,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	var tid TID
 	var t *TrackTable
 	var r Record
+	var err error
 
 	t = &o.tt[tableID]
 
@@ -343,8 +464,8 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	if r == nil {
-		r = o.s.GetRecByID(tableID, k, partNum)
-		if r == nil {
+		r, err = o.s.GetRecByID(tableID, k, partNum)
+		if err != nil {
 			return nil, true, ENOKEY
 		}
 	}
@@ -370,7 +491,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
+func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq) error {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, false)
@@ -391,6 +512,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	//var tid TID
 	var t *TrackTable
 	var r Record
+	var err error
 
 	ok = false
 	t = &o.tt[tableID]
@@ -418,10 +540,9 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		}
 
 		if r == nil {
-			r = o.s.GetRecByID(tableID, k, partNum)
-
-			if r == nil {
-				return ENOKEY
+			r, err = o.s.GetRecByID(tableID, k, partNum)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -438,54 +559,170 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		t.wKeys[n].cols[0] = colNum
 	}
 
-	// Read this record
-	/*ok, tid = r.IsUnlocked()
+	return nil
+}
 
-	if !ok {
-		o.w.NStats[NREADABORTS]++
-		return EABORT
+func (o *OTransaction) MayWrite(tableID int, k Key, partNum int, req *LockReq) error {
+	return nil
+}
+
+func (o *OTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record) error {
+
+	s := o.s
+	err := s.PrepareInsert(tableID, k, partNum)
+	if err != nil {
+		return err
 	}
+
+	t := &o.tt[tableID]
+	n := len(t.iRecs)
+	t.iRecs = t.iRecs[0 : n+1]
+	t.iRecs[n].k = k
+	t.iRecs[n].partNum = partNum
+	t.iRecs[n].rec = rec
+
+	return nil
+}
+
+func (o *OTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, error) {
+
+	s := o.s
+	rec, err := s.PrepareDelete(tableID, k, partNum)
+	if err != nil {
+		return nil, err
+	}
+
+	t := &o.tt[tableID]
+	n := len(t.dRecs)
+	t.dRecs = t.dRecs[0 : n+1]
+	t.dRecs[n].k = k
+	t.dRecs[n].partNum = partNum
+
+	return rec, err
+}
+
+func (o *OTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Value) error {
+	return o.s.GetValueBySec(tableID, k, partNum, val)
+}
+
+func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error) {
+	if *SysType == ADAPTIVE {
+		if o.st.sampleCount == 0 {
+			o.st.oneSample(tableID, o.w.riMaster, true)
+		}
+
+		if o.st.state == 0 {
+			o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
+		} else {
+			o.st.sampleAccess++
+			if o.st.sampleAccess >= RECSR {
+				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
+				o.st.sampleAccess = 0
+			}
+		}
+	}
+
+	var ok bool
+	var tid TID
+	var t *TrackTable
+	var r Record
+	var err error
+
+	r, err = o.s.GetRecByID(tableID, k, partNum)
+	if err != nil {
+		return nil, err
+	}
+
+	ok, tid = r.IsUnlocked()
 
 	if tid > o.maxSeen {
 		o.maxSeen = tid
-	}*/
+	}
 
-	return nil
+	if !ok {
+		o.w.NStats[NREADABORTS]++
+		return nil, EABORT
+	}
+
+	t = &o.tt[tableID]
+	n := len(t.rKeys)
+	t.rKeys = t.rKeys[0 : n+1]
+	t.rKeys[n].k = k
+	t.rKeys[n].last = tid
+	t.rKeys[n].rec = r
+
+	return r, nil
 }
 
-func (o *OTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
-	return nil
-}
-
-func (o *OTransaction) Abort() TID {
-	for j := 0; j < len(o.tt); j++ {
-		t := &o.tt[j]
-		for i := 0; i < len(t.wKeys); i++ {
-			wk := &t.wKeys[i]
+func (o *OTransaction) Abort(req *LockReq) TID {
+	s := o.s
+	for i := 0; i < len(o.tt); i++ {
+		t := &o.tt[i]
+		for j := 0; j < len(t.wKeys); j++ {
+			wk := &t.wKeys[j]
 			if wk.locked {
 				wk.rec.Unlock(o.maxSeen)
 			}
 		}
+		for j := 0; j < len(t.iRecs); j++ {
+			s.ReleaseInsert(i, t.iRecs[j].k, t.iRecs[j].partNum)
+		}
+		t.iRecs = t.iRecs[:0]
+
+		for j := 0; j < len(t.dRecs); j++ {
+			s.ReleaseDelete(i, t.dRecs[j].k, t.dRecs[j].partNum)
+		}
+		t.dRecs = t.dRecs[:0]
 	}
 
 	return 0
 }
 
-func (o *OTransaction) Commit() TID {
+func Compare(k1 Key, k2 Key) int {
+	for i, _ := range k1 {
+		if k1[i] < k2[i] {
+			return -1
+		} else if k1[i] > k2[i] {
+			return 1
+		}
+	}
+	return 0
+}
+
+func (o *OTransaction) Commit(req *LockReq) TID {
 
 	// Phase 1: Lock all write keys
 	//for _, wk := range o.wKeys {
 
 	for j := 0; j < len(o.tt); j++ {
 		t := &o.tt[j]
+		if occ_wait { // If wait on writes, sort by keys
+			for i := 1; i < len(t.wKeys); i++ {
+				wk := t.wKeys[i]
+				p := i - 1
+				for p >= 0 && Compare(wk.k, t.wKeys[p].k) < 0 {
+					t.wKeys[p+1] = t.wKeys[p]
+					p--
+				}
+				t.wKeys[p+1] = wk
+			}
+		}
+
 		for i := 0; i < len(t.wKeys); i++ {
 			wk := &t.wKeys[i]
 			var former TID
 			var ok bool
-			ok, former = wk.rec.Lock()
-			if !ok {
-				o.w.NStats[NLOCKABORTS]++
-				return o.Abort()
+
+			if occ_wait {
+				for !ok {
+					ok, former = wk.rec.Lock()
+				}
+			} else {
+				ok, former = wk.rec.Lock()
+				if !ok {
+					o.w.NStats[NLOCKABORTS]++
+					return o.Abort(req)
+				}
 			}
 			wk.locked = true
 			if former > o.maxSeen {
@@ -516,7 +753,7 @@ func (o *OTransaction) Commit() TID {
 			ok1, tmpTID = rk.rec.IsUnlocked()
 			if tmpTID != rk.last {
 				o.w.NStats[NRCHANGEABORTS]++
-				return o.Abort()
+				return o.Abort(req)
 			}
 
 			// Check whether read key is not in wKeys
@@ -531,14 +768,28 @@ func (o *OTransaction) Commit() TID {
 
 			if !ok1 && !ok2 {
 				o.w.NStats[NRWABORTS]++
-				return o.Abort()
+				return o.Abort(req)
 			}
 		}
 	}
 
 	// Phase 3: Apply all writes
+	s := o.s
 	for p := 0; p < len(o.tt); p++ {
 		t := &o.tt[p]
+
+		for j := 0; j < len(t.dRecs); j++ {
+			s.DeleteRecord(p, t.dRecs[j].k, t.dRecs[j].partNum)
+		}
+
+		for j := 0; j < len(t.iRecs); j++ {
+			s.InsertRecord(p, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
+		}
+	}
+
+	for p := 0; p < len(o.tt); p++ {
+		t := &o.tt[p]
+
 		for i, _ := range t.wKeys {
 			wk := &t.wKeys[i]
 			for j := 0; j < len(wk.vals); j++ {
@@ -548,6 +799,7 @@ func (o *OTransaction) Commit() TID {
 			wk.rec.Unlock(tid)
 			wk.locked = false
 		}
+
 	}
 
 	return tid
@@ -587,6 +839,8 @@ type RecTable struct {
 	padding1 [PADDING]byte
 	rRecs    []ReadRec
 	wRecs    []WriteRec
+	iRecs    []InsertRec
+	dRecs    []DeleteRec
 	padding2 [PADDING]byte
 }
 
@@ -619,6 +873,12 @@ func StartLTransaction(w *Worker, nTables int) *LTransaction {
 			wr.cols = wr.cols[PADDINGINT:PADDINGINT]
 		}
 		t.wRecs = t.wRecs[0:0]
+
+		t.iRecs = make([]InsertRec, MAXTRACKINGKEY)
+		t.iRecs = t.iRecs[0:0]
+
+		t.dRecs = make([]DeleteRec, MAXTRACKINGKEY)
+		t.dRecs = t.dRecs[0:0]
 	}
 
 	return tx
@@ -631,7 +891,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 func (l *LTransaction) Reset(t Trans) {
 }
 
-func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, ts TID) (Value, bool, error) {
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, true)
@@ -651,6 +911,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	var ok bool = false
 	var wr *WriteRec
 	var rr *ReadRec
+	var err error
 	w := l.w
 
 	rt := &l.rt[tableID]
@@ -689,15 +950,14 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	// Try RLock
-	rec = l.s.GetRecByID(tableID, k, partNum)
-	if rec == nil {
-		l.Abort()
-		return nil, true, ENOKEY
+	rec, err = l.s.GetRecByID(tableID, k, partNum)
+	if err != nil {
+		return nil, true, err
 	}
 
-	if !rec.RLock(ts) {
+	if !rec.RLock(req) {
 		w.NStats[NRLOCKABORTS]++
-		l.Abort()
+		l.Abort(req)
 		return nil, true, EABORT
 	}
 
@@ -714,7 +974,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, ts TID) error {
+func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq) error {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, false)
@@ -734,6 +994,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	var ok bool = false
 	var wr *WriteRec
 	var rr *ReadRec
+	var err error
 	w := l.w
 
 	rt := &l.rt[tableID]
@@ -767,8 +1028,8 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 	// Has been RLocked
 	if ok {
-		rr.exist = false
-		if rr.rec.Upgrade(ts) {
+		if rr.rec.Upgrade(req) {
+			rr.exist = false
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -782,20 +1043,24 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			wr.cols[0] = colNum
 			return nil
 		} else {
+			if *NoWait {
+				rr.exist = false
+			} else {
+				rr.exist = true
+			}
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			w.NStats[NUPGRADEABORTS]++
-			l.Abort()
+			l.Abort(req)
 			return EABORT
 		}
 	}
 
-	rec = l.s.GetRecByID(tableID, k, partNum)
-	if rec == nil {
-		l.Abort()
-		return ENOKEY
+	rec, err = l.s.GetRecByID(tableID, k, partNum)
+	if err != nil {
+		return err
 	}
 
-	if rec.WLock(ts) {
+	if rec.WLock(req) {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -809,18 +1074,19 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		return nil
 	} else {
 		w.NStats[NWLOCKABORTS]++
-		l.Abort()
+		l.Abort(req)
 		return EABORT
 	}
 
 }
 
-func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
+func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, req *LockReq) error {
 	if !*Spec {
 		return nil
 	}
 	var ok bool = false
 	var rr *ReadRec
+	var err error
 	w := l.w
 
 	rt := &l.rt[tableID]
@@ -843,8 +1109,8 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
 	}
 	// Has been RLocked
 	if ok {
-		rr.exist = false
-		if rr.rec.Upgrade(ts) {
+		if rr.rec.Upgrade(req) {
+			rr.exist = false
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
@@ -854,20 +1120,24 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
 			wr.rec = rr.rec
 			return nil
 		} else {
+			if *NoWait {
+				rr.exist = false
+			} else {
+				rr.exist = true
+			}
 			//clog.Info("Worker %v: Trans %v Upgrade table %v; Key %v Failed\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
 			w.NStats[NUPGRADEABORTS]++
-			l.Abort()
+			l.Abort(req)
 			return EABORT
 		}
 	}
 
-	rec = l.s.GetRecByID(tableID, k, partNum)
-	if rec == nil {
-		l.Abort()
-		return ENOKEY
+	rec, err = l.s.GetRecByID(tableID, k, partNum)
+	if err != nil {
+		return err
 	}
 
-	if rec.WLock(ts) {
+	if rec.WLock(req) {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -877,20 +1147,118 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, ts TID) error {
 		return nil
 	} else {
 		w.NStats[NWLOCKABORTS]++
-		l.Abort()
+		l.Abort(req)
 		return EABORT
 	}
 }
 
-func (l *LTransaction) Abort() TID {
+func (l *LTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record) error {
+
+	s := l.s
+	err := s.PrepareInsert(tableID, k, partNum)
+	if err != nil {
+		return err
+	}
+
+	t := &l.rt[tableID]
+	n := len(t.iRecs)
+	t.iRecs = t.iRecs[0 : n+1]
+	t.iRecs[n].k = k
+	t.iRecs[n].partNum = partNum
+	t.iRecs[n].rec = rec
+
+	return nil
+}
+
+func (l *LTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, error) {
+
+	s := l.s
+	rec, err := s.PrepareDelete(tableID, k, partNum)
+	if err != nil {
+		return nil, err
+	}
+
+	t := &l.rt[tableID]
+	n := len(t.dRecs)
+	t.dRecs = t.dRecs[0 : n+1]
+	t.dRecs[n].k = k
+	t.dRecs[n].partNum = partNum
+
+	return rec, err
+}
+
+func (l *LTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Value) error {
+	return l.s.GetValueBySec(tableID, k, partNum, val)
+}
+
+func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error) {
+	if *SysType == ADAPTIVE {
+		if l.st.sampleCount == 0 {
+			l.st.oneSample(tableID, l.w.riMaster, true)
+		}
+
+		if l.st.state == 0 {
+			l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
+		} else {
+			l.st.sampleAccess++
+			if l.st.sampleAccess >= RECSR {
+				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
+				l.st.sampleAccess = 0
+			}
+		}
+	}
+
+	var rec Record
+	var err error
+	w := l.w
+
+	// Try RLock
+	rec, err = l.s.GetRecByID(tableID, k, partNum)
+	if err != nil {
+		return nil, err
+	}
+
+	if !rec.RLock(req) {
+		l.Abort(req)
+		w.NStats[NRLOCKABORTS]++
+		return nil, EABORT
+	}
+
+	//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
+
+	rt := &l.rt[tableID]
+
+	// Success, Record it
+	n := len(rt.rRecs)
+	rt.rRecs = rt.rRecs[:n+1]
+	rt.rRecs[n].k = k
+	rt.rRecs[n].rec = rec
+	rt.rRecs[n].exist = true
+
+	return rec, nil
+}
+
+func (l *LTransaction) Abort(req *LockReq) TID {
 	//w := l.w
+	s := l.s
 	for i := 0; i < len(l.rt); i++ {
 		t := &l.rt[i]
+
+		for j := 0; j < len(t.dRecs); j++ {
+			s.ReleaseDelete(i, t.dRecs[j].k, t.dRecs[j].partNum)
+		}
+		t.dRecs = t.dRecs[:0]
+
+		for j := 0; j < len(t.iRecs); j++ {
+			s.ReleaseInsert(i, t.iRecs[j].k, t.iRecs[j].partNum)
+		}
+		t.iRecs = t.iRecs[:0]
+
 		for j, _ := range t.rRecs {
 			rr := &t.rRecs[j]
 			if rr.exist {
 				//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
-				rr.rec.RUnlock()
+				rr.rec.RUnlock(req)
 			}
 		}
 		t.rRecs = t.rRecs[:0]
@@ -899,23 +1267,40 @@ func (l *LTransaction) Abort() TID {
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
 			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
-			wr.rec.WUnlock()
+			wr.rec.WUnlock(req)
 		}
 		t.wRecs = t.wRecs[:0]
+
 	}
 	return 0
 }
 
-func (l *LTransaction) Commit() TID {
+func (l *LTransaction) Commit(req *LockReq) TID {
 	//w := l.w
+	s := l.s
 
 	for i := 0; i < len(l.rt); i++ {
 		t := &l.rt[i]
+
+		for j := 0; j < len(t.dRecs); j++ {
+			s.DeleteRecord(i, t.dRecs[j].k, t.dRecs[j].partNum)
+		}
+		t.dRecs = t.dRecs[:0]
+
+		for j := 0; j < len(t.iRecs); j++ {
+			s.InsertRecord(i, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
+		}
+		t.iRecs = t.iRecs[:0]
+	}
+
+	for i := 0; i < len(l.rt); i++ {
+		t := &l.rt[i]
+
 		for j, _ := range t.rRecs {
 			rr := &t.rRecs[j]
 			if rr.exist {
 				//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
-				rr.rec.RUnlock()
+				rr.rec.RUnlock(req)
 			}
 		}
 		t.rRecs = t.rRecs[:0]
@@ -927,9 +1312,10 @@ func (l *LTransaction) Commit() TID {
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
 			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
-			wr.rec.WUnlock()
+			wr.rec.WUnlock(req)
 		}
 		t.wRecs = t.wRecs[:0]
+
 	}
 
 	return 1

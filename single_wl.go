@@ -215,7 +215,7 @@ type SingleTrans struct {
 	trial       int
 	rnd         *rand.Rand
 	rr          int
-	tid         TID
+	req         LockReq
 	padding2    [PADDING]byte
 }
 
@@ -228,7 +228,7 @@ func (s *SingleTrans) GetAccessParts() []int {
 }
 
 func (s *SingleTrans) SetTID(tid TID) {
-	s.tid = tid
+	s.req.tid = tid
 }
 
 func (s *SingleTrans) SetTrial(trial int) {
@@ -267,12 +267,13 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	gen := s.gen
 	cr := int(s.cr)
 	var pi int
-	if mode == PARTITION {
-		pi = s.partIndex
-	} else {
-		pi = rnd.Intn(s.nParts)
-	}
-	//pi := s.partIndex
+	/*
+		if mode == PARTITION {
+			pi = s.partIndex
+		} else {
+			pi = rnd.Intn(s.nParts)
+		}*/
+	pi = s.partIndex
 	nParts := s.nParts
 	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1 && s.mp > 1
 	tlen := s.tlen
@@ -359,11 +360,6 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 		j = (j + 1) % len(t.accessParts)
 	}
 
-	if WDTRIAL > 0 {
-		t.trial = rnd.Intn(WDTRIAL)
-	}
-
-	//t.readNum = (s.rr * s.tlen) / 100
 	t.rr = s.rr
 
 	return t
@@ -380,7 +376,7 @@ type SingelWorkload struct {
 	transGen        []*SingleTransGen
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -404,7 +400,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool,
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, isPhysical, nWorkers, s, ps)
+	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps)
 
 	// Populating the Store
 	hp := singleWL.basic.generators[0]
@@ -474,6 +470,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, isPhysical bool,
 			trans.parts = trans.parts[PADDINGINT:PADDINGINT]
 			trans.rnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i*17+19)))
 			trans.rr = rr
+			trans.req.id = i
 			for q := 0; q < SINGLEMAXKEYS; q++ {
 				trans.sv[q].stringVal = make([]byte, CAP_SINGLE_STR+2*PADDINGBYTE)
 				trans.sv[q].stringVal = trans.sv[q].stringVal[PADDINGBYTE : PADDINGBYTE+CAP_SINGLE_STR]

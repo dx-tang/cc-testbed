@@ -6,12 +6,11 @@ import (
 )
 
 const (
-	PREEMPT = 500
+	PREEMPT = 500000
 )
 
 type Spinlock struct {
 	state int32
-	trial int
 }
 
 const (
@@ -23,21 +22,15 @@ const (
 // spins until the mutex is available.
 func (s *Spinlock) Lock() {
 	done := false
-	i := s.trial
+	i := PREEMPT
 	for !done {
 		if i == 0 {
 			runtime.Gosched()
-			i = s.trial
+			i = PREEMPT
 		}
 		done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
 		i--
 	}
-	/*
-		done := false
-		for !done {
-			done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
-		}
-	*/
 }
 
 // Unlock unlocks s.
@@ -52,10 +45,6 @@ func (s *Spinlock) Unlock() {
 	}
 }
 
-func (s *Spinlock) SetTrial(trial int) {
-	s.trial = trial
-}
-
 type RWSpinlock struct {
 	w           Spinlock
 	readerCount int32
@@ -64,12 +53,13 @@ type RWSpinlock struct {
 const spinlockMaxReaders = 1 << 30
 
 func (l *RWSpinlock) RLock() {
+
 	if atomic.AddInt32(&l.readerCount, 1) < 0 {
-		i := l.w.trial
+		i := PREEMPT
 		for atomic.LoadInt32(&l.readerCount) < 0 {
 			if i == 0 {
 				runtime.Gosched()
-				i = l.w.trial
+				i = PREEMPT
 			}
 			i--
 		}
@@ -82,23 +72,28 @@ func (l *RWSpinlock) RUnlock() {
 
 func (l *RWSpinlock) Lock() {
 	l.w.Lock()
-	r := atomic.AddInt32(&l.readerCount, -spinlockMaxReaders) + spinlockMaxReaders
-	i := l.w.trial
-	for r != 0 {
+	//r := atomic.AddInt32(&l.readerCount, -spinlockMaxReaders) + spinlockMaxReaders
+	done := false
+	r := atomic.LoadInt32(&l.readerCount)
+	i := PREEMPT
+	for {
 		if i == 0 {
 			runtime.Gosched()
-			i = l.w.trial
+			i = PREEMPT
 		}
-		r = atomic.LoadInt32(&l.readerCount) + spinlockMaxReaders
 		i--
+		if r == 0 {
+			done = atomic.CompareAndSwapInt32(&l.readerCount, 0, -spinlockMaxReaders)
+			if done {
+				break
+			}
+		} else {
+			r = atomic.LoadInt32(&l.readerCount)
+		}
 	}
 }
 
 func (l *RWSpinlock) Unlock() {
 	atomic.AddInt32(&l.readerCount, spinlockMaxReaders)
 	l.w.Unlock()
-}
-
-func (l *RWSpinlock) SetTrial(trial int) {
-	l.w.trial = trial
 }

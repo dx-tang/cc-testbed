@@ -26,6 +26,7 @@ var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var ps = flag.Float64("ps", 1, "Skew For Partition")
 var p = flag.Bool("p", false, "Whether Index Partition")
+var dataDir = flag.String("dd", "../data", "TPCC Data Dir")
 
 const (
 	TRIALS  = 3
@@ -80,8 +81,9 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
-	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps)
-	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), -1, -1, testbed.SMALLBANKWL)
+	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps, *dataDir)
+
+	coord := testbed.NewCoordinator(nWorkers, tpcc.GetStore(), tpcc.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
 
 	clog.Info("Done with Populating Store\n")
 
@@ -96,7 +98,7 @@ func main() {
 			}
 			var t testbed.Trans
 			w := coord.Workers[n]
-			gen := sb.GetTransGen(n)
+			gen := tpcc.GetTransGen(n)
 			tq := testbed.NewTransQueue(BUFSIZE)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
 			for {

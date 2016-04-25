@@ -53,9 +53,9 @@ func main() {
 	nWorkers := *testbed.NumPart
 
 	nParts := nWorkers
-	isPhysical := false
 	isPartition := true
 	curMode := testbed.PARTITION
+	lockInit := false
 
 	if *testbed.SysType == testbed.PARTITION {
 		clog.Info("Using Partition-based CC\n")
@@ -139,7 +139,7 @@ func main() {
 
 		if sb == nil {
 			clog.Info("Populating Whole Store\n")
-			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, isPhysical, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
+			sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS)
 			coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), len(tests), *nsecs, testbed.SMALLBANKWL)
 
 			// Populate Key Gen and Part Gen
@@ -185,6 +185,9 @@ func main() {
 		for i := 0; i < nWorkers; i++ {
 			wg.Add(1)
 			go func(n int) {
+				if !lockInit {
+					testbed.InitLockReqBuffer(n)
+				}
 				var t testbed.Trans
 				w := coord.Workers[n]
 				gen := sb.GetTransGen(n)
@@ -234,6 +237,9 @@ func main() {
 		coord.Finish()
 		curMode = coord.GetMode()
 		coord.Reset()
+		if !lockInit {
+			lockInit = true
+		}
 
 	}
 

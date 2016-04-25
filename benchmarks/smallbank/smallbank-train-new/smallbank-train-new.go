@@ -71,6 +71,7 @@ func main() {
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
+	lockInit := false
 
 	if *prof {
 		f, err := os.Create("smallbank.prof")
@@ -95,7 +96,6 @@ func main() {
 	} else {
 		isPartition = true
 	}
-	isPhysical := false
 	clog.Info("Number of workers %v \n", nWorkers)
 	clog.Info("Adaptive CC Training\n")
 
@@ -195,6 +195,9 @@ func main() {
 					for i := 0; i < nWorkers; i++ {
 						wg.Add(1)
 						go func(n int) {
+							if !lockInit {
+								testbed.InitLockReqBuffer(n)
+							}
 							var t testbed.Trans
 							w := coord.Workers[n]
 							gen := sb.GetTransGen(n)
@@ -244,6 +247,10 @@ func main() {
 					wg.Wait()
 
 					coord.Finish()
+
+					if !lockInit {
+						lockInit = true
+					}
 
 					if *np && j == testbed.PARTITION {
 						coord.Reset()

@@ -158,7 +158,7 @@ type SBTrans struct {
 	fv          []FloatValue
 	ret         FloatValue
 	trial       int
-	tid         TID
+	req         LockReq
 	padding2    [PADDING]byte
 }
 
@@ -171,7 +171,7 @@ func (s *SBTrans) GetAccessParts() []int {
 }
 
 func (s *SBTrans) SetTID(tid TID) {
-	s.tid = tid
+	s.req.tid = tid
 }
 
 func (s *SBTrans) SetTrial(trial int) {
@@ -206,11 +206,12 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	gen := s.gen
 	cr := int(s.cr)
 	var pi int
-	if mode == PARTITION {
+	/*if mode == PARTITION {
 		pi = s.partIndex
 	} else {
 		pi = rnd.Intn(s.nParts)
-	}
+	}*/
+	pi = s.partIndex
 	isPart := s.isPartition
 
 	txn := rnd.Intn(100)
@@ -323,10 +324,6 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 		clog.Error("SmallBank does not support transaction %v\n", t.TXN)
 	}
 
-	if WDTRIAL > 0 {
-		t.trial = rnd.Intn(WDTRIAL)
-	}
-
 	return t
 }
 
@@ -341,7 +338,7 @@ type SBWorkload struct {
 	transGen        []*SBTransGen
 }
 
-func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64) *SBWorkload {
+func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64) *SBWorkload {
 	sbWorkload := &SBWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -365,7 +362,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, isPhysical, nWorkers, s, ps)
+	sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps)
 
 	// Populating the Store
 	hp := sbWorkload.basic.generators[0]
@@ -448,6 +445,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, isPhysical bo
 				fv: make([]FloatValue, SBMAXPARTS),
 				//ret:         FloatValue{},
 			}
+			trans.req.id = i
 			trans.accessParts = trans.accessParts[PADDINGINT:PADDINGINT]
 			trans.accoutID = trans.accoutID[PADDINGKEY:PADDINGKEY]
 			tg.transBuf[p] = trans

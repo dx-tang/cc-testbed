@@ -5,14 +5,9 @@ import (
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/nowaitlock"
 	"github.com/totemtang/cc-testbed/spinlock"
-	"github.com/totemtang/cc-testbed/spinlockopt"
-	"github.com/totemtang/cc-testbed/wdlock"
 	"github.com/totemtang/cc-testbed/wfmutex"
-)
-
-const (
-	WDTRIAL = 0
 )
 
 type Tuple interface {
@@ -53,40 +48,14 @@ type Record interface {
 	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
-	WLock(tid TID) bool
-	WUnlock()
-	RLock(tid TID) bool
-	RUnlock()
-	Upgrade(tid TID) bool
+	WLock(req *LockReq) bool
+	WUnlock(req *LockReq)
+	RLock(req *LockReq) bool
+	RUnlock(req *LockReq)
+	Upgrade(req *LockReq) bool
 	GetTuple() Tuple
+	SetTuple(t Tuple)
 }
-
-/*
-func allocAttr(valType BTYPE, val Value) Value {
-	switch valType {
-	case INTEGER:
-		ret := &IntValue{
-			intVal: val.(*IntValue).intVal,
-		}
-		return ret
-	case FLOAT:
-		ret := &FloatValue{
-			floatVal: val.(*FloatValue).floatVal,
-		}
-		return ret
-	case STRING:
-		input := val.(*StringValue).stringVal
-		ret := allocStrVal()
-		ret.stringVal = ret.stringVal[0:len(input)]
-		for i := 0; i < len(input); i++ {
-			ret.stringVal[i] = input[i]
-		}
-		return ret
-	default:
-		clog.Error("Value Type Not Supported")
-		return nil
-	}
-}*/
 
 func MakeRecord(table Table, k Key, tuple Tuple) Record {
 
@@ -103,7 +72,6 @@ func MakeRecord(table Table, k Key, tuple Tuple) Record {
 			table: table,
 			key:   k,
 			tuple: tuple,
-			last:  wfmutex.WFMutex{},
 		}
 
 		return or
@@ -113,11 +81,8 @@ func MakeRecord(table Table, k Key, tuple Tuple) Record {
 			key:   k,
 			tuple: tuple,
 		}
-		if *NoWait {
-			lr.rwLock.SetTrial(WDTRIAL)
-		} else {
-			lr.wd.Initialize()
-		}
+
+		lr.wdLock.Initialize()
 
 		return lr
 	} else if *SysType == ADAPTIVE {
@@ -125,13 +90,10 @@ func MakeRecord(table Table, k Key, tuple Tuple) Record {
 			table: table,
 			key:   k,
 			tuple: tuple,
-			last:  wfmutex.WFMutex{},
 		}
-		if *NoWait {
-			ar.rwLock.SetTrial(WDTRIAL)
-		} else {
-			ar.wd.Initialize()
-		}
+
+		ar.wdLock.Initialize()
+
 		return ar
 	} else {
 		clog.Error("System Type %v Not Supported Yet", *SysType)
@@ -143,7 +105,7 @@ type PRecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
-	table    *Table
+	table    Table
 	padding2 [PADDING]byte
 }
 
@@ -170,9 +132,6 @@ func (pr *PRecord) GetValue(val Value, colNum int) {
 }
 
 func (pr *PRecord) SetValue(val Value, colNum int) {
-	//pr.value[colNum] = val
-	//bt := pr.table.valueSchema[colNum]
-	//setVal(bt, pr.value[colNum], val)
 	pr.tuple.SetValue(val, colNum)
 }
 
@@ -185,27 +144,35 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
-func (pr *PRecord) WLock(tid TID) bool {
+func (pr *PRecord) WLock(req *LockReq) bool {
 	clog.Error("Partition mode does not support WLock Operation")
 	return false
 }
 
-func (pr *PRecord) WUnlock() {
+func (pr *PRecord) WUnlock(req *LockReq) {
 	clog.Error("Partition mode does not support WUnlock Operation")
 }
 
-func (pr *PRecord) RLock(tid TID) bool {
+func (pr *PRecord) RLock(req *LockReq) bool {
 	clog.Error("Partition mode does not support RLock Operation")
 	return false
 }
 
-func (pr *PRecord) RUnlock() {
+func (pr *PRecord) RUnlock(req *LockReq) {
 	clog.Error("Partition mode does not support RUnlock Operation")
 }
 
-func (pr *PRecord) Upgrade(tid TID) bool {
+func (pr *PRecord) Upgrade(req *LockReq) bool {
 	clog.Error("Partition mode does not support Upgrade Operation")
 	return false
+}
+
+func (pr *PRecord) GetTuple() Tuple {
+	return pr.tuple
+}
+
+func (pr *PRecord) SetTuple(t Tuple) {
+	pr.tuple = t
 }
 
 type ORecord struct {
@@ -213,7 +180,7 @@ type ORecord struct {
 	key      Key
 	tuple    Tuple
 	last     wfmutex.WFMutex
-	table    *Table
+	table    Table
 	padding2 [PADDING]byte
 }
 
@@ -256,28 +223,36 @@ func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
 }
 
-func (or *ORecord) WLock(tid TID) bool {
+func (or *ORecord) WLock(req *LockReq) bool {
 	clog.Error("OCC mode does not support WLock Operation")
 	return false
 }
 
-func (or *ORecord) WUnlock() {
+func (or *ORecord) WUnlock(req *LockReq) {
 	clog.Error("OCC mode does not support WUnlock Operation")
 }
 
-func (or *ORecord) RLock(tid TID) bool {
+func (or *ORecord) RLock(req *LockReq) bool {
 	debug.PrintStack()
 	clog.Error("OCC mode does not support RLock Operation")
 	return false
 }
 
-func (or *ORecord) RUnlock() {
+func (or *ORecord) RUnlock(req *LockReq) {
 	clog.Error("OCC mode does not support RUnlock Operation")
 }
 
-func (or *ORecord) Upgrade(tid TID) bool {
+func (or *ORecord) Upgrade(req *LockReq) bool {
 	clog.Error("OCC mode does not support Upgrade Operation")
 	return false
+}
+
+func (or *ORecord) GetTuple() Tuple {
+	return or.tuple
+}
+
+func (or *ORecord) SetTuple(t Tuple) {
+	or.tuple = t
 }
 
 // Dummy Record
@@ -328,56 +303,45 @@ func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
 }
 
-func (dr *DRecord) WLock(tid TID) bool {
+func (dr *DRecord) WLock(req *LockReq) bool {
 	dr.lock.Lock()
 	return true
 }
 
-func (dr *DRecord) WUnlock() {
+func (dr *DRecord) WUnlock(req *LockReq) {
 	dr.lock.Unlock()
 }
 
-func (dr *DRecord) RLock(tid TID) bool {
+func (dr *DRecord) RLock(req *LockReq) bool {
 	clog.Error("Dummy mode does not support RLock Operation")
 	return false
 }
 
-func (dr *DRecord) RUnlock() {
+func (dr *DRecord) RUnlock(req *LockReq) {
 	clog.Error("Dummy mode does not support RUnlock Operation")
 }
 
-func (dr *DRecord) Upgrade(tid TID) bool {
+func (dr *DRecord) Upgrade(req *LockReq) bool {
 	clog.Error("Dummy mode does not support Upgrade Operation")
 	return false
 }
 
-func setVal(bt BTYPE, oldVal Value, newVal Value) {
-	switch bt {
-	case INTEGER:
-		old := oldVal.(*IntValue)
-		old.intVal = newVal.(*IntValue).intVal
-	case FLOAT:
-		old := oldVal.(*FloatValue)
-		old.floatVal = newVal.(*FloatValue).floatVal
-	case STRING:
-		old := oldVal.(*StringValue)
-		newOne := newVal.(*StringValue)
-		old.stringVal = old.stringVal[:len(newOne.stringVal)]
-		for i, b := range newOne.stringVal {
-			old.stringVal[i] = b
-		}
-	default:
-		clog.Error("Set Value Error; Not Support Value Type\n")
-	}
+func (dr *DRecord) GetTuple() Tuple {
+	clog.Error("Dummy mode does not support GetTuple Operation")
+	return nil
+}
+
+func (dr *DRecord) SetTuple(t Tuple) {
+	clog.Error("Dummy mode does not support SetTuple Operation")
 }
 
 type LRecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
-	wd       wdlock.WDLock
-	rwLock   spinlockopt.WDRWSpinlock
-	table    *Table
+	wdLock   WDLock
+	nwLock   nowaitlock.NoWaitLock
+	table    Table
 	padding2 [PADDING]byte
 }
 
@@ -416,57 +380,109 @@ func (lr *LRecord) SetTID(tid TID) {
 	clog.Error("Lock mode does not support SetTID Operation")
 }
 
-func (lr *LRecord) WLock(tid TID) bool {
+func (lr *LRecord) WLock(req *LockReq) bool {
 	if *NoWait {
-		return lr.rwLock.Lock(0)
+		return lr.nwLock.Lock()
 	} else {
-		return lr.wd.Lock(uint64(tid))
-	}
-	//return true
-}
-
-func (lr *LRecord) WUnlock() {
-	if *NoWait {
-		lr.rwLock.Unlock()
-	} else {
-		lr.wd.Unlock()
-	}
-}
-
-func (lr *LRecord) RLock(tid TID) bool {
-	if *NoWait {
-		return lr.rwLock.RLock(0)
-	} else {
-		return lr.wd.RLock(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := lr.wdLock.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 }
 
-func (lr *LRecord) RUnlock() {
+func (lr *LRecord) WUnlock(req *LockReq) {
 	if *NoWait {
-		lr.rwLock.RUnlock()
+		lr.nwLock.Unlock()
 	} else {
-		lr.wd.RUnlock()
+		req.reqType = LOCK_EX
+		lr.wdLock.Unlock(req)
+	}
+}
+
+func (lr *LRecord) RLock(req *LockReq) bool {
+	if *NoWait {
+		return lr.nwLock.RLock()
+	} else {
+		req.reqType = LOCK_SH
+		retState := lr.wdLock.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
+	}
+}
+
+func (lr *LRecord) RUnlock(req *LockReq) {
+	if *NoWait {
+		lr.nwLock.RUnlock()
+	} else {
+		req.reqType = LOCK_SH
+		lr.wdLock.Unlock(req)
 	}
 	//return
 }
 
-func (lr *LRecord) Upgrade(tid TID) bool {
+func (lr *LRecord) Upgrade(req *LockReq) bool {
 	if *NoWait {
-		return lr.rwLock.Upgrade(0)
+		return lr.nwLock.Upgrade()
 	} else {
-		return lr.wd.Upgrade(uint64(tid))
+		//return lr.wd.Lock(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := lr.wdLock.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
+}
+
+func (lr *LRecord) GetTuple() Tuple {
+	return lr.tuple
+}
+
+func (lr *LRecord) SetTuple(t Tuple) {
+	lr.tuple = t
 }
 
 type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
-	wd       wdlock.WDLock
-	rwLock   spinlockopt.WDRWSpinlock
+	wdLock   WDLock
+	nwLock   nowaitlock.NoWaitLock
 	last     wfmutex.WFMutex
-	table    *Table
-	conflict spinlockopt.WDRWSpinlock
+	conflict nowaitlock.NoWaitLock
+	table    Table
 	padding2 [PADDING]byte
 }
 
@@ -506,43 +522,116 @@ func (ar *ARecord) SetTID(tid TID) {
 	clog.Error("Adaptive mode does not support SetTID Operation")
 }
 
-func (ar *ARecord) WLock(tid TID) bool {
+func (ar *ARecord) WLock(req *LockReq) bool {
 	if *NoWait {
-		return ar.rwLock.Lock(0)
+		return ar.nwLock.Lock()
 	} else {
-		return ar.wd.Lock(uint64(tid))
-	}
-	//return true
-}
-
-func (ar *ARecord) WUnlock() {
-	if *NoWait {
-		ar.rwLock.Unlock()
-	} else {
-		ar.wd.Unlock()
-	}
-}
-
-func (ar *ARecord) RLock(tid TID) bool {
-	if *NoWait {
-		return ar.rwLock.RLock(0)
-	} else {
-		return ar.wd.RLock(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := ar.wdLock.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
 	}
 }
 
-func (ar *ARecord) RUnlock() {
+func (ar *ARecord) WUnlock(req *LockReq) {
 	if *NoWait {
-		ar.rwLock.RUnlock()
+		ar.nwLock.Unlock()
 	} else {
-		ar.wd.RUnlock()
+		req.reqType = LOCK_EX
+		ar.wdLock.Unlock(req)
 	}
 }
 
-func (ar *ARecord) Upgrade(tid TID) bool {
+func (ar *ARecord) RLock(req *LockReq) bool {
 	if *NoWait {
-		return ar.rwLock.Upgrade(0)
+		return ar.nwLock.RLock()
 	} else {
-		return ar.wd.Upgrade(uint64(tid))
+		//return ar.wd.RLock(uint64(tid))
+		req.reqType = LOCK_SH
+		retState := ar.wdLock.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
+	}
+}
+
+func (ar *ARecord) RUnlock(req *LockReq) {
+	if *NoWait {
+		ar.nwLock.RUnlock()
+	} else {
+		req.reqType = LOCK_SH
+		ar.wdLock.Unlock(req)
+	}
+}
+
+func (ar *ARecord) Upgrade(req *LockReq) bool {
+	if *NoWait {
+		return ar.nwLock.Upgrade()
+	} else {
+		//return ar.wd.Upgrade(uint64(tid))
+		req.reqType = LOCK_EX
+		retState := ar.wdLock.Lock(req)
+		if retState == LOCK_OK {
+			return true
+		} else if retState == LOCK_ABORT {
+			return false
+		} else { // Wait
+			retState = <-req.state
+			if retState == LOCK_OK {
+				return true
+			} else {
+				clog.Error("Wait-Die: Unsuccessful Wait\n")
+				return false
+			}
+		}
+	}
+}
+
+func (ar *ARecord) GetTuple() Tuple {
+	return ar.tuple
+}
+
+func (ar *ARecord) SetTuple(t Tuple) {
+	ar.tuple = t
+}
+
+func setVal(bt BTYPE, oldVal Value, newVal Value) {
+	switch bt {
+	case INTEGER:
+		old := oldVal.(*IntValue)
+		old.intVal = newVal.(*IntValue).intVal
+	case FLOAT:
+		old := oldVal.(*FloatValue)
+		old.floatVal = newVal.(*FloatValue).floatVal
+	case STRING:
+		old := oldVal.(*StringValue)
+		newOne := newVal.(*StringValue)
+		old.stringVal = old.stringVal[:len(newOne.stringVal)]
+		for i, b := range newOne.stringVal {
+			old.stringVal[i] = b
+		}
+	default:
+		clog.Error("Set Value Error; Not Support Value Type\n")
 	}
 }

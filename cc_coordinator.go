@@ -15,6 +15,8 @@ const (
 	SINGLEOCCTRAIN  = "single-occ-train.out"
 	SBPARTTRAIN     = "sb-part-train.out"
 	SBOCCTRAIN      = "sb-occ-train.out"
+	TPCCPARTTRAIN   = "tpcc-part-train.out"
+	TPCCOCCTRAIN    = "tpcc-occ-train.out"
 )
 
 type Coordinator struct {
@@ -48,7 +50,7 @@ const (
 	REPORTPERIOD = 2000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, IDToKeyRange [][]int64, tests int, nsecs int, workload int) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, tests int, nsecs int, workload int) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:   make([]*Worker, nWorkers),
 		store:     store,
@@ -77,13 +79,17 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 			partTS := CLASSIFERPATH + "/" + SBPARTTRAIN
 			occTS := CLASSIFERPATH + "/" + SBOCCTRAIN
 			coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
+		} else if workload == TPCCWL {
+			//partTS := CLASSIFERPATH + "/" + TPCCPARTTRAIN
+			//occTS := CLASSIFERPATH + "/" + TPCCOCCTRAIN
+			//coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
 		} else {
 			clog.Error("Workload %v Not Supported", workload)
 		}
 	}
 
 	for i := range coordinator.Workers {
-		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate, IDToKeyRange)
+		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate)
 		coordinator.reports[i] = make(chan *ReportInfo, 1)
 		coordinator.changeACK[i] = make(chan bool, 1)
 	}

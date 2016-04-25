@@ -1,14 +1,12 @@
 package testbed
 
 import (
-	"container/list"
-
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
 )
 
 const (
-	CAP_NEWORDER_ENTRY = 1000
+	CAP_NEWORDER_ENTRY = 10000
 	DIST_COUNT         = 10
 )
 
@@ -27,26 +25,28 @@ type NewOrderTable struct {
 	head        []*NoEntry
 	tail        []*NoEntry
 	nKeys       int64
-	isPhysical  bool
 	isPartition bool
+	mode        int
 	delLock     []SpinLockPad
 	padding2    [PADDING]byte
 }
 
-func MakeNewOrderTable(isPartition bool, isPhysical bool, warehouse int) *NewOrderTable {
+func MakeNewOrderTable(warehouse int, isPartition bool, mode int) *NewOrderTable {
 	noTable := &NewOrderTable{
-		head:        make([]*NoEntry, warehouse*DIST_COUNT),
-		tail:        make([]*NoEntry, warehouse*DIST_COUNT),
 		nKeys:       0,
-		isPhysical:  isPhysical,
 		isPartition: isPartition,
+		mode:        mode,
 		delLock:     make([]SpinLockPad, warehouse*DIST_COUNT),
 	}
+
+	noTable.head = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
+	noTable.head = noTable.head[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
+	noTable.tail = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
+	noTable.tail = noTable.tail[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
 
 	for i := 0; i < warehouse; i++ {
 		for j := 0; j < DIST_COUNT; j++ {
 			dRec := &DRecord{}
-			dRec.lock.SetTrial(SLTRIAL)
 			dRec.tuple = &NewOrderTuple{}
 			entry := &NoEntry{}
 			entry.rec = dRec
@@ -55,7 +55,6 @@ func MakeNewOrderTable(isPartition bool, isPhysical bool, warehouse int) *NewOrd
 
 			noTable.head[i*DIST_COUNT+j] = entry
 			noTable.tail[i*DIST_COUNT+j] = entry
-			noTable.delLock[i*DIST_COUNT+j].SetTrial(SLTRIAL)
 		}
 	}
 
@@ -63,13 +62,16 @@ func MakeNewOrderTable(isPartition bool, isPhysical bool, warehouse int) *NewOrd
 }
 
 func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	w_id := int64(k[0])
-	d_id := int64(k[8])
+	w_id := int64(k[BIT0])
+	d_id := int64(k[BIT8])
+	index := w_id*DIST_COUNT + d_id
 	noTuple := tuple.(*NewOrderTuple)
-	entry := no.tail[w_id*DIST_COUNT+d_id]
+	entry := no.tail[index]
+	var retRec Record
 	if entry.t < CAP_NEWORDER_ENTRY { // Not Full in this entry
 		entry.o_id_array[entry.t] = noTuple.no_o_id
 		entry.t++
+		retRec = entry.rec
 	} else {
 		// New a Entry
 		dRec := &DRecord{}
@@ -82,51 +84,67 @@ func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record,
 		newEntry.h = 0
 		newEntry.t = 0
 		entry.next = newEntry
-		no.tail[k] = newEntry
+		no.tail[index] = newEntry
 		// Add into new entry
 		newEntry.o_id_array[newEntry.t] = noTuple.no_o_id
 		newEntry.t++
+		retRec = dRec
 	}
+
+	return retRec, nil
 }
 
 func (no *NewOrderTable) GetRecByID(k Key, partNum int) (Record, error) {
 	clog.Error("New Order Table Not Support GetRecByID")
+	return nil, nil
 }
 
 func (no *NewOrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
 	clog.Error("New Order Table Not Support SetValueByID")
+	return nil
 }
 
 func (no *NewOrderTable) GetValueByID(k Key, partNum int, val Value, colNum int) error {
 	clog.Error("New Order Table Not Support GetValueByID")
+	return nil
 }
 
 func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
-	index := int(k[0])*DIST_COUNT + int(k[8])
-	no.delLock[index].Lock() // Lock index
+	index := int(k[BIT0])*DIST_COUNT + int(k[BIT8])
+
+	if !no.isPartition {
+		no.delLock[index].Lock() // Lock index
+	}
 
 	entry := no.head[index]
-	entry.rec.WLock(0)
+
+	if !no.isPartition {
+		entry.rec.WLock(nil)
+	}
+
 	if entry.h != entry.t {
 		noTuple := entry.rec.GetTuple().(*NewOrderTuple)
 		noTuple.no_o_id = entry.o_id_array[entry.h]
-		return entry.rec
+		return entry.rec, nil
 	} else {
-		entry.rec.WUnlock()
-		no.delLock[index].Unlock()
+		if !no.isPartition {
+			entry.rec.WUnlock(nil)
+			no.delLock[index].Unlock()
+		}
 		return nil, ENODEL
 	}
 }
 
 func (no *NewOrderTable) ReleaseDelete(k Key, partNum int) {
-	index := int(k[0])*DIST_COUNT + int(k[8])
-	no.head[index].rec.WUnlock()
-	no.delLock[index].Unlock()
-	return nil
+	if !no.isPartition {
+		index := int(k[BIT0])*DIST_COUNT + int(k[BIT8])
+		no.head[index].rec.WUnlock(nil)
+		no.delLock[index].Unlock()
+	}
 }
 
 func (no *NewOrderTable) DeleteRecord(k Key, partNum int) error {
-	index := int(k[0])*DIST_COUNT + int(k[8])
+	index := int(k[BIT0])*DIST_COUNT + int(k[BIT8])
 	entry := no.head[index]
 	entry.h++
 	if entry.h == CAP_NEWORDER_ENTRY && entry.next != nil { //No Data in this entry
@@ -134,29 +152,27 @@ func (no *NewOrderTable) DeleteRecord(k Key, partNum int) error {
 		entry.next = nil
 	}
 
-	entry.rec.WUnlock()
-	no.delLock[index].Unlock()
-	return nil
-}
+	if !no.isPartition {
+		entry.rec.WUnlock(nil)
+		no.delLock[index].Unlock()
+	}
 
-func (no *NewOrderTable) ReleaseInsert(k Key, partNum int) {
-	index := int(k[0])*DIST_COUNT + int(k[8])
-	no.tail[index].rec.WUnlock()
 	return nil
 }
 
 func (no *NewOrderTable) PrepareInsert(k Key, partNum int) error {
-	index := int(k[0])*DIST_COUNT + int(k[8])
-
-	entry := no.tail[index]
-	entry.rec.WLock(0)
+	if !no.isPartition {
+		index := int(k[BIT0])*DIST_COUNT + int(k[BIT8])
+		entry := no.tail[index]
+		entry.rec.WLock(nil)
+	}
 	return nil
 }
 
 func (no *NewOrderTable) InsertRecord(k Key, partNum int, rec Record) error {
-	index := int(k[0])*DIST_COUNT + int(k[8])
+	index := int(k[BIT0])*DIST_COUNT + int(k[BIT8])
 	entry := no.tail[index]
-	entry.o_id_array[t] = rec.GetTuple().(*NewOrderTuple).no_o_id
+	entry.o_id_array[entry.t] = rec.GetTuple().(*NewOrderTuple).no_o_id
 	entry.t++
 	if entry.t == CAP_NEWORDER_ENTRY {
 		// New a Entry
@@ -170,28 +186,39 @@ func (no *NewOrderTable) InsertRecord(k Key, partNum int, rec Record) error {
 		newEntry.h = 0
 		newEntry.t = 0
 		entry.next = newEntry
-		no.tail[k] = newEntry
+		no.tail[index] = newEntry
 	}
-	entry.rec.WUnlock()
+
+	if !no.isPartition {
+		entry.rec.WUnlock(nil)
+	}
+
+	return nil
+}
+
+func (no *NewOrderTable) ReleaseInsert(k Key, partNum int) {
+	if !no.isPartition {
+		index := int(k[0])*DIST_COUNT + int(k[8])
+		no.tail[index].rec.WUnlock(nil)
+	}
 }
 
 func (no *NewOrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 	clog.Error("New Order Table Not Support GetValueBySec")
+	return nil
+}
+
+func (no *NewOrderTable) SetMode(mode int) {
+	no.mode = mode
 }
 
 const (
 	CAP_ORDER_ENTRY = 100
 )
 
-type ShardedPart struct {
-	padding1  [PADDING]byte
-	rwLock    spinlock.RWSpinlock
-	datastore map[Key]Record
-	padding2  [PADDING]byte
-}
-
 type OrderPart struct {
 	padding1 [PADDING]byte
+	spinlock.RWSpinlock
 	o_id_map map[Key]*OrderEntry
 	padding2 [PADDING]byte
 }
@@ -206,35 +233,39 @@ type OrderEntry struct {
 
 type OrderTable struct {
 	padding1    [PADDING]byte
-	data        []*ShardedPart
-	secIndex    []*OrderPart
+	data        []Partition
+	secIndex    []OrderPart
 	nKeys       int64
-	isPhysical  bool
+	nParts      int
 	isPartition bool
 	mode        int
+	shardHash   func(Key) int
 	padding2    [PADDING]byte
 }
 
-func MakeOrderTable(isPartition bool, isPhysical bool, mode int, warehouse int) *OrderTable {
+func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *OrderTable {
 	oTable := &OrderTable{
-		data:        make([]*ShardedPart, warehouse*DIST_COUNT),
-		secIndex:    make([]*OrderPart, warehouse*DIST_COUNT),
+		data:        make([]Partition, nParts),
+		secIndex:    make([]OrderPart, warehouse*DIST_COUNT),
 		nKeys:       0,
+		nParts:      nParts,
 		isPartition: isPartition,
-		isPhysical:  isPhysical,
 		mode:        mode,
 	}
 
+	for k := 0; k < nParts; k++ {
+		oTable.data[k].shardedMap = make([]Shard, SHARDCOUNT)
+		for i := 0; i < SHARDCOUNT; i++ {
+			oTable.data[k].shardedMap[i].rows = make(map[Key]Record)
+		}
+	}
+
 	for i := 0; i < warehouse*DIST_COUNT; i++ {
-		sPart := &ShardedPart{
-			datastore: make(map[Key]Record),
-		}
-		sPart.rwLock.SetTrial(SLTRIAL)
-		oPart := &OrderPart{
-			o_id_map: make(map[Key]*OrderEntry),
-		}
-		oTable.data[i] = sPart
-		oTable.secIndex[i] = oPart
+		oTable.secIndex[i].o_id_map = make(map[Key]*OrderEntry)
+	}
+
+	oTable.shardHash = func(k Key) int {
+		return (int(k[BIT0])*3 + int(k[BIT8])*11 + int(k[BIT16])*13) % SHARDCOUNT
 	}
 
 	return oTable
@@ -242,14 +273,25 @@ func MakeOrderTable(isPartition bool, isPhysical bool, mode int, warehouse int) 
 }
 
 func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	index := int(k[0])*DIST_COUNT + int(k[8])
+	o.nKeys++
 
-	// Insert ShardedPart
-	sPart := o.data[index]
+	if !o.isPartition {
+		partNum = 0
+	}
+
+	// Insert Order
+	shardNum := o.shardHash(k)
+	shard := &o.data[partNum].shardedMap[shardNum]
+
+	if _, ok := shard.rows[k]; ok {
+		return nil, EDUPKEY //One record with that key has existed;
+	}
+
 	rec := MakeRecord(o, k, tuple)
-	sPart.datastore[k] = rec
+	shard.rows[k] = rec
 
 	// Insert OrderPart
+	index := int(k[0])*DIST_COUNT + int(k[8])
 	var keyAr [KEYLENTH]int64
 	var cKey Key
 	oTuple := tuple.(*OrderTuple)
@@ -292,48 +334,71 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 }
 
 func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, error) {
-	index := int(k[0])*DIST_COUNT + int(k[8])
-	sPart := o.data[index]
-	sPart.rwLock.RLock()
-	defer sPart.rwLock.Unlock()
 
-	rec, ok := sPart.datastore[k]
+	if !o.isPartition {
+		partNum = 0
+	}
+
+	shardNum := o.shardHash(k)
+	shard := &o.data[partNum].shardedMap[shardNum]
+
+	if o.mode != PARTITION {
+		shard.RLock()
+		defer shard.RUnlock()
+	}
+
+	r, ok := shard.rows[k]
 	if !ok {
 		return nil, ENOKEY
 	} else {
-		return rec, nil
+		return r, nil
 	}
 }
 
 func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-	index := int(k[0])*DIST_COUNT + int(k[8])
-	sPart := o.data[index]
-	sPart.rwLock.RLock()
-	defer sPart.rwLock.Unlock()
 
-	rec, ok := sPart.datastore[k]
-	if !ok {
-		return ENOKEY
-	} else {
-		rec.SetValue(value, colNum)
-		return nil
+	if !o.isPartition {
+		partNum = 0
 	}
 
+	shardNum := o.shardHash(k)
+	shard := &o.data[partNum].shardedMap[shardNum]
+
+	if o.mode != PARTITION {
+		shard.RLock()
+		defer shard.RUnlock()
+	}
+
+	r, ok := shard.rows[k]
+	if !ok {
+		return ENOKEY
+	}
+
+	r.SetValue(value, colNum)
+	return nil
 }
 
-func (o *OrderTable) GetValueByID(k Key, partNum int, val Value, colNum int) error {
-	index := int(k[0])*DIST_COUNT + int(k[8])
-	sPart := o.data[index]
-	sPart.rwLock.RLock()
-	defer sPart.rwLock.Unlock()
+func (o *OrderTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
 
-	rec, ok := sPart.datastore[k]
+	if !o.isPartition {
+		partNum = 0
+	}
+
+	shardNum := o.shardHash(k)
+	shard := &o.data[partNum].shardedMap[shardNum]
+
+	if o.mode != PARTITION {
+		shard.RLock()
+		defer shard.RUnlock()
+	}
+
+	r, ok := shard.rows[k]
 	if !ok {
 		return ENOKEY
-	} else {
-		rec.GetValue(value, colNum)
-		return nil
 	}
+
+	r.GetValue(value, colNum)
+	return nil
 }
 
 func (o *OrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -341,44 +406,56 @@ func (o *OrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
 	return nil, nil
 }
 
-func (o *OrderTable) ReleaseDelete(k Key, partNum int) {
-	clog.Error("Order Table Not Support ReleaseDelete")
-}
-
 func (o *OrderTable) DeleteRecord(k Key, partNum int) error {
 	clog.Error("Order Table Not Support DeleteRecord")
 	return nil
 }
 
-func (o *OrderTable) ReleaseInsert(k Key, partNum int) {
-	clog.Error("Order Table Not Support ReleaseInsert")
+func (o *OrderTable) ReleaseDelete(k Key, partNum int) {
+	clog.Error("Order Table Not Support ReleaseDelete")
 }
 
 func (o *OrderTable) PrepareInsert(k Key, partNum int) error {
-	clog.Error("Order Table Not Support PrepareInsert")
 	return nil
 }
 
 func (o *OrderTable) InsertRecord(k Key, partNum int, rec Record) error {
-	index := int(k[0])*DIST_COUNT + int(k[8])
+	o.nKeys++
 
-	// Insert ShardedPart
-	sPart := o.data[index]
-	oPart := o.secIndex[index]
-	sPart.rwLock.Lock()
-	defer sPart.rwLock.Unlock()
-
-	_, ok := sPart.datastore[k]
-	if ok {
-		return EDUPKEY
+	if !o.isPartition {
+		partNum = 0
 	}
 
-	sPart.datastore[k] = rec
+	// Insert Order
+	shardNum := o.shardHash(k)
+	shard := &o.data[partNum].shardedMap[shardNum]
+
+	index := int(k[0])*DIST_COUNT + int(k[8])
+	oPart := &o.secIndex[index]
+
+	//clog.Info("Write Waiting %v ", index)
+
+	if !o.isPartition {
+		oPart.Lock()
+		defer oPart.Unlock()
+		//defer clog.Info("Write Unlock %v", index)
+	}
+
+	if o.mode != PARTITION {
+		shard.Lock()
+		defer shard.Unlock()
+	}
+
+	if _, ok := shard.rows[k]; ok {
+		return EDUPKEY //One record with that key has existed;
+	}
+
+	shard.rows[k] = rec
 
 	// Insert OrderPart
 	var keyAr [KEYLENTH]int64
 	var cKey Key
-	oTuple := tuple.(*OrderTuple)
+	oTuple := rec.GetTuple().(*OrderTuple)
 	keyAr[0] = oTuple.o_w_id
 	keyAr[1] = oTuple.o_d_id
 	keyAr[2] = oTuple.o_c_id
@@ -415,21 +492,34 @@ func (o *OrderTable) InsertRecord(k Key, partNum int, rec Record) error {
 	return nil
 }
 
+func (o *OrderTable) ReleaseInsert(k Key, partNum int) {
+}
+
 func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 	index := int(k[0])*DIST_COUNT + int(k[8])
-	sPart := o.data[index]
-	sPart.rwLock.RLock()
-	defer sPart.rwLock.Unlock()
-	oPart := o.secIndex[index]
+	oPart := &o.secIndex[index]
+	//clog.Info("Wating %v", index)
+
+	if !o.isPartition {
+		oPart.RLock()
+		defer oPart.RUnlock()
+		//defer clog.Info("Read UnLock %v", index)
+	}
 
 	iv := val.(*IntValue)
 	oEntry, ok := oPart.o_id_map[k]
 	if !ok {
-		return NENOKEY
+		return ENOORDER
 	}
 	iv.intVal = oEntry.o_id_array[0]
 	return nil
 }
+
+func (o *OrderTable) SetMode(mode int) {
+	o.mode = mode
+}
+
+/*
 
 type OrderLineTable struct {
 	padding1    [PADDING]byte
@@ -562,7 +652,7 @@ func (ol *OrderLineTable) InsertRecord(k Key, partNum int, rec Record) error {
 
 func (ol *OrderLineTable) GetValueBySec(k Key, partNum int, val Value) error {
 	clog.Error("Order Line Table Not Support GetValueBySec")
-}
+} */
 
 const (
 	CAP_CUSTOMER_ENTRY = 5
@@ -585,37 +675,38 @@ type CustomerEntry struct {
 
 type CustomerTable struct {
 	padding1    [PADDING]byte
-	data        []*Partition
-	secIndex    []*CustomerPart
+	data        []Partition
+	secIndex    []CustomerPart
 	nKeys       int64
-	isPhysical  bool
 	isPartition bool
+	nParts      int
 	mode        int
+	shardHash   func(Key) int
 	padding2    [PADDING]byte
 }
 
-func MakeCustomerTable(isPartition bool, isPhysical bool, mode int, warehouse int) *CustomerTable {
+func MakeCustomerTable(nParts int, warehouse int, isPartition bool, mode int) *CustomerTable {
 	cTable := &CustomerTable{
 		nKeys:       0,
 		isPartition: isPartition,
-		isPhysical:  isPhysical,
+		nParts:      nParts,
 		mode:        mode,
 	}
 
-	//if isPartition {
-	cTable.data = make([]*Partition, warehouse)
-	cTable.secIndex = make([]*CustomerPart, warehouse)
-	//}
+	cTable.data = make([]Partition, nParts)
+	cTable.secIndex = make([]CustomerPart, nParts)
 
-	for i := 0; i < warehouse; i++ {
-		part := &Partition{
-			rows: make(map[Key]Record),
+	for k := 0; k < nParts; k++ {
+		cTable.secIndex[k].c_id_map = make(map[Key]*CustomerEntry)
+
+		cTable.data[k].shardedMap = make([]Shard, SHARDCOUNT)
+		for i := 0; i < SHARDCOUNT; i++ {
+			cTable.data[k].shardedMap[i].rows = make(map[Key]Record)
 		}
-		cPart := &CustomerPart{
-			c_id_map: make(map[Key]*CustomerEntry),
-		}
-		cTable.data[i] = part
-		cTable.secIndex[i] = cPart
+	}
+
+	cTable.shardHash = func(k Key) int {
+		return (int(k[BIT0])*3 + int(k[BIT8])*11 + int(k[BIT16])*13) % SHARDCOUNT
 	}
 
 	return cTable
@@ -624,9 +715,16 @@ func MakeCustomerTable(isPartition bool, isPhysical bool, mode int, warehouse in
 
 func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
 	// Insert Partition
-	part := c.data[partNum]
+	c.nKeys++
+
+	if !c.isPartition {
+		partNum = 0
+	}
+
+	shardNum := c.shardHash(k)
+	shard := &c.data[partNum].shardedMap[shardNum]
 	rec := MakeRecord(c, k, tuple)
-	part.rows[k] = rec
+	shard.rows[k] = rec
 
 	// Insert CustomerPart
 	var keyAr [KEYLENTH]int64
@@ -638,7 +736,7 @@ func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, 
 	for i := 0; i < cTuple.len_c_last; i++ {
 		cKey[i+16] = cTuple.c_last[i]
 	}
-	cPart := c.secIndex[partNum]
+	cPart := &c.secIndex[partNum]
 	cEntry, ok := cPart.c_id_map[cKey]
 	if !ok {
 		cEntry = &CustomerEntry{
@@ -675,35 +773,56 @@ func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, 
 }
 
 func (c *CustomerTable) GetRecByID(k Key, partNum int) (Record, error) {
-	part := c.data[partNum]
-	rec, ok := part.rows[k]
+
+	if !c.isPartition {
+		partNum = 0
+	}
+
+	shardNum := c.shardHash(k)
+	shard := &c.data[partNum].shardedMap[shardNum]
+
+	r, ok := shard.rows[k]
 	if !ok {
 		return nil, ENOKEY
 	} else {
-		return rec, nil
+		return r, nil
 	}
 }
 
 func (c *CustomerTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-	part := c.data[partNum]
-	rec, ok := part.rows[k]
+
+	if !c.isPartition {
+		partNum = 0
+	}
+
+	shardNum := c.shardHash(k)
+	shard := &c.data[partNum].shardedMap[shardNum]
+
+	r, ok := shard.rows[k]
 	if !ok {
 		return ENOKEY
-	} else {
-		rec.SetValue(value, colNum)
-		return nil
 	}
+
+	r.SetValue(value, colNum)
+	return nil
 }
 
-func (c *CustomerTable) GetValueByID(k Key, partNum int, val Value, colNum int) error {
-	part := c.data[partNum]
-	rec, ok := part.rows[k]
+func (c *CustomerTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
+
+	if !c.isPartition {
+		partNum = 0
+	}
+
+	shardNum := c.shardHash(k)
+	shard := &c.data[partNum].shardedMap[shardNum]
+
+	r, ok := shard.rows[k]
 	if !ok {
 		return ENOKEY
-	} else {
-		rec.GetValue(val, colNum)
-		return nil
 	}
+
+	r.GetValue(value, colNum)
+	return nil
 }
 
 func (c *CustomerTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -735,7 +854,12 @@ func (c *CustomerTable) InsertRecord(k Key, partNum int, rec Record) error {
 }
 
 func (c *CustomerTable) GetValueBySec(k Key, partNum int, val Value) error {
-	cPart := c.secIndex[index]
+
+	if !c.isPartition {
+		partNum = 0
+	}
+
+	cPart := &c.secIndex[partNum]
 	cEntry := cPart.c_id_map[k]
 	pos := cEntry.total / 2
 
@@ -746,4 +870,136 @@ func (c *CustomerTable) GetValueBySec(k Key, partNum int, val Value) error {
 	}
 	iv.intVal = cEntry.c_id_array[pos]
 	return nil
+}
+
+func (c *CustomerTable) SetMode(mode int) {
+	c.mode = mode
+}
+
+const (
+	CAP_HISTORY_ENTRY = 1000
+)
+
+type HistoryEntry struct {
+	padding1 [PADDING]byte
+	data     [CAP_HISTORY_ENTRY]Record
+	index    int
+	next     *HistoryEntry
+	padding2 [PADDING]byte
+}
+
+type HistoryShard struct {
+	padding1 [PADDING]byte
+	latch    spinlock.Spinlock
+	head     *HistoryEntry
+	tail     *HistoryEntry
+	padding2 [PADDING]byte
+}
+
+type HistoryTable struct {
+	padding1  [PADDING]byte
+	shards    [SHARDCOUNT]HistoryShard
+	shardHash func(Key) int
+	padding2  [PADDING]byte
+}
+
+func MakeHistoryTable(nParts int, warehouse int, isPartition bool, mode int) *HistoryTable {
+	ht := &HistoryTable{}
+	ht.shardHash = func(k Key) int {
+		return (int(k[BIT0])*3 + int(k[BIT8])*11 + int(k[BIT16])*13) % SHARDCOUNT
+	}
+	for i := 0; i < SHARDCOUNT; i++ {
+		shard := &ht.shards[i]
+		he := &HistoryEntry{
+			index: 0,
+			next:  nil,
+		}
+		shard.head = he
+		shard.tail = he
+	}
+
+	return ht
+}
+
+func (h *HistoryTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	shard := h.shards[h.shardHash(k)]
+	cur := shard.tail
+	if cur.index == CAP_HISTORY_ENTRY {
+		he := &HistoryEntry{
+			index: 0,
+			next:  nil,
+		}
+		cur.next = he
+		shard.tail = he
+		cur = he
+	}
+	rec := MakeRecord(h, k, tuple)
+	cur.data[cur.index] = rec
+	cur.index++
+
+	return rec, nil
+}
+
+func (h *HistoryTable) GetRecByID(k Key, partNum int) (Record, error) {
+	clog.Error("HistoryTable Table Not Support GetRecByID")
+	return nil, nil
+}
+
+func (h *HistoryTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
+	clog.Error("HistoryTable Table Not Support SetValueByID")
+	return nil
+}
+
+func (h *HistoryTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
+	clog.Error("HistoryTable Table Not Support GetValueByID")
+	return nil
+}
+
+func (h *HistoryTable) PrepareDelete(k Key, partNum int) (Record, error) {
+	clog.Error("HistoryTable Table Not Support PrepareDelete")
+	return nil, nil
+}
+
+func (h *HistoryTable) ReleaseDelete(k Key, partNum int) {
+	clog.Error("HistoryTable Table Not Support ReleaseDelete")
+}
+
+func (h *HistoryTable) DeleteRecord(k Key, partNum int) error {
+	clog.Error("HistoryTable Table Not Support DeleteRecord")
+	return nil
+}
+
+func (h *HistoryTable) ReleaseInsert(k Key, partNum int) {
+}
+
+func (h *HistoryTable) PrepareInsert(k Key, partNum int) error {
+	return nil
+}
+
+func (h *HistoryTable) InsertRecord(k Key, partNum int, rec Record) error {
+	shard := h.shards[h.shardHash(k)]
+	shard.latch.Lock()
+	defer shard.latch.Unlock()
+	cur := shard.tail
+	if cur.index == CAP_HISTORY_ENTRY {
+		he := &HistoryEntry{
+			index: 0,
+			next:  nil,
+		}
+		cur.next = he
+		shard.tail = he
+		cur = he
+	}
+	cur.data[cur.index] = rec
+	cur.index++
+	return nil
+}
+
+func (h *HistoryTable) GetValueBySec(k Key, partNum int, val Value) error {
+	clog.Error("History Table Not Support GetValueBySec")
+	return nil
+}
+
+func (h *HistoryTable) SetMode(mode int) {
+	return
 }

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	//"github.com/totemtang/cc-testbed/wfmutex"
-	//"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/clog"
 )
 
 const (
@@ -93,7 +93,6 @@ type SampleTool struct {
 	padding0     [PADDING]byte
 	nParts       int
 	tableCount   int
-	IDToKeyRange [][]int64
 	sampleCount  int
 	sampleAccess int
 	recBuf       []*ARecord
@@ -108,12 +107,11 @@ type SampleTool struct {
 	padding1     [PADDING]byte
 }
 
-func NewSampleTool(nParts int, IDToKeyRange [][]int64, sampleRate int, s *Store) *SampleTool {
+func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 	st := &SampleTool{
-		nParts:       nParts,
-		tableCount:   len(IDToKeyRange),
-		IDToKeyRange: IDToKeyRange,
-		sampleRate:   sampleRate,
+		nParts:     nParts,
+		tableCount: len(s.tables),
+		sampleRate: sampleRate,
 		//lruAr:        make([]*LRU, len(IDToKeyRange)),
 	}
 
@@ -144,9 +142,12 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 			}
 		}
 
-		rec := s.GetRecByID(tableID, key, partNum)
+		rec, err := s.GetRecByID(tableID, key, partNum)
+		if err != nil {
+			clog.Error("Error No Key in Sample")
+		}
 		tmpRec := rec.(*ARecord)
-		ok := tmpRec.conflict.RLock(0)
+		ok := tmpRec.conflict.RLock()
 		if ok {
 			n := len(st.recBuf)
 			st.recBuf = st.recBuf[0 : n+1]
@@ -170,7 +171,10 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 	}
 
 	tm := time.Now()
-	rec := s.GetRecByID(tableID, key, partNum)
+	rec, err := s.GetRecByID(tableID, key, partNum)
+	if err != nil {
+		clog.Error("Error No Key in Sample")
+	}
 	ri.latency += time.Since(tm).Nanoseconds()
 	tmpRec := rec.(*ARecord)
 	x := tmpRec.conflict.CheckLock()

@@ -58,7 +58,6 @@ func main() {
 	}
 
 	nParts := nWorkers
-	isPhysical := false
 	isPartition := true
 	clog.Info("Number of workers %v \n", nWorkers)
 	if *testbed.SysType == testbed.PARTITION {
@@ -84,7 +83,7 @@ func main() {
 	}
 
 	//sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
-	single := testbed.NewSingleWL(*wl, nParts, isPartition, isPhysical, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps)
+	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps)
 	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1, testbed.SINGLEWL)
 
 	clog.Info("Done with Populating Store\n")
@@ -95,6 +94,7 @@ func main() {
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)
 		go func(n int) {
+			testbed.InitLockReqBuffer(n)
 			var t testbed.Trans
 			tq := testbed.NewTransQueue(BUFSIZE)
 			w := coord.Workers[n]

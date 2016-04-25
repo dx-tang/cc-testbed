@@ -65,7 +65,7 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 	w.txns[fn] = transaction
 }
 
-func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int, IDToKeyRange [][]int64) *Worker {
+func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int) *Worker {
 	w := &Worker{
 		ID:         id,
 		store:      s,
@@ -79,16 +79,7 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		modeChan:   make(chan int, 1),
 	}
 
-	w.SetTrial(500)
-
-	kr := make([][]int64, len(IDToKeyRange))
-	for i := 0; i < len(IDToKeyRange); i++ {
-		kr[i] = make([]int64, len(IDToKeyRange[i]))
-		for j := 0; j < len(IDToKeyRange[i]); j++ {
-			kr[i][j] = IDToKeyRange[i][j]
-		}
-	}
-	w.st = NewSampleTool(s.nParts, kr, sampleRate, s)
+	w.st = NewSampleTool(s.nParts, sampleRate, s)
 	w.riMaster = NewReportInfo(s.nParts, tableCount)
 	w.riReplica = NewReportInfo(s.nParts, tableCount)
 
@@ -117,6 +108,14 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.Register(TRANSACTIONSAVINGS, TransactionSavings)
 	w.Register(ADDONE, AddOne)
 	w.Register(UPDATEINT, UpdateInt)
+
+	// TPCC Workload
+	w.Register(TPCC_NEWORDER, NewOrder)
+	w.Register(TPCC_PAYMENT_ID, Payment)
+	w.Register(TPCC_PAYMENT_LAST, Payment)
+	w.Register(TPCC_ORDERSTATUS_ID, OrderStatus)
+	w.Register(TPCC_ORDERSTATUS_LAST, OrderStatus)
+	w.Register(TPCC_STOCKLEVEL, StockLevel)
 
 	return w
 }
@@ -205,6 +204,7 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 		w.NStats[NABORTS]++
 		return nil, err
 	} else if err == ENOKEY {
+		clog.Info("txn %v", txn)
 		w.NStats[NENOKEY]++
 		return nil, err
 	} else if err == ELACKBALANCE {

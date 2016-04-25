@@ -10,13 +10,9 @@ import (
 	"sync"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/nowaitlock"
 	"github.com/totemtang/cc-testbed/spinlock"
-	"github.com/totemtang/cc-testbed/spinlockopt"
 	"github.com/totemtang/cc-testbed/wfmutex"
-)
-
-const (
-	SLTRIAL = 500
 )
 
 const (
@@ -50,6 +46,7 @@ const (
 	INTEGER = iota // int64
 	FLOAT          // floate64
 	STRING         // string
+	DATE           // date
 )
 
 var (
@@ -61,6 +58,9 @@ var (
 	// Error for Smallbank
 	ELACKBALANCE = errors.New("Checking Balance Not Enough")
 	ENEGSAVINGS  = errors.New("Negative Saving Balance")
+
+	// Error for TPCC
+	ENOORDER = errors.New("No Order For This Customer")
 )
 
 type BTYPE int // Basic types: int64, float64, string
@@ -71,20 +71,50 @@ var SysType = flag.Int("sys", PARTITION, "System Type we will use")
 var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
 var NoWait = flag.Bool("nw", true, "Use Waitdie or NoWait for 2PL")
 
+type RWMutexPad struct {
+	padding1 [PADDING]byte
+	sync.RWMutex
+	padding2 [PADDING]byte
+}
+
+type SpinLockPad struct {
+	padding1 [PADDING]byte
+	spinlock.Spinlock
+	padding2 [PADDING]byte
+}
+
+type WFMuTexPad struct {
+	padding1 [PADDING]byte
+	lock     wfmutex.WFMutex
+	padding2 [PADDING]byte
+}
+
+type NoWaitLockPad struct {
+	padding1 [PADDING]byte
+	lock     nowaitlock.NoWaitLock
+	padding2 [PADDING]byte
+}
+
 type Store struct {
 	padding1     [PADDING]byte
 	tables       []Table
-	spinLock     []*SpinLockPad
-	wfLock       []*WFMuTexPAD
-	confLock     []*WDRWSpinlockPAD
-	mutexLock    []*RWMutex
-	nParts       int
-	isPhysical   bool
+	spinLock     []SpinLockPad
+	wfLock       []WFMuTexPad
+	confLock     []NoWaitLockPad
+	mutexLock    []RWMutexPad
 	tableToIndex map[string]int
+	nParts       int
 	padding2     [PADDING]byte
 }
 
-func NewStore(schema string, nParts int, isPhysical bool) *Store {
+func NewStore(schema string, nParts int, isPartition bool) *Store {
+
+	// Initilize GlobleBuf
+	globalBuf = make([]LockReqBuffer, *NumPart)
+
+	if nParts == 1 {
+		isPartition = false
+	}
 
 	// Open Schema File and Read Configuration
 	sch, err := os.OpenFile(schema, os.O_RDONLY, 0600)
@@ -116,25 +146,13 @@ func NewStore(schema string, nParts int, isPhysical bool) *Store {
 	}
 
 	s := &Store{
-		tables:       make([]*Table, tableCount),
+		tables:       make([]Table, tableCount),
 		tableToIndex: make(map[string]int),
-		wfLock:       make([]*WFMuTexPAD, nParts),
-		confLock:     make([]*WDRWSpinlockPAD, nParts),
-		mutexLock:    make([]*RWMutex, nParts),
-		spinLock:     make([]*SpinLockPad, nParts),
+		wfLock:       make([]WFMuTexPad, nParts),
+		confLock:     make([]NoWaitLockPad, nParts),
+		mutexLock:    make([]RWMutexPad, nParts),
+		spinLock:     make([]SpinLockPad, nParts),
 		nParts:       nParts,
-		isPhysical:   isPhysical,
-	}
-
-	for i := 0; i < nParts; i++ {
-		s.wfLock[i] = &WFMuTexPAD{}
-		s.confLock[i] = &WDRWSpinlockPAD{}
-		if *SpinLock {
-			s.spinLock[i] = &SpinLockPad{}
-			s.spinLock[i].SetTrial(SLTRIAL)
-		} else {
-			s.mutexLock[i] = &RWMutex{}
-		}
 	}
 
 	var line []byte
@@ -150,42 +168,23 @@ func NewStore(schema string, nParts int, isPhysical bool) *Store {
 
 		// The first element is table name;
 		s.tableToIndex[schemaStrs[0]] = i
-		// We allocate more space to make the array algined to cache line
-		s.tables[i] = &Table{
-			nKeys:       0,
-			name:        schemaStrs[0],
-			valueSchema: make([]BTYPE, len(schemaStrs)-1),
+
+		mode := *SysType
+		if mode == ADAPTIVE {
+			mode = PARTITION
 		}
 
-		for j := 0; j < len(schemaStrs)-1; j++ {
-			switch schemaStrs[j+1] {
-			case "int":
-				s.tables[i].valueSchema[j] = INTEGER
-			case "string":
-				s.tables[i].valueSchema[j] = STRING
-			case "float":
-				s.tables[i].valueSchema[j] = FLOAT
-			default:
-				clog.Error("Schema File %s Wrong Value Type %s", schema, schemaStrs[j+1])
-			}
-		}
-
-		if isPhysical {
-			s.tables[i].data = make([]*Partition, nParts)
-			for j := 0; j < nParts; j++ {
-				part := &Partition{
-					rows: make(map[Key]Record),
-				}
-				s.tables[i].data[j] = part
-			}
+		if strings.Compare(schemaStrs[0], "NEWORDER") == 0 {
+			s.tables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
+		} else if strings.Compare(schemaStrs[0], "ORDER") == 0 {
+			s.tables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
+		} else if strings.Compare(schemaStrs[0], "CUSTOMER") == 0 {
+			s.tables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
+		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
+			s.tables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
 		} else {
-			s.tables[i].data = make([]*Partition, 1)
-			part := &Partition{
-				rows: make(map[Key]Record),
-			}
-			s.tables[i].data[0] = part
+			s.tables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode)
 		}
-
 	}
 	return s
 }
@@ -259,6 +258,11 @@ func (s *Store) DeleteRecord(tableID int, k Key, partNum int) error {
 	return table.DeleteRecord(k, partNum)
 }
 
+func (s *Store) ReleaseDelete(tableID int, k Key, partNum int) {
+	table := s.tables[tableID]
+	table.ReleaseDelete(k, partNum)
+}
+
 func (s *Store) PrepareInsert(tableID int, k Key, partNum int) error {
 	table := s.tables[tableID]
 	return table.PrepareInsert(k, partNum)
@@ -269,198 +273,17 @@ func (s *Store) InsertRecord(tableID int, k Key, partNum int, rec Record) error 
 	return table.InsertRecord(k, partNum, rec)
 }
 
-type Table interface {
-	CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error)
-	GetRecByID(k Key, partNum int) (Record, error)
-	SetValueByID(k Key, partNum int, value Value, colNum int) error
-	GetValueByID(k Key, partNum int, val Value, colNum int) error
-	ReleaseDelete(k Key, partNum int)
-	PrepareDelete(k Key, partNum int) (Record, error)
-	DeleteRecord(k Key, partNum int) error
-	ReleaseInsert(k Key, partNum int)
-	PrepareInsert(k Key, partNum int) error
-	InsertRecord(k Key, partNum int, rec Record) error
-	GetValueBySec(k Key, partNum int, val Value) error
+func (s *Store) ReleaseInsert(tableID int, k Key, partNum int) {
+	table := s.tables[tableID]
+	table.ReleaseInsert(k, partNum)
 }
 
-type Chunk struct {
-	padding1 [PADDING]byte
-	rows     map[Key]Record
-	padding2 [PADDING]byte
+func (s *Store) GetValueBySec(tableID int, k Key, partNum int, val Value) error {
+	return s.tables[tableID].GetValueBySec(k, partNum, val)
 }
 
-type Partition struct {
-	padding1 [PADDING]byte
-	rows     map[Key]Record
-	padding2 [PADDING]byte
-}
-
-type RWMutex struct {
-	padding1 [PADDING]byte
-	sync.RWMutex
-	padding2 [PADDING]byte
-}
-
-type SpinLockPad struct {
-	padding1 [PADDING]byte
-	spinlock.Spinlock
-	padding2 [PADDING]byte
-}
-
-type WFMuTexPAD struct {
-	padding1 [PADDING]byte
-	lock     wfmutex.WFMutex
-	padding2 [PADDING]byte
-}
-
-type WDRWSpinlockPAD struct {
-	padding1 [PADDING]byte
-	lock     spinlockopt.WDRWSpinlock
-	padding2 [PADDING]byte
-}
-
-type BasicTable struct {
-	padding1    [PADDING]byte
-	data        []*Partition
-	valueSchema []BTYPE
-	nKeys       int64
-	name        string
-	isPhysical  bool
-	padding2    [PADDING]byte
-}
-
-func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	bt.nKeys++
-
-	var part *Partition
-	if bt.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
+func (s *Store) SetMode(mode int) {
+	for _, t := range s.tables {
+		t.SetMode(mode)
 	}
-
-	if _, ok := part.rows[k]; ok {
-		return nil, EDUPKEY //One record with that key has existed;
-	}
-
-	r := MakeRecord(bt, k, tuple)
-	//chunk.rows[k] = r
-	part.rows[k] = r
-	return r, nil
-}
-
-func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, error) {
-	var part *Partition
-	if bt.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
-	}
-	r, ok := part.rows[k]
-	if !ok {
-		return nil, ENOKEY
-	} else {
-		return r, nil
-	}
-}
-
-func (bt *BasicTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	var part *Partition
-	if s.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
-	}
-	r, ok := part.rows[k]
-	if !ok {
-		return ENOKEY // No such record; Fail
-	}
-
-	r.SetValue(value, colNum)
-	return nil
-}
-
-func (bt *BasicTable) GetValueByID(k Key, partNum int, val Value, colNum int) error {
-	var part *Partition
-	if bt.isPhysical {
-		part = table.data[partNum]
-	} else {
-		part = table.data[0]
-	}
-	r, ok := part.rows[k]
-	if !ok {
-		return ENOKEY
-	}
-	r.GetValue(val, colNum)
-	return nil
-}
-
-func (bt *BasicTable) PrepareDelete(k Key, partNum int) (Record, error) {
-	clog.Error("Basic Table Not Support PrepareDelete")
-	return nil, nil
-}
-
-func (bt *BasicTable) DeleteRecord(k Key, partNum int) error {
-	clog.Error("Basic Table Not Support DeleteRecord")
-	return nil
-}
-
-func (bt *BasicTable) PrepareInsert(k Key, partNum int) error {
-	clog.Error("Basic Table Not Support PrepareInsert")
-	return nil, nil
-}
-
-func (bt *BasicTable) InsertRecord(k Key, partNum int, rec Record) error {
-	clog.Error("Basic Table Not Support InsertRecord")
-	return nil
-}
-
-func checkSchema(v []Value, valueSchema []BTYPE) bool {
-	if len(v) != len(valueSchema) {
-		return false
-	}
-
-	for i := 0; i < len(v); i++ {
-		switch v[i].(type) {
-		case *IntValue:
-			if valueSchema[i] != INTEGER {
-				return false
-			}
-		case *StringValue:
-			if valueSchema[i] != STRING {
-				return false
-			}
-		case *FloatValue:
-			if valueSchema[i] != FLOAT {
-				return false
-			}
-		default:
-			clog.Error("CheckSchema Not Supported Type %v\n", valueSchema[i])
-			return false
-		}
-	}
-
-	return true
-}
-
-func checkType(val Value, t BTYPE) bool {
-	switch val.(type) {
-	case *IntValue:
-		if t != INTEGER {
-			return false
-		}
-	case *StringValue:
-		if t != STRING {
-			return false
-		}
-	case *FloatValue:
-		if t != FLOAT {
-			return false
-		}
-	default:
-		clog.Error("CheckType Not Supported Type %v\n", t)
-		return false
-	}
-	return true
 }
