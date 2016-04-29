@@ -103,6 +103,7 @@ func (tq *TransQueue) Dequeue() Trans {
 func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	noTrans := t.(*NewOrderTrans)
 
+	distRead := false
 	var k Key
 	var keyAr [KEYLENTH]int64
 
@@ -150,7 +151,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	// Increment D_NEXT_O_ID
 	wb_next_o_id := &noTrans.wb_next_o_id
 	wb_next_o_id.intVal = d_next_o_id + 1
-	err = exec.WriteValue(DISTRICT, k, partNum, wb_next_o_id, D_NEXT_O_ID, req)
+	err = exec.WriteValue(DISTRICT, k, partNum, wb_next_o_id, D_NEXT_O_ID, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +209,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	keyAr[1] = 0
 	keyAr[2] = 0
 	var totalAmount float64
+	rb_o_dist := &noTrans.rb_o_dist
 
 	for i := 0; i < int(noTrans.ol_cnt); i++ {
 		keyAr[0] = noTrans.ol_i_id[i]
@@ -224,10 +226,12 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		sKeyAr[3] = 0
 		UKey(sKeyAr, &sKey)
 
-		rb_o_dist := &noTrans.rb_o_dist
-		val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), rb_o_dist, S_DIST_01+int(d_id), req)
-		if err != nil {
-			return nil, err
+		if !distRead {
+			val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), rb_o_dist, S_DIST_01+int(d_id), req)
+			if err != nil {
+				return nil, err
+			}
+			distRead = true
 		}
 
 		// Update s_quantity
@@ -242,41 +246,41 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 			s_quantity = s_quantity - noTrans.ol_quantity[i] + 91
 		}
 		noTrans.wb_s_quantity[i].intVal = s_quantity
-		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_quantity[i], S_QUANTITY, req)
+		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_quantity[i], S_QUANTITY, req, false)
 		if err != nil {
 			return nil, err
 		}
 
 		// Update S_YTD
-		val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_YTD, req)
-		if err != nil {
-			return nil, err
-		}
-		noTrans.wb_s_ytd[i].intVal = val.(*IntValue).intVal + 1
-		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_ytd[i], S_YTD, req)
+		//val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_YTD, req)
+		//if err != nil {
+		//	return nil, err
+		//}
+		noTrans.wb_s_ytd[i].intVal = 1
+		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_ytd[i], S_YTD, req, true)
 		if err != nil {
 			return nil, err
 		}
 
 		// Update S_ORDER_CNT
-		val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_ORDER_CNT, req)
-		if err != nil {
-			return nil, err
-		}
-		noTrans.wb_s_order_cnt[i].intVal = val.(*IntValue).intVal + 1
-		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req)
+		//val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_ORDER_CNT, req)
+		//if err != nil {
+		//	return nil, err
+		//}
+		noTrans.wb_s_order_cnt[i].intVal = 1
+		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req, true)
 		if err != nil {
 			return nil, err
 		}
 
 		// Update S_REMOTE_CNT
 		if sKeyAr[0] != w_id { // remote
-			val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_REMOTE_CNT, req)
-			if err != nil {
-				return nil, err
-			}
-			noTrans.wb_s_remote_cnt[i].intVal = val.(*IntValue).intVal + 1
-			err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req)
+			//val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_REMOTE_CNT, req)
+			//if err != nil {
+			//	return nil, err
+			//}
+			noTrans.wb_s_remote_cnt[i].intVal = 1
+			err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req, true)
 			if err != nil {
 				return nil, err
 			}
@@ -340,7 +344,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	}
 	wTuple := rec.GetTuple().(*WarehouseTuple)
 	payTrans.wb_w_ytd.floatVal = wTuple.w_ytd + payTrans.h_amount
-	err = exec.WriteValue(WAREHOUSE, k, partNum, &payTrans.wb_w_ytd, W_YTD, req)
+	err = exec.WriteValue(WAREHOUSE, k, partNum, &payTrans.wb_w_ytd, W_YTD, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +358,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	}
 	dTuple := rec.GetTuple().(*DistrictTuple)
 	payTrans.wb_d_ytd.floatVal = dTuple.d_ytd + payTrans.h_amount
-	err = exec.WriteValue(DISTRICT, k, partNum, &payTrans.wb_d_ytd, D_YTD, req)
+	err = exec.WriteValue(DISTRICT, k, partNum, &payTrans.wb_d_ytd, D_YTD, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -382,20 +386,20 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	cTuple := rec.GetTuple().(*CustomerTuple)
 	// Decrease C_BALANCE
 	payTrans.wb_c_balance.floatVal = cTuple.c_balance - payTrans.h_amount
-	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_balance, C_BALANCE, req)
+	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_balance, C_BALANCE, req, false)
 	if err != nil {
 		return nil, err
 	}
 	// Increase C_YTD_PAYMENT
 	payTrans.wb_c_ytd_payment.floatVal = cTuple.c_ytd_payment + payTrans.h_amount
-	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_ytd_payment, C_YTD_PAYMENT, req)
+	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_ytd_payment, C_YTD_PAYMENT, req, false)
 	if err != nil {
 		return nil, err
 	}
 
 	// Increase C_PAYMENT_CNT
 	payTrans.wb_c_payment_cnt.intVal = cTuple.c_payment_cnt + 1
-	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_payment_cnt, C_PAYMENT_CNT, req)
+	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_payment_cnt, C_PAYMENT_CNT, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -708,12 +712,12 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		}
 	*/
 
-	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, req)
+	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, req, false)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, req)
+	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -796,12 +800,12 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	}
 	fv1.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-	err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, req)
+	err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, req, false)
 	if err != nil {
 		return nil, err
 	}
 
-	err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, req)
+	err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -896,13 +900,13 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 
 	if sum < ammt.floatVal {
 		fv0.floatVal = checkBal - ammt.floatVal + float64(1)
-		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req)
+		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		fv0.floatVal = checkBal - ammt.floatVal
-		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req)
+		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false)
 		if err != nil {
 			return nil, err
 		}
@@ -944,7 +948,7 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 	}
 	fv0.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-	err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, req)
+	err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -993,7 +997,7 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 		return nil, ENEGSAVINGS
 	} else {
 		fv0.floatVal = sum
-		err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, req)
+		err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, req, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1039,7 +1043,7 @@ func AddOne(t Trans, exec ETransaction) (Value, error) {
 		}*/
 		iv[i].intVal = val.(*IntValue).intVal + 1
 
-		err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, req)
+		err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, req, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1081,7 +1085,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 			//for p, b := range CONST_STR_SINGLE {
 			//	sv[i].stringVal[p] = byte(b)
 			//}
-			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, req)
+			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, req, false)
 			if err != nil {
 				return nil, err
 			}

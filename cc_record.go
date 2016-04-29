@@ -13,6 +13,7 @@ import (
 type Tuple interface {
 	GetValue(val Value, col int)
 	SetValue(val Value, col int)
+	DeltaValue(val Value, col int)
 }
 
 type Value interface{}
@@ -55,6 +56,7 @@ type Record interface {
 	Upgrade(req *LockReq) bool
 	GetTuple() Tuple
 	SetTuple(t Tuple)
+	DeltaValue(val Value, column int)
 }
 
 func MakeRecord(table Table, k Key, tuple Tuple) Record {
@@ -175,6 +177,10 @@ func (pr *PRecord) SetTuple(t Tuple) {
 	pr.tuple = t
 }
 
+func (pr *PRecord) DeltaValue(val Value, col int) {
+	pr.tuple.DeltaValue(val, col)
+}
+
 type ORecord struct {
 	padding1 [PADDING]byte
 	key      Key
@@ -255,6 +261,10 @@ func (or *ORecord) SetTuple(t Tuple) {
 	or.tuple = t
 }
 
+func (or *ORecord) DeltaValue(val Value, col int) {
+	or.tuple.DeltaValue(val, col)
+}
+
 // Dummy Record
 type DRecord struct {
 	padding1 [PADDING]byte
@@ -333,6 +343,10 @@ func (dr *DRecord) GetTuple() Tuple {
 
 func (dr *DRecord) SetTuple(t Tuple) {
 	clog.Error("Dummy mode does not support SetTuple Operation")
+}
+
+func (dr *DRecord) DeltaValue(val Value, col int) {
+	clog.Error("Dummy mode does not support DeltaValue Operation")
 }
 
 type LRecord struct {
@@ -472,6 +486,10 @@ func (lr *LRecord) GetTuple() Tuple {
 
 func (lr *LRecord) SetTuple(t Tuple) {
 	lr.tuple = t
+}
+
+func (lr *LRecord) DeltaValue(val Value, col int) {
+	lr.tuple.DeltaValue(val, col)
 }
 
 type ARecord struct {
@@ -634,4 +652,8 @@ func setVal(bt BTYPE, oldVal Value, newVal Value) {
 	default:
 		clog.Error("Set Value Error; Not Support Value Type\n")
 	}
+}
+
+func (ar *ARecord) DeltaValue(val Value, col int) {
+	ar.tuple.DeltaValue(val, col)
 }

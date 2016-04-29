@@ -147,6 +147,17 @@ func (w *WarehouseTuple) SetValue(val Value, col int) {
 	}
 }
 
+func (w *WarehouseTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case W_TAX:
+		w.w_tax = w.w_tax + val.(*FloatValue).floatVal
+	case W_YTD:
+		w.w_ytd = w.w_ytd + val.(*FloatValue).floatVal
+	default:
+		clog.Error("Column Index %v does not support DeltaValue\n", col)
+	}
+}
+
 // DISTRICT
 const (
 	D_ID = iota
@@ -274,6 +285,19 @@ func (d *DistrictTuple) SetValue(val Value, col int) {
 		d.d_ytd = val.(*FloatValue).floatVal
 	case D_NEXT_O_ID:
 		d.d_next_o_id = val.(*IntValue).intVal
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+}
+
+func (d *DistrictTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case D_TAX:
+		d.d_tax = d.d_tax + val.(*FloatValue).floatVal
+	case D_YTD:
+		d.d_ytd = d.d_ytd + val.(*FloatValue).floatVal
+	case D_NEXT_O_ID:
+		d.d_next_o_id = d.d_next_o_id + val.(*IntValue).intVal
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
@@ -504,6 +528,23 @@ func (c *CustomerTuple) SetValue(val Value, col int) {
 	}
 }
 
+func (c *CustomerTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case C_DISCOUNT:
+		c.c_discount = c.c_discount + val.(*FloatValue).floatVal
+	case C_BALANCE:
+		c.c_balance = c.c_balance + val.(*FloatValue).floatVal
+	case C_YTD_PAYMENT:
+		c.c_ytd_payment = c.c_ytd_payment + val.(*FloatValue).floatVal
+	case C_PAYMENT_CNT:
+		c.c_payment_cnt = c.c_payment_cnt + val.(*IntValue).intVal
+	case C_DELIVERY_CNT:
+		c.c_delivery_cnt = c.c_delivery_cnt + val.(*IntValue).intVal
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+}
+
 // HISTORY
 const (
 	H_C_ID = iota
@@ -586,6 +627,10 @@ func (h *HistoryTuple) SetValue(val Value, col int) {
 	}
 }
 
+func (h *HistoryTuple) DeltaValue(val Value, col int) {
+	clog.Error("Column Index %v Out of Range\n", col)
+}
+
 // NEW-ORDER
 const (
 	NO_O_ID = iota
@@ -625,6 +670,10 @@ func (no *NewOrderTuple) SetValue(val Value, col int) {
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
+}
+
+func (no *NewOrderTuple) DeltaValue(val Value, col int) {
+	clog.Error("Column Index %v Out of Range\n", col)
 }
 
 // ORDER
@@ -696,6 +745,10 @@ func (o *OrderTuple) SetValue(val Value, col int) {
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
+}
+
+func (o *OrderTuple) DeltaValue(val Value, col int) {
+	clog.Error("Column Index %v Out of Range\n", col)
 }
 
 // ORDER-LINE
@@ -790,6 +843,17 @@ func (ol *OrderLineTuple) SetValue(val Value, col int) {
 	}
 }
 
+func (ol *OrderLineTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case OL_QUANTITY:
+		ol.ol_quantity = ol.ol_quantity + val.(*IntValue).intVal
+	case OL_AMOUNT:
+		ol.ol_amount = ol.ol_amount + val.(*FloatValue).floatVal
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+}
+
 // ITEM
 const (
 	I_ID = iota
@@ -860,6 +924,10 @@ func (i *ItemTuple) SetValue(val Value, col int) {
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
 	}
+}
+
+func (i *ItemTuple) DeltaValue(val Value, col int) {
+	clog.Error("Column Index %v Out of Range\n", col)
 }
 
 // STOCK
@@ -957,6 +1025,8 @@ func (s *StockTuple) GetValue(val Value, col int) {
 		src := s.s_data[:s.len_s_data]
 		copy(sv.stringVal, src)
 		return
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
 	}
 
 	sv := val.(*StringValue)
@@ -1012,9 +1082,31 @@ func (s *StockTuple) SetValue(val Value, col int) {
 		dest := s.s_data[:s.len_s_data]
 		copy(dest, sv.stringVal)
 		return
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
 	}
 
 	sv := val.(*StringValue)
 	dest := (*str)[:CAP_DIST]
 	copy(dest, sv.stringVal)
+}
+
+func (s *StockTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case S_QUANTITY:
+		s.s_quantity = s.s_quantity + val.(*IntValue).intVal
+		return
+	case S_YTD:
+		s.s_ytd = s.s_ytd + val.(*IntValue).intVal
+		return
+	case S_ORDER_CNT:
+		s.s_order_cnt = s.s_order_cnt + val.(*IntValue).intVal
+		return
+	case S_REMOTE_CNT:
+		s.s_remote_cnt = s.s_remote_cnt + val.(*IntValue).intVal
+		return
+	default:
+		clog.Error("Column Index %v Out of Range\n", col)
+	}
+
 }

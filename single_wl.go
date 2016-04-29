@@ -202,6 +202,16 @@ func (st *SingleTuple) SetValue(val Value, col int) {
 	}
 }
 
+func (st *SingleTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case SINGLE_VAL:
+		st.val = st.val + val.(*IntValue).intVal
+		return
+	default:
+		clog.Error("Column Index %v Does not support DeltaValue", col)
+	}
+}
+
 type SingleTrans struct {
 	padding1    [PADDING]byte
 	TXN         int

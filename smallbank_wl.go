@@ -85,6 +85,10 @@ func (at *AccoutsTuple) SetValue(val Value, col int) {
 	}
 }
 
+func (at *AccoutsTuple) DeltaValue(val Value, col int) {
+	clog.Error("Account Table does not support DeltaValue\n")
+}
+
 type CheckingTuple struct {
 	padding1 [PADDING]byte
 	accoutID int64
@@ -116,6 +120,15 @@ func (ct *CheckingTuple) SetValue(val Value, col int) {
 	}
 }
 
+func (ct *CheckingTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case CHECK_BAL:
+		ct.balance = ct.balance + val.(*FloatValue).floatVal
+	default:
+		clog.Error("Column Index %v does not support DeltaValue\n", col)
+	}
+}
+
 type SavingsTuple struct {
 	padding1 [PADDING]byte
 	accoutID int64
@@ -144,6 +157,15 @@ func (st *SavingsTuple) SetValue(val Value, col int) {
 		st.balance = val.(*FloatValue).floatVal
 	default:
 		clog.Error("Column Index %v Out of Range\n", col)
+	}
+}
+
+func (st *SavingsTuple) DeltaValue(val Value, col int) {
+	switch col {
+	case CHECK_BAL:
+		st.balance = st.balance + val.(*FloatValue).floatVal
+	default:
+		clog.Error("Column Index %v does not support DeltaValue\n", col)
 	}
 }
 

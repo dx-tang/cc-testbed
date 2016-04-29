@@ -212,6 +212,11 @@ func (no *NewOrderTable) SetMode(mode int) {
 	no.mode = mode
 }
 
+func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
+	clog.Error("New Order Table Not Support DeltaValueByID")
+	return nil
+}
+
 const (
 	CAP_ORDER_ENTRY = 100
 )
@@ -517,6 +522,29 @@ func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (o *OrderTable) SetMode(mode int) {
 	o.mode = mode
+}
+
+func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
+
+	if !o.isPartition {
+		partNum = 0
+	}
+
+	shardNum := o.shardHash(k)
+	shard := &o.data[partNum].shardedMap[shardNum]
+
+	if o.mode != PARTITION {
+		shard.RLock()
+		defer shard.RUnlock()
+	}
+
+	r, ok := shard.rows[k]
+	if !ok {
+		return ENOKEY
+	}
+
+	r.DeltaValue(value, colNum)
+	return nil
 }
 
 /*
@@ -876,6 +904,24 @@ func (c *CustomerTable) SetMode(mode int) {
 	c.mode = mode
 }
 
+func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
+
+	if !c.isPartition {
+		partNum = 0
+	}
+
+	shardNum := c.shardHash(k)
+	shard := &c.data[partNum].shardedMap[shardNum]
+
+	r, ok := shard.rows[k]
+	if !ok {
+		return ENOKEY
+	}
+
+	r.DeltaValue(value, colNum)
+	return nil
+}
+
 const (
 	CAP_HISTORY_ENTRY = 1000
 )
@@ -1002,4 +1048,9 @@ func (h *HistoryTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (h *HistoryTable) SetMode(mode int) {
 	return
+}
+
+func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
+	clog.Error("HistoryTable Table Not Support SetValueByID")
+	return nil
 }

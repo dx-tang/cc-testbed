@@ -17,6 +17,7 @@ type Table interface {
 	GetRecByID(k Key, partNum int) (Record, error)
 	SetValueByID(k Key, partNum int, value Value, colNum int) error
 	GetValueByID(k Key, partNum int, value Value, colNum int) error
+	DeltaValueByID(k Key, partNum int, value Value, colNum int) error
 	PrepareDelete(k Key, partNum int) (Record, error)
 	DeleteRecord(k Key, partNum int) error
 	ReleaseDelete(k Key, partNum int)
@@ -235,6 +236,28 @@ func (bt *BasicTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (bt *BasicTable) SetMode(mode int) {
 	bt.mode = mode
+}
+
+func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
+	if !bt.isPartition {
+		partNum = 0
+	}
+
+	shardNum := bt.shardHash(k)
+	shard := &bt.data[partNum].shardedMap[shardNum]
+
+	if bt.mode != PARTITION {
+		shard.RLock()
+		defer shard.RUnlock()
+	}
+
+	r, ok := shard.rows[k]
+	if !ok {
+		return ENOKEY
+	}
+
+	r.DeltaValue(value, colNum)
+	return nil
 }
 
 func checkSchema(v []Value, valueSchema []BTYPE) bool {

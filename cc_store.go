@@ -40,6 +40,7 @@ const (
 	PADDINGINT   = 16
 	PADDINGINT64 = 8
 	PADDINGKEY   = 2
+	PADDINGBOOL  = 64
 )
 
 const (
@@ -286,4 +287,9 @@ func (s *Store) SetMode(mode int) {
 	for _, t := range s.tables {
 		t.SetMode(mode)
 	}
+}
+
+func (s *Store) DeltaValueByID(tableID int, k Key, partNum int, value Value, colNum int) error {
+	table := s.tables[tableID]
+	return table.DeltaValueByID(k, partNum, value, colNum)
 }

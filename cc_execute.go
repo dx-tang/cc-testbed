@@ -18,7 +18,7 @@ const (
 type ETransaction interface {
 	Reset(t Trans)
 	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error)
-	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) error
+	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isDelta bool) error
 	MayWrite(tableID int, k Key, partNum int, req *LockReq) error
 	InsertRecord(tableID int, k Key, partNum int, rec Record) error
 	DeleteRecord(tableID int, k Key, partNum int) (Record, error)
@@ -77,10 +77,12 @@ func StartPTransaction(w *Worker, tableCount int) *PTransaction {
 		t.wRecs = make([]WriteRec, MAXTRACKINGKEY)
 		for j, _ := range t.wRecs {
 			wr := &t.wRecs[j]
-			wr.vals = make([]Value, 0, MAXCOLUMN+2*PADDINGINT64)
+			wr.vals = make([]Value, MAXCOLUMN+2*PADDINGINT64)
 			wr.vals = wr.vals[PADDINGINT64:PADDINGINT64]
-			wr.cols = make([]int, 0, MAXCOLUMN+2*PADDINGINT)
+			wr.cols = make([]int, MAXCOLUMN+2*PADDINGINT)
 			wr.cols = wr.cols[PADDINGINT:PADDINGINT]
+			wr.isDelta = make([]bool, MAXCOLUMN+2*PADDINGBOOL)
+			wr.isDelta = wr.isDelta[PADDINGBOOL:PADDINGBOOL]
 		}
 		t.wRecs = t.wRecs[0:0]
 
@@ -136,7 +138,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq) error {
+func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool) error {
 	if *SysType == ADAPTIVE {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, false)
@@ -162,6 +164,8 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			wr.cols[n] = colNum
 			wr.vals = wr.vals[0 : n+1]
 			wr.vals[n] = value
+			wr.isDelta = wr.isDelta[0 : n+1]
+			wr.isDelta[n] = isDelta
 			return nil
 		}
 	}
@@ -181,6 +185,8 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	t.wRecs[n].cols[0] = colNum
 	t.wRecs[n].vals = t.wRecs[n].vals[0:1]
 	t.wRecs[n].vals[0] = value
+	t.wRecs[n].isDelta = t.wRecs[n].isDelta[0:1]
+	t.wRecs[n].isDelta[0] = isDelta
 	return nil
 
 }
@@ -260,6 +266,7 @@ func (p *PTransaction) Abort(req *LockReq) TID {
 			wr := &t.wRecs[j]
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
+			wr.isDelta = wr.isDelta[:0]
 		}
 		t.wRecs = t.wRecs[0:0]
 
@@ -284,11 +291,15 @@ func (p *PTransaction) Commit(req *LockReq) TID {
 			wr := &t.wRecs[j]
 			//rec := s.GetRecByID(i, wr.k, wr.partNum)
 			for p := 0; p < len(wr.cols); p++ {
-				wr.rec.SetValue(wr.vals[p], wr.cols[p])
-				//rec.SetValue(wr.vals[p], wr.cols[p])
+				if wr.isDelta[p] {
+					wr.rec.DeltaValue(wr.vals[p], wr.cols[p])
+				} else {
+					wr.rec.SetValue(wr.vals[p], wr.cols[p])
+				}
 			}
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
+			wr.isDelta = wr.isDelta[:0]
 		}
 		t.wRecs = t.wRecs[0:0]
 
@@ -325,6 +336,7 @@ type WriteKey struct {
 	cols     []int
 	locked   bool
 	rec      Record
+	isDelta  []bool
 	padding2 [PADDING]byte
 }
 
@@ -372,10 +384,12 @@ func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 		t.wKeys = make([]WriteKey, MAXTRACKINGKEY)
 		for i := 0; i < len(t.wKeys); i++ {
 			wk := &t.wKeys[i]
-			wk.vals = make([]Value, 0, MAXCOLUMN+2*PADDINGINT64)
+			wk.vals = make([]Value, MAXCOLUMN+2*PADDINGINT64)
 			wk.vals = wk.vals[PADDINGINT64:PADDINGINT64]
-			wk.cols = make([]int, 0, MAXCOLUMN+2*PADDINGINT)
+			wk.cols = make([]int, MAXCOLUMN+2*PADDINGINT)
 			wk.cols = wk.cols[PADDINGINT:PADDINGINT]
+			wk.isDelta = make([]bool, MAXCOLUMN+2*PADDINGBOOL)
+			wk.isDelta = wk.isDelta[PADDINGBOOL:PADDINGBOOL]
 		}
 		t.wKeys = t.wKeys[0:0]
 
@@ -400,6 +414,7 @@ func (o *OTransaction) Reset(t Trans) {
 			wk := &t.wKeys[i]
 			wk.vals = wk.vals[:0]
 			wk.cols = wk.cols[:0]
+			wk.isDelta = wk.isDelta[:0]
 		}
 		t.wKeys = t.wKeys[:0]
 		t.iRecs = t.iRecs[:0]
@@ -491,7 +506,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq) error {
+func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool) error {
 	if *SysType == ADAPTIVE {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, false)
@@ -526,6 +541,8 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			wk.vals[n] = value
 			wk.cols = wk.cols[0 : n+1]
 			wk.cols[n] = colNum
+			wk.isDelta = wk.isDelta[0 : n+1]
+			wk.isDelta[n] = isDelta
 			break
 		}
 	}
@@ -557,6 +574,8 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		t.wKeys[n].vals[0] = value
 		t.wKeys[n].cols = t.wKeys[n].cols[0:1]
 		t.wKeys[n].cols[0] = colNum
+		t.wKeys[n].isDelta = t.wKeys[n].isDelta[0:1]
+		t.wKeys[n].isDelta[0] = isDelta
 	}
 
 	return nil
@@ -667,12 +686,10 @@ func (o *OTransaction) Abort(req *LockReq) TID {
 		for j := 0; j < len(t.iRecs); j++ {
 			s.ReleaseInsert(i, t.iRecs[j].k, t.iRecs[j].partNum)
 		}
-		t.iRecs = t.iRecs[:0]
 
 		for j := 0; j < len(t.dRecs); j++ {
 			s.ReleaseDelete(i, t.dRecs[j].k, t.dRecs[j].partNum)
 		}
-		t.dRecs = t.dRecs[:0]
 	}
 
 	return 0
@@ -793,7 +810,11 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 		for i, _ := range t.wKeys {
 			wk := &t.wKeys[i]
 			for j := 0; j < len(wk.vals); j++ {
-				wk.rec.SetValue(wk.vals[j], wk.cols[j])
+				if wk.isDelta[j] {
+					wk.rec.DeltaValue(wk.vals[j], wk.cols[j])
+				} else {
+					wk.rec.SetValue(wk.vals[j], wk.cols[j])
+				}
 			}
 
 			wk.rec.Unlock(tid)
@@ -824,6 +845,7 @@ type WriteRec struct {
 	rec      Record
 	vals     []Value
 	cols     []int
+	isDelta  []bool
 	padding2 [PADDING]byte
 }
 
@@ -867,10 +889,12 @@ func StartLTransaction(w *Worker, nTables int) *LTransaction {
 		t.wRecs = make([]WriteRec, MAXTRACKINGKEY)
 		for j, _ := range t.wRecs {
 			wr := &t.wRecs[j]
-			wr.vals = make([]Value, 0, MAXCOLUMN+2*PADDINGINT64)
+			wr.vals = make([]Value, MAXCOLUMN+2*PADDINGINT64)
 			wr.vals = wr.vals[PADDINGINT64:PADDINGINT64]
-			wr.cols = make([]int, 0, MAXCOLUMN+2*PADDINGINT)
+			wr.cols = make([]int, MAXCOLUMN+2*PADDINGINT)
 			wr.cols = wr.cols[PADDINGINT:PADDINGINT]
+			wr.isDelta = make([]bool, MAXCOLUMN+2*PADDINGBOOL)
+			wr.isDelta = wr.isDelta[PADDINGBOOL:PADDINGBOOL]
 		}
 		t.wRecs = t.wRecs[0:0]
 
@@ -974,7 +998,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq) error {
+func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool) error {
 	if *SysType == ADAPTIVE {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, false)
@@ -1014,6 +1038,8 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		wr.vals[n] = value
 		wr.cols = wr.cols[0 : n+1]
 		wr.cols[n] = colNum
+		wr.isDelta = wr.isDelta[0 : n+1]
+		wr.isDelta[n] = isDelta
 		return nil
 	}
 
@@ -1041,6 +1067,8 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			wr.vals[0] = value
 			wr.cols = wr.cols[0:1]
 			wr.cols[0] = colNum
+			wr.isDelta = wr.isDelta[0:1]
+			wr.isDelta[0] = isDelta
 			return nil
 		} else {
 			if *NoWait {
@@ -1071,6 +1099,8 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		wr.vals[0] = value
 		wr.cols = wr.cols[0:1]
 		wr.cols[0] = colNum
+		wr.isDelta = wr.isDelta[0:1]
+		wr.isDelta[0] = isDelta
 		return nil
 	} else {
 		w.NStats[NWLOCKABORTS]++
@@ -1266,6 +1296,7 @@ func (l *LTransaction) Abort(req *LockReq) TID {
 			wr := &t.wRecs[j]
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
+			wr.isDelta = wr.isDelta[:0]
 			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
 			wr.rec.WUnlock(req)
 		}
@@ -1307,10 +1338,15 @@ func (l *LTransaction) Commit(req *LockReq) TID {
 		for j, _ := range t.wRecs {
 			wr := &t.wRecs[j]
 			for p := 0; p < len(wr.vals); p++ {
-				wr.rec.SetValue(wr.vals[p], wr.cols[p])
+				if wr.isDelta[p] {
+					wr.rec.DeltaValue(wr.vals[p], wr.cols[p])
+				} else {
+					wr.rec.SetValue(wr.vals[p], wr.cols[p])
+				}
 			}
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
+			wr.isDelta = wr.isDelta[:0]
 			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
 			wr.rec.WUnlock(req)
 		}
