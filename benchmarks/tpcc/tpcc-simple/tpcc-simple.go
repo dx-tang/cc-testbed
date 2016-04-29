@@ -46,15 +46,6 @@ func main() {
 		clog.Error("Report not Needed\n")
 	}
 
-	if *prof {
-		f, err := os.Create("smallbank.prof")
-		if err != nil {
-			clog.Error(err.Error())
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
 	nParts := nWorkers
 	isPartition := true
 	lockInit := false
@@ -86,6 +77,15 @@ func main() {
 	coord := testbed.NewCoordinator(nWorkers, tpcc.GetStore(), tpcc.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
 
 	clog.Info("Done with Populating Store\n")
+
+	if *prof {
+		f, err := os.Create("smallbank.prof")
+		if err != nil {
+			clog.Error(err.Error())
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	coord.Start()
 	ts := testbed.TID(0)
