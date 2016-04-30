@@ -169,28 +169,33 @@ func (no *NewOrderTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (no *NewOrderTable) InsertRecord(k Key, partNum int, rec Record) error {
-	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
-	entry := no.tail[index]
-	entry.o_id_array[entry.t] = rec.GetTuple().(*NewOrderTuple).no_o_id
-	entry.t++
-	if entry.t == CAP_NEWORDER_ENTRY {
-		// New a Entry
-		dRec := &DRecord{}
-		dRec.tuple = &NewOrderTuple{
-			no_w_id: int(k[BIT0]),
-			no_d_id: int(k[BIT4]),
-		}
-		newEntry := &NoEntry{}
-		newEntry.rec = dRec
-		newEntry.h = 0
-		newEntry.t = 0
-		entry.next = newEntry
-		no.tail[index] = newEntry
-	}
+func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
+	for i, _ := range recs {
+		iRec := &recs[i]
+		k := iRec.k
 
-	if !no.isPartition {
-		entry.rec.WUnlock(nil)
+		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+		entry := no.tail[index]
+		entry.o_id_array[entry.t] = iRec.rec.GetTuple().(*NewOrderTuple).no_o_id
+		entry.t++
+		if entry.t == CAP_NEWORDER_ENTRY {
+			// New a Entry
+			dRec := &DRecord{}
+			dRec.tuple = &NewOrderTuple{
+				no_w_id: int(k[BIT0]),
+				no_d_id: int(k[BIT4]),
+			}
+			newEntry := &NoEntry{}
+			newEntry.rec = dRec
+			newEntry.h = 0
+			newEntry.t = 0
+			entry.next = newEntry
+			no.tail[index] = newEntry
+		}
+
+		if !no.isPartition {
+			entry.rec.WUnlock(nil)
+		}
 	}
 
 	return nil
@@ -424,74 +429,93 @@ func (o *OrderTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (o *OrderTable) InsertRecord(k Key, partNum int, rec Record) error {
-	o.nKeys++
+func (o *OrderTable) InsertRecord(recs []InsertRec) error {
+	o.nKeys += len(recs)
 
-	if !o.isPartition {
-		partNum = 0
-	}
+	for i, _ := range recs {
+		iRec := &recs[i]
+		partNum := iRec.partNum
+		k := iRec.k
+		rec := iRec.rec
 
-	// Insert Order
-	shardNum := o.shardHash(k)
-	shard := &o.data[partNum].shardedMap[shardNum]
-
-	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
-	oPart := &o.secIndex[index]
-
-	//clog.Info("Write Waiting %v ", index)
-
-	if !o.isPartition {
-		oPart.Lock()
-		defer oPart.Unlock()
-		//defer clog.Info("Write Unlock %v", index)
-	}
-
-	if o.mode != PARTITION {
-		shard.Lock()
-		defer shard.Unlock()
-	}
-
-	if _, ok := shard.rows[k]; ok {
-		return EDUPKEY //One record with that key has existed;
-	}
-
-	shard.rows[k] = rec
-
-	// Insert OrderPart
-	var keyAr [KEYLENTH]int
-	var cKey Key
-	oTuple := rec.GetTuple().(*OrderTuple)
-	keyAr[0] = oTuple.o_w_id
-	keyAr[1] = oTuple.o_d_id
-	keyAr[2] = oTuple.o_c_id
-	UKey(keyAr, &cKey)
-
-	oEntry, ok := oPart.o_id_map[cKey]
-	if !ok {
-		oEntry = &OrderEntry{
-			next: nil,
-			t:    0,
-		}
-		oPart.o_id_map[cKey] = oEntry
-		oEntry.o_id_array[oEntry.t] = oTuple.o_id
-		oEntry.t++
-	} else {
-		for oEntry.next != nil {
-			oEntry = oEntry.next
+		if !o.isPartition {
+			partNum = 0
 		}
 
-		if oEntry.t == CAP_ORDER_ENTRY {
-			nextEntry := &OrderEntry{
+		// Insert Order
+		shardNum := o.shardHash(k)
+		shard := &o.data[partNum].shardedMap[shardNum]
+
+		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+		oPart := &o.secIndex[index]
+
+		//clog.Info("Write Waiting %v ", index)
+
+		if !o.isPartition {
+			oPart.Lock()
+			//defer clog.Info("Write Unlock %v", index)
+		}
+
+		if o.mode != PARTITION {
+			shard.Lock()
+		}
+
+		if _, ok := shard.rows[k]; ok {
+			if !o.isPartition {
+				oPart.Unlock()
+			}
+			if o.mode != PARTITION {
+				shard.Unlock()
+			}
+			return EDUPKEY //One record with that key has existed;
+		}
+
+		shard.rows[k] = rec
+
+		// Insert OrderPart
+		var keyAr [KEYLENTH]int
+		var cKey Key
+		oTuple := rec.GetTuple().(*OrderTuple)
+		keyAr[0] = oTuple.o_w_id
+		keyAr[1] = oTuple.o_d_id
+		keyAr[2] = oTuple.o_c_id
+		UKey(keyAr, &cKey)
+
+		oEntry, ok := oPart.o_id_map[cKey]
+		if !ok {
+			oEntry = &OrderEntry{
 				next: nil,
 				t:    0,
 			}
-			nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
-			nextEntry.t++
-			oEntry.next = nextEntry
-		} else {
+			oPart.o_id_map[cKey] = oEntry
 			oEntry.o_id_array[oEntry.t] = oTuple.o_id
 			oEntry.t++
+		} else {
+			for oEntry.next != nil {
+				oEntry = oEntry.next
+			}
+
+			if oEntry.t == CAP_ORDER_ENTRY {
+				nextEntry := &OrderEntry{
+					next: nil,
+					t:    0,
+				}
+				nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
+				nextEntry.t++
+				oEntry.next = nextEntry
+			} else {
+				oEntry.o_id_array[oEntry.t] = oTuple.o_id
+				oEntry.t++
+			}
 		}
+
+		if !o.isPartition {
+			oPart.Unlock()
+		}
+		if o.mode != PARTITION {
+			shard.Unlock()
+		}
+
 	}
 
 	return nil
@@ -742,7 +766,7 @@ func (c *CustomerTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (c *CustomerTable) InsertRecord(k Key, partNum int, rec Record) error {
+func (c *CustomerTable) InsertRecord(recs []InsertRec) error {
 	clog.Error("Customer Table Not Support InsertRecord")
 	return nil
 }
@@ -888,22 +912,28 @@ func (h *HistoryTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (h *HistoryTable) InsertRecord(k Key, partNum int, rec Record) error {
-	shard := h.shards[h.shardHash(k)]
-	shard.latch.Lock()
-	defer shard.latch.Unlock()
-	cur := shard.tail
-	if cur.index == CAP_HISTORY_ENTRY {
-		he := &HistoryEntry{
-			index: 0,
-			next:  nil,
+func (h *HistoryTable) InsertRecord(recs []InsertRec) error {
+	for i, _ := range recs {
+		k := recs[i].k
+		rec := recs[i].rec
+
+		shard := h.shards[h.shardHash(k)]
+		shard.latch.Lock()
+		cur := shard.tail
+		if cur.index == CAP_HISTORY_ENTRY {
+			he := &HistoryEntry{
+				index: 0,
+				next:  nil,
+			}
+			cur.next = he
+			shard.tail = he
+			cur = he
 		}
-		cur.next = he
-		shard.tail = he
-		cur = he
+		cur.data[cur.index] = rec
+		cur.index++
+		shard.latch.Unlock()
 	}
-	cur.data[cur.index] = rec
-	cur.index++
+
 	return nil
 }
 

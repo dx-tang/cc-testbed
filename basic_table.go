@@ -22,7 +22,7 @@ type Table interface {
 	DeleteRecord(k Key, partNum int) error
 	ReleaseDelete(k Key, partNum int)
 	PrepareInsert(k Key, partNum int) error
-	InsertRecord(k Key, partNum int, rec Record) error
+	InsertRecord(recs []InsertRec) error
 	ReleaseInsert(k Key, partNum int)
 	GetValueBySec(k Key, partNum int, val Value) error
 	SetMode(mode int)
@@ -203,26 +203,32 @@ func (bt *BasicTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (bt *BasicTable) InsertRecord(k Key, partNum int, rec Record) error {
+func (bt *BasicTable) InsertRecord(recs []InsertRec) error {
+	for i, _ := range recs {
+		iRec := &recs[i]
+		partNum := iRec.partNum
+		if !bt.isPartition {
+			partNum = 0
+		}
 
-	if !bt.isPartition {
-		partNum = 0
+		shardNum := bt.shardHash(iRec.k)
+		shard := &bt.data[partNum].shardedMap[shardNum]
+
+		if bt.mode != PARTITION {
+			shard.Lock()
+		}
+
+		_, ok := shard.rows[iRec.k]
+		if ok {
+			return EDUPKEY
+		}
+
+		shard.rows[iRec.k] = iRec.rec
+		if bt.mode != PARTITION {
+			shard.Unlock()
+		}
 	}
 
-	shardNum := bt.shardHash(k)
-	shard := &bt.data[partNum].shardedMap[shardNum]
-
-	if bt.mode != PARTITION {
-		shard.Lock()
-		defer shard.Unlock()
-	}
-
-	_, ok := shard.rows[k]
-	if ok {
-		return EDUPKEY
-	}
-
-	shard.rows[k] = rec
 	return nil
 }
 
