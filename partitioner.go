@@ -6,31 +6,31 @@ import (
 
 type Partitioner interface {
 	GetPart(key Key) int
-	GetPartKey(partIndex int, rank int64) Key
-	GetWholeKey(rank int64) Key
-	GetKeyArray() []int64
-	ResetPart(nParts int64)
+	GetPartKey(partIndex int, rank int) Key
+	GetWholeKey(rank int) Key
+	GetKeyArray() []int
+	ResetPart(nParts int)
 }
 
 type HashPartitioner struct {
-	NParts     int64
-	pKeysArray []int64
+	NParts     int
+	pKeysArray []int
 	keyLen     int
-	keyRange   []int64
-	compKey    []int64
+	keyRange   []int
+	compKey    []int
 }
 
-func NewHashPartitioner(NParts int64, keyRange []int64) *HashPartitioner {
+func NewHashPartitioner(NParts int, keyRange []int) *HashPartitioner {
 	hp := &HashPartitioner{
 		NParts:     NParts,
-		pKeysArray: make([]int64, NParts),
+		pKeysArray: make([]int, NParts),
 		keyLen:     len(keyRange),
-		keyRange:   make([]int64, len(keyRange)),
-		compKey:    make([]int64, len(keyRange)+2*PADDINGINT64),
+		keyRange:   make([]int, len(keyRange)),
+		compKey:    make([]int, len(keyRange)+2*PADDINGINT),
 	}
-	hp.compKey = hp.compKey[PADDINGINT64 : hp.keyLen+PADDINGINT64]
+	hp.compKey = hp.compKey[PADDINGINT : hp.keyLen+PADDINGINT]
 
-	var unit int64 = 1
+	var unit int = 1
 
 	for i, v := range keyRange {
 		hp.keyRange[i] = v
@@ -42,7 +42,7 @@ func NewHashPartitioner(NParts int64, keyRange []int64) *HashPartitioner {
 	r := hp.keyRange[0] / hp.NParts
 	m := hp.keyRange[0] % hp.NParts
 
-	for i := int64(0); i < hp.NParts; i++ {
+	for i := 0; i < hp.NParts; i++ {
 		hp.pKeysArray[i] = r * unit
 		if i < m {
 			hp.pKeysArray[i] += unit
@@ -54,10 +54,10 @@ func NewHashPartitioner(NParts int64, keyRange []int64) *HashPartitioner {
 
 func (hp *HashPartitioner) GetPart(key Key) int {
 	k := ParseKey(key, 0)
-	return int(k % hp.NParts)
+	return k % hp.NParts
 }
 
-func (hp *HashPartitioner) GetPartKey(partIndex int, rank int64) Key {
+func (hp *HashPartitioner) GetPartKey(partIndex int, rank int) Key {
 	if hp.NParts == 0 {
 		hp.GetWholeKey(rank)
 	}
@@ -67,22 +67,22 @@ func (hp *HashPartitioner) GetPartKey(partIndex int, rank int64) Key {
 		rank = rank / hp.keyRange[i]
 	}
 
-	hp.compKey[0] = int64(hp.compKey[0])*hp.NParts + int64(partIndex)
+	hp.compKey[0] = hp.compKey[0]*hp.NParts + partIndex
 
 	//clog.Info("CompKey %v\n", hp.compKey)
 
 	return CKey(hp.compKey)
 }
 
-func (hp *HashPartitioner) GetWholeKey(rank int64) Key {
+func (hp *HashPartitioner) GetWholeKey(rank int) Key {
 	hp.compKey[0] = rank
 	return CKey(hp.compKey)
 }
 
-func (hp *HashPartitioner) GetKeyArray() []int64 {
+func (hp *HashPartitioner) GetKeyArray() []int {
 	return hp.pKeysArray
 }
 
-func (hp *HashPartitioner) ResetPart(nParts int64) {
+func (hp *HashPartitioner) ResetPart(nParts int) {
 	hp.NParts = nParts
 }

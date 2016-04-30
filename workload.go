@@ -45,11 +45,11 @@ type BasicWorkload struct {
 	nParts        int
 	isPartition   bool
 	nWorkers      int
-	nKeys         []int64 // index by table ID
+	nKeys         []int // index by table ID
 	tableCount    int
 	tableNames    []string // index by table ID
 	tableNameToID map[string]int
-	IDToKeyRange  [][]int64    // index by table ID
+	IDToKeyRange  [][]int      // index by table ID
 	generators    []*Generator // index by worker ID
 }
 
@@ -95,8 +95,8 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 	basic.tableCount = tableCount
 	basic.tableNames = make([]string, tableCount)
 	basic.tableNameToID = make(map[string]int)
-	basic.IDToKeyRange = make([][]int64, tableCount)
-	basic.nKeys = make([]int64, tableCount)
+	basic.IDToKeyRange = make([][]int, tableCount)
+	basic.nKeys = make([]int, tableCount)
 
 	// Read Key Range
 	var line []byte
@@ -114,15 +114,15 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 		basic.tableNames[i] = krStrs[0]
 		basic.tableNameToID[krStrs[0]] = i
 
-		var nk int64 = 1
+		var nk int = 1
 		var kr int
-		keyRange := make([]int64, len(krStrs)-1)
+		keyRange := make([]int, len(krStrs)-1)
 		for j := 0; j < len(keyRange); j++ {
 			kr, err = strconv.Atoi(krStrs[j+1])
 			if err != nil {
 				clog.Error("Workload File %s Wrong Format at Line %d\n", workload, i+1)
 			}
-			keyRange[j] = int64(kr)
+			keyRange[j] = kr
 			nk *= keyRange[j]
 		}
 
@@ -178,7 +178,7 @@ func (basic *BasicWorkload) NewGenerators(s float64, ps float64) []*Generator {
 		}
 
 		for j := 0; j < tableCount; j++ {
-			p := NewHashPartitioner(int64(basic.nParts), basic.IDToKeyRange[j])
+			p := NewHashPartitioner(basic.nParts, basic.IDToKeyRange[j])
 			gen.partitioner[j] = p
 		}
 
@@ -251,7 +251,7 @@ func (basic *BasicWorkload) ResetPart(nParts int, isPartition bool) {
 		}
 		for i, keyGen := range gen.keyGens {
 			keyGen.ResetPart(isPartition)
-			gen.partitioner[i].ResetPart(int64(nParts))
+			gen.partitioner[i].ResetPart(nParts)
 		}
 	}
 	basic.store.nParts = nParts

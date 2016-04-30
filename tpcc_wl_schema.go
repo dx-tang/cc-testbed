@@ -47,7 +47,7 @@ const (
 // 249 bytes
 type WarehouseTuple struct {
 	padding1       [PADDING]byte
-	w_id           int64
+	w_id           int
 	w_name         [CAP_W_NAME]byte
 	len_w_name     int
 	w_street_1     [CAP_STREET_1]byte
@@ -58,8 +58,8 @@ type WarehouseTuple struct {
 	len_w_city     int
 	w_state        [CAP_STATE]byte
 	w_zip          [CAP_ZIP]byte
-	w_tax          float64
-	w_ytd          float64
+	w_tax          float32
+	w_ytd          float32
 	padding2       [PADDING]byte
 }
 
@@ -180,8 +180,8 @@ const (
 // 265 bytes
 type DistrictTuple struct {
 	padding1       [PADDING]byte
-	d_id           int64
-	d_w_id         int64
+	d_id           int
+	d_w_id         int
 	d_name         [CAP_D_NAME]byte
 	len_d_name     int
 	d_street_1     [CAP_STREET_1]byte
@@ -192,9 +192,9 @@ type DistrictTuple struct {
 	len_d_city     int
 	d_state        [CAP_STATE]byte
 	d_zip          [CAP_ZIP]byte
-	d_tax          float64
-	d_ytd          float64
-	d_next_o_id    int64
+	d_tax          float32
+	d_ytd          float32
+	d_next_o_id    int
 	padding2       [PADDING]byte
 }
 
@@ -339,14 +339,13 @@ const (
 
 type CustomerTuple struct {
 	padding1       [PADDING]byte
-	c_id           int64
-	c_d_id         int64
-	c_w_id         int64
+	c_id           int
+	c_d_id         int
+	c_w_id         int
 	c_first        [CAP_C_FIRST]byte
 	len_c_first    int
 	c_middle       [CAP_C_MIDDLE]byte
-	c_last         [CAP_C_LAST]byte
-	len_c_last     int
+	c_last         int
 	c_street_1     [CAP_STREET_1]byte
 	len_c_street_1 int
 	c_street_2     [CAP_STREET_2]byte
@@ -358,12 +357,12 @@ type CustomerTuple struct {
 	c_phone        [CAP_C_PHONE]byte
 	c_since        time.Time
 	c_credit       [CAP_C_CREDIT]byte
-	c_credit_lim   float64
-	c_discount     float64
-	c_balance      float64
-	c_ytd_payment  float64
-	c_payment_cnt  int64
-	c_delivery_cnt int64
+	c_credit_lim   float32
+	c_discount     float32
+	c_balance      float32
+	c_ytd_payment  float32
+	c_payment_cnt  int
+	c_delivery_cnt int
 	c_data         [CAP_C_DATA]byte
 	len_c_data     int
 	padding2       [PADDING]byte
@@ -388,10 +387,7 @@ func (c *CustomerTuple) GetValue(val Value, col int) {
 		src := c.c_middle[:CAP_C_MIDDLE]
 		copy(sv.stringVal, src)
 	case C_LAST:
-		sv := val.(*StringValue)
-		sv.stringVal = sv.stringVal[:c.len_c_last]
-		src := c.c_last[:c.len_c_last]
-		copy(sv.stringVal, src)
+		val.(*IntValue).intVal = c.c_last
 	case C_STREET_1:
 		sv := val.(*StringValue)
 		sv.stringVal = sv.stringVal[:c.len_c_street_1]
@@ -469,10 +465,7 @@ func (c *CustomerTuple) SetValue(val Value, col int) {
 		dest := c.c_middle[:CAP_C_MIDDLE]
 		copy(dest, sv.stringVal)
 	case C_LAST:
-		sv := val.(*StringValue)
-		c.len_c_last = len(sv.stringVal)
-		dest := c.c_last[:c.len_c_last]
-		copy(dest, sv.stringVal)
+		c.c_last = val.(*IntValue).intVal
 	case C_STREET_1:
 		sv := val.(*StringValue)
 		c.len_c_street_1 = len(sv.stringVal)
@@ -563,13 +556,13 @@ const (
 
 type HistoryTuple struct {
 	padding1   [PADDING]byte
-	h_c_id     int64
-	h_c_d_id   int64
-	h_c_w_id   int64
-	h_d_id     int64
-	h_w_id     int64
+	h_c_id     int
+	h_c_d_id   int
+	h_c_w_id   int
+	h_d_id     int
+	h_w_id     int
 	h_date     time.Time
-	h_amount   float64
+	h_amount   float32
 	h_data     [CAP_H_DATA]byte
 	len_h_data int
 	padding2   [PADDING]byte
@@ -640,9 +633,9 @@ const (
 
 type NewOrderTuple struct {
 	padding1 [PADDING]byte
-	no_o_id  int64
-	no_d_id  int64
-	no_w_id  int64
+	no_o_id  int
+	no_d_id  int
+	no_w_id  int
 	padding2 [PADDING]byte
 }
 
@@ -690,14 +683,14 @@ const (
 
 type OrderTuple struct {
 	padding1     [PADDING]byte
-	o_id         int64
-	o_d_id       int64
-	o_w_id       int64
-	o_c_id       int64
+	o_id         int
+	o_d_id       int
+	o_w_id       int
+	o_c_id       int
 	o_entry_d    time.Time
-	o_carrier_id int64
-	o_ol_cnt     int64
-	o_all_local  int64
+	o_carrier_id int
+	o_ol_cnt     int
+	o_all_local  int
 	padding2     [PADDING]byte
 }
 
@@ -771,15 +764,15 @@ const (
 
 type OrderLineTuple struct {
 	padding1       [PADDING]byte
-	ol_o_id        int64
-	ol_d_id        int64
-	ol_w_id        int64
-	ol_number      int64
-	ol_i_id        int64
-	ol_supply_w_id int64
+	ol_o_id        int
+	ol_d_id        int
+	ol_w_id        int
+	ol_number      int
+	ol_i_id        int
+	ol_supply_w_id int
 	ol_delivery_d  time.Time
-	ol_quantity    int64
-	ol_amount      float64
+	ol_quantity    int
+	ol_amount      float32
 	ol_dist_info   [CAP_DIST]byte
 	padding2       [PADDING]byte
 }
@@ -870,11 +863,11 @@ const (
 
 type ItemTuple struct {
 	padding1   [PADDING]byte
-	i_id       int64
-	i_im_id    int64
+	i_id       int
+	i_im_id    int
 	i_name     [CAP_I_NAME]byte
 	len_i_name int
-	i_price    float64
+	i_price    float32
 	i_data     [CAP_I_DATA]byte
 	len_i_data int
 	padding2   [PADDING]byte
@@ -957,9 +950,9 @@ const (
 
 type StockTuple struct {
 	padding1     [PADDING]byte
-	s_i_id       int64
-	s_w_id       int64
-	s_quantity   int64
+	s_i_id       int
+	s_w_id       int
+	s_quantity   int
 	s_dist_01    [CAP_DIST]byte
 	s_dist_02    [CAP_DIST]byte
 	s_dist_03    [CAP_DIST]byte
@@ -970,9 +963,9 @@ type StockTuple struct {
 	s_dist_08    [CAP_DIST]byte
 	s_dist_09    [CAP_DIST]byte
 	s_dist_10    [CAP_DIST]byte
-	s_ytd        int64
-	s_order_cnt  int64
-	s_remote_cnt int64
+	s_ytd        int
+	s_order_cnt  int
+	s_remote_cnt int
 	s_data       [CAP_S_DATA]byte
 	len_s_data   int
 	padding2     [PADDING]byte

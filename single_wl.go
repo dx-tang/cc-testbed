@@ -58,8 +58,8 @@ const CONST_STR_SINGLE = "abcdekdifd"
 
 type SingleTuple struct {
 	padding1 [PADDING]byte
-	id       int64
-	val      int64
+	id       int
+	val      int
 	str1     [CAP_SINGLE_STR]byte
 	str2     [CAP_SINGLE_STR]byte
 	str3     [CAP_SINGLE_STR]byte
@@ -418,22 +418,22 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 	nKeys := singleWL.basic.nKeys[SINGLE]
 	store := singleWL.basic.store
 	keyLen := len(keyRange)
-	compKey := make([]int64, keyLen)
+	compKey := make([]int, keyLen)
 
 	var k int = 0
-	for j := int64(0); j < nKeys; j++ {
+	for j := 0; j < nKeys; j++ {
 
 		key := CKey(compKey)
 		partNum := hp.GetPart(SINGLE, key)
 
 		st := &SingleTuple{
-			id:  int64(compKey[0]),
-			val: int64(INITVAL),
+			id:  int(compKey[0]),
+			val: int(INITVAL),
 		}
 
 		store.CreateRecByID(SINGLE, key, partNum, st)
 
-		for int64(compKey[k]+1) >= keyRange[k] {
+		for compKey[k]+1 >= keyRange[k] {
 			compKey[k] = 0
 			k++
 			if k >= keyLen {
@@ -551,18 +551,18 @@ func (singleWL *SingelWorkload) ResetData() {
 	gen := singleWL.basic.generators[0]
 	keyRange := singleWL.basic.IDToKeyRange[SINGLE]
 	keyLen := len(keyRange)
-	compKey := make([]int64, keyLen)
+	compKey := make([]int, keyLen)
 	store := singleWL.basic.store
 	iv := &IntValue{
 		intVal: INITVAL,
 	}
 	var k int = 0
-	for i := int64(0); i < nKeys; i++ {
+	for i := int(0); i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(SINGLE, key)
 		store.SetValueByID(SINGLE, key, partNum, iv, SINGLE_VAL)
 
-		for int64(compKey[k]+1) >= keyRange[k] {
+		for compKey[k]+1 >= keyRange[k] {
 			compKey[k] = 0
 			k++
 			if k >= keyLen {
@@ -576,7 +576,7 @@ func (singleWL *SingelWorkload) ResetData() {
 	}
 }
 
-func (singleWL *SingelWorkload) GetIDToKeyRange() [][]int64 {
+func (singleWL *SingelWorkload) GetIDToKeyRange() [][]int {
 	return singleWL.basic.IDToKeyRange
 }
 
@@ -585,17 +585,17 @@ func (singleWL *SingelWorkload) GetBasicWL() *BasicWorkload {
 }
 
 func (s *SingelWorkload) PrintSum() {
-	var total int64
+	var total int
 	nKeys := s.basic.nKeys[SINGLE]
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[SINGLE]
 	keyLen := len(keyRange)
-	compKey := make([]int64, keyLen)
+	compKey := make([]int, keyLen)
 	store := s.basic.store
 	intRB := &IntValue{}
 
 	var k int = 0
-	for i := int64(0); i < nKeys; i++ {
+	for i := 0; i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(SINGLE, key)
 		err := store.GetValueByID(SINGLE, key, partNum, intRB, SINGLE_VAL)
@@ -604,7 +604,7 @@ func (s *SingelWorkload) PrintSum() {
 		}
 		total += intRB.intVal
 
-		for int64(compKey[k]+1) >= keyRange[k] {
+		for compKey[k]+1 >= keyRange[k] {
 			compKey[k] = 0
 			k++
 			if k >= keyLen {

@@ -105,7 +105,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	distRead := false
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 
 	floatRB := &noTrans.floatRB
 	intRB := &noTrans.intRB
@@ -114,7 +114,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	var rec Record
 	var val Value
 	var err error
-	var allLocal int64
+	var allLocal int
 
 	if len(noTrans.accessParts) > 1 {
 		allLocal = 0
@@ -122,7 +122,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		allLocal = 1
 	}
 
-	partNum := int(noTrans.w_id)
+	partNum := noTrans.w_id
 
 	// Get W_TAX
 	w_id := noTrans.w_id
@@ -168,8 +168,9 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	rec.GetValue(floatRB, C_DISCOUNT)
 	c_discount := floatRB.floatVal
 
-	rb_c_last := &noTrans.rb_c_last
-	rec.GetValue(rb_c_last, C_LAST)
+	//rb_c_last := &noTrans.rb_c_last
+	//rec.GetValue(rb_c_last, C_LAST)
+	rec.GetValue(intRB, C_LAST)
 
 	rb_c_credit := &noTrans.rb_c_credit
 	rec.GetValue(rb_c_credit, C_CREDIT)
@@ -205,10 +206,10 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	// Insert Order-Line and Update Stock
 	var sKey Key
-	var sKeyAr [KEYLENTH]int64
+	var sKeyAr [KEYLENTH]int
 	keyAr[1] = 0
 	keyAr[2] = 0
-	var totalAmount float64
+	var totalAmount float32
 	rb_o_dist := &noTrans.rb_o_dist
 
 	for i := 0; i < int(noTrans.ol_cnt); i++ {
@@ -227,7 +228,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		UKey(sKeyAr, &sKey)
 
 		if !distRead {
-			val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), rb_o_dist, S_DIST_01+int(d_id), req)
+			val, _, err = exec.ReadValue(STOCK, sKey, sKeyAr[0], rb_o_dist, S_DIST_01+d_id, req)
 			if err != nil {
 				return nil, err
 			}
@@ -235,7 +236,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		}
 
 		// Update s_quantity
-		val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_QUANTITY, req)
+		val, _, err = exec.ReadValue(STOCK, sKey, sKeyAr[0], intRB, S_QUANTITY, req)
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +247,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 			s_quantity = s_quantity - noTrans.ol_quantity[i] + 91
 		}
 		noTrans.wb_s_quantity[i].intVal = s_quantity
-		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_quantity[i], S_QUANTITY, req, false)
+		err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_quantity[i], S_QUANTITY, req, false)
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +258,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		//	return nil, err
 		//}
 		noTrans.wb_s_ytd[i].intVal = 1
-		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_ytd[i], S_YTD, req, true)
+		err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_ytd[i], S_YTD, req, true)
 		if err != nil {
 			return nil, err
 		}
@@ -268,7 +269,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		//	return nil, err
 		//}
 		noTrans.wb_s_order_cnt[i].intVal = 1
-		err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req, true)
+		err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req, true)
 		if err != nil {
 			return nil, err
 		}
@@ -280,7 +281,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 			//	return nil, err
 			//}
 			noTrans.wb_s_remote_cnt[i].intVal = 1
-			err = exec.WriteValue(STOCK, sKey, int(sKeyAr[0]), &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req, true)
+			err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req, true)
 			if err != nil {
 				return nil, err
 			}
@@ -290,11 +291,11 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		olTuple.ol_o_id = d_next_o_id
 		olTuple.ol_d_id = d_id
 		olTuple.ol_w_id = w_id
-		olTuple.ol_number = int64(i)
+		olTuple.ol_number = i
 		olTuple.ol_i_id = noTrans.ol_i_id[i]
 		olTuple.ol_supply_w_id = noTrans.ol_supply_w_id[i]
 		olTuple.ol_quantity = noTrans.ol_quantity[i]
-		olTuple.ol_amount = float64(noTrans.ol_quantity[i]) * iTuple.i_price
+		olTuple.ol_amount = float32(noTrans.ol_quantity[i]) * iTuple.i_price
 
 		ol_dist_info := olTuple.ol_dist_info[:CAP_DIST]
 		copy(ol_dist_info, rb_o_dist.stringVal)
@@ -302,9 +303,9 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		sKeyAr[0] = w_id
 		sKeyAr[1] = d_id
 		sKeyAr[2] = d_next_o_id
-		sKeyAr[3] = int64(i)
+		sKeyAr[3] = i
 		UKey(sKeyAr, &sKey)
-		exec.InsertRecord(ORDERLINE, sKey, int(sKeyAr[0]), noTrans.olRec[i])
+		exec.InsertRecord(ORDERLINE, sKey, sKeyAr[0], noTrans.olRec[i])
 
 		totalAmount += olTuple.ol_amount
 	}
@@ -322,7 +323,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	payTrans := t.(*PaymentTrans)
 
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 
 	//floatRB := &payTrans.floatRB
 	intRB := &payTrans.intRB
@@ -332,8 +333,8 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	//var val Value
 	var err error
 
-	partNum := int(payTrans.w_id)
-	remotePart := int(payTrans.c_w_id)
+	partNum := payTrans.w_id
+	remotePart := payTrans.c_w_id
 
 	// Increment w_ytd in warehouse
 	keyAr[0] = payTrans.w_id
@@ -366,10 +367,11 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	keyAr[0] = payTrans.c_w_id
 	keyAr[1] = payTrans.d_id
 	if payTrans.isLast {
+		keyAr[2] = payTrans.c_last
 		UKey(keyAr, &k)
-		for i, b := range payTrans.c_last {
-			k[i+16] = b
-		}
+		//for i, b := range payTrans.c_last {
+		//	k[i+16] = b
+		//}
 		err = exec.GetKeysBySecIndex(CUSTOMER, k, remotePart, intRB)
 		if err != nil {
 			return nil, err
@@ -409,23 +411,23 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 		cTuple.GetValue(&payTrans.wb_c_data, C_DATA)
 		payTrans.wb_c_data.stringVal = payTrans.wb_c_data.stringVal[:CAP_C_DATA]
 		c := 0
-		for _, b := range []byte(strconv.FormatInt(payTrans.c_id, 10)) {
+		for _, b := range []byte(strconv.FormatInt(int64(payTrans.c_id), 10)) {
 			payTrans.wb_c_data.stringVal[c] = b
 			c++
 		}
-		for _, b := range []byte(strconv.FormatInt(payTrans.d_id, 10)) {
+		for _, b := range []byte(strconv.FormatInt(int64(payTrans.d_id), 10)) {
 			payTrans.wb_c_data.stringVal[c] = b
 			c++
 		}
-		for _, b := range []byte(strconv.FormatInt(payTrans.c_id, 10)) {
+		for _, b := range []byte(strconv.FormatInt(int64(payTrans.c_id), 10)) {
 			payTrans.wb_c_data.stringVal[c] = b
 			c++
 		}
-		for _, b := range []byte(strconv.FormatInt(payTrans.w_id, 10)) {
+		for _, b := range []byte(strconv.FormatInt(int64(payTrans.w_id), 10)) {
 			payTrans.wb_c_data.stringVal[c] = b
 			c++
 		}
-		for _, b := range []byte(strconv.FormatFloat(payTrans.h_amount, 'E', -1, 64)) {
+		for _, b := range []byte(strconv.FormatFloat(float64(payTrans.h_amount), 'E', -1, 64)) {
 			payTrans.wb_c_data.stringVal[c] = b
 			c++
 		}
@@ -468,7 +470,7 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	orderTrans := t.(*OrderStatusTrans)
 
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 
 	var rec Record
 	var err error
@@ -476,16 +478,17 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	intRB := &orderTrans.intRB
 	req := &orderTrans.req
 
-	partNum := int(orderTrans.w_id)
+	partNum := orderTrans.w_id
 
 	// Select one row from Customer
 	keyAr[0] = orderTrans.w_id
 	keyAr[1] = orderTrans.d_id
 	if orderTrans.isLast {
+		keyAr[2] = orderTrans.c_last
 		UKey(keyAr, &k)
-		for i, b := range orderTrans.c_last {
-			k[i+16] = b
-		}
+		//for i, b := range orderTrans.c_last {
+		//	k[i+16] = b
+		//}
 		err = exec.GetKeysBySecIndex(CUSTOMER, k, partNum, intRB)
 		if err != nil {
 			return nil, err
@@ -519,7 +522,7 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	}
 
 	ol_cnt := rec.GetTuple().(*OrderTuple).o_ol_cnt
-	for i := int64(0); i < ol_cnt; i++ {
+	for i := 0; i < ol_cnt; i++ {
 		keyAr[3] = i
 		UKey(keyAr, &k)
 		_, err = exec.GetRecord(ORDERLINE, k, partNum, req)
@@ -543,14 +546,14 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 	stockTrans := t.(*StockLevelTrans)
 
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var s_k Key
-	var s_keyAr [KEYLENTH]int64
+	var s_keyAr [KEYLENTH]int
 
 	var rec Record
 	var err error
 
-	partNum := int(stockTrans.w_id)
+	partNum := stockTrans.w_id
 	req := &stockTrans.req
 
 	// Select one row from District Table
@@ -565,7 +568,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 
 	threshold := stockTrans.threshold
 	i_id_ar := stockTrans.i_id_ar
-	ol_cnt := int64(0)
+	ol_cnt := 0
 	count := 0
 
 	s_keyAr[0] = stockTrans.w_id
@@ -580,7 +583,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 		}
 
 		ol_cnt = rec.GetTuple().(*OrderTuple).o_ol_cnt
-		for j := int64(0); j < ol_cnt; j++ {
+		for j := 0; j < ol_cnt; j++ {
 			// Read ol_cnt rows from OrderLine Table
 			keyAr[3] = j
 			UKey(keyAr, &k)
@@ -899,7 +902,7 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 	sum += val.(*FloatValue).floatVal
 
 	if sum < ammt.floatVal {
-		fv0.floatVal = checkBal - ammt.floatVal + float64(1)
+		fv0.floatVal = checkBal - ammt.floatVal + float32(1)
 		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false)
 		if err != nil {
 			return nil, err

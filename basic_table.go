@@ -8,8 +8,8 @@ import (
 const (
 	SHARDCOUNT = 256
 	BIT0       = 0
+	BIT4       = 4
 	BIT8       = 8
-	BIT16      = 16
 )
 
 type Table interface {
@@ -45,7 +45,7 @@ type BasicTable struct {
 	padding1    [PADDING]byte
 	data        []Partition
 	valueSchema []BTYPE
-	nKeys       int64
+	nKeys       int
 	name        string
 	isPartition bool
 	nParts      int
@@ -67,7 +67,7 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int) 
 	}
 
 	bt.shardHash = func(k Key) int {
-		return (int(k[BIT0])*3 + int(k[BIT8])*11 + int(k[BIT16])*13) % SHARDCOUNT
+		return (int(k[BIT0])*3 + int(k[BIT4])*11 + int(k[BIT8])*13) % SHARDCOUNT
 	}
 
 	for j := 0; j < len(schemaStrs)-1; j++ {

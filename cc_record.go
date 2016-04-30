@@ -20,13 +20,13 @@ type Value interface{}
 
 type IntValue struct {
 	padding1 [PADDING]byte
-	intVal   int64
+	intVal   int
 	padding2 [PADDING]byte
 }
 
 type FloatValue struct {
 	padding1 [PADDING]byte
-	floatVal float64
+	floatVal float32
 	padding2 [PADDING]byte
 }
 

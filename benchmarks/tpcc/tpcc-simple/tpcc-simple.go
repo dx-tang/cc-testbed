@@ -17,7 +17,7 @@ import (
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
 var cr = flag.Float64("cr", 0, "percentage of cross-partition transactions")
-var wl = flag.String("wl", "../smallbank.txt", "workload to be used")
+var wl = flag.String("wl", "../tpcc.txt", "workload to be used")
 var contention = flag.Float64("contention", 1, "theta factor of Zipf, 1 for uniform")
 var tp = flag.String("tp", "100:0:0:0:0:0", "Percetage of Each Transaction")
 var out = flag.String("out", "data.out", "output file path")
@@ -79,7 +79,7 @@ func main() {
 	clog.Info("Done with Populating Store\n")
 
 	if *prof {
-		f, err := os.Create("smallbank.prof")
+		f, err := os.Create("tpcc.prof")
 		if err != nil {
 			clog.Error(err.Error())
 		}

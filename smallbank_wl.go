@@ -50,7 +50,7 @@ const (
 
 type AccoutsTuple struct {
 	padding1 [PADDING]byte
-	accoutID int64
+	accoutID int
 	name     [CAP_ACCT_NAME]byte
 	padding2 [PADDING]byte
 }
@@ -91,8 +91,8 @@ func (at *AccoutsTuple) DeltaValue(val Value, col int) {
 
 type CheckingTuple struct {
 	padding1 [PADDING]byte
-	accoutID int64
-	balance  float64
+	accoutID int
+	balance  float32
 	padding2 [PADDING]byte
 }
 
@@ -131,8 +131,8 @@ func (ct *CheckingTuple) DeltaValue(val Value, col int) {
 
 type SavingsTuple struct {
 	padding1 [PADDING]byte
-	accoutID int64
-	balance  float64
+	accoutID int
+	balance  float32
 	padding2 [PADDING]byte
 }
 
@@ -258,7 +258,7 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 		t.accessParts[0] = pi
 		t.accoutID = t.accoutID[:1]
 		t.accoutID[0] = gen.GetKey(CHECKING, pi)
-		t.ammount.floatVal = float64(AMMT)
+		t.ammount.floatVal = AMMT
 	case AMALGAMATE:
 		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
@@ -329,19 +329,19 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 				}
 			}
 		}
-		t.ammount.floatVal = float64(AMMT)
+		t.ammount.floatVal = AMMT
 	case DEPOSITCHECKING:
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
 		t.accoutID = t.accoutID[:1]
 		t.accoutID[0] = gen.GetKey(CHECKING, pi)
-		t.ammount.floatVal = float64(AMMT)
+		t.ammount.floatVal = AMMT
 	case TRANSACTIONSAVINGS:
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
 		t.accoutID = t.accoutID[:1]
 		t.accoutID[0] = gen.GetKey(SAVINGS, pi)
-		t.ammount.floatVal = float64(AMMT)
+		t.ammount.floatVal = AMMT
 	default:
 		clog.Error("SmallBank does not support transaction %v\n", t.TXN)
 	}
@@ -393,10 +393,10 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 		nKeys := sbWorkload.basic.nKeys[i]
 		store := sbWorkload.basic.store
 		keyLen := len(keyRange)
-		compKey := make([]int64, keyLen)
+		compKey := make([]int, keyLen)
 
 		var k int = 0
-		for j := int64(0); j < nKeys; j++ {
+		for j := 0; j < nKeys; j++ {
 
 			key := CKey(compKey)
 			partNum := hp.GetPart(i, key)
@@ -416,18 +416,18 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 			} else if i == SAVINGS {
 				st := &SavingsTuple{
 					accoutID: compKey[0],
-					balance:  float64(BAL),
+					balance:  BAL,
 				}
 				store.CreateRecByID(i, key, partNum, st)
 			} else { // CHECKING
 				ct := &CheckingTuple{
 					accoutID: compKey[0],
-					balance:  float64(BAL),
+					balance:  BAL,
 				}
 				store.CreateRecByID(i, key, partNum, ct)
 			}
 
-			for int64(compKey[k]+1) >= keyRange[k] {
+			for compKey[k]+1 >= keyRange[k] {
 				compKey[k] = 0
 				k++
 				if k >= keyLen {
@@ -540,7 +540,7 @@ func (s *SBWorkload) GetBasicWL() *BasicWorkload {
 	return s.basic
 }
 
-func (s *SBWorkload) GetIDToKeyRange() [][]int64 {
+func (s *SBWorkload) GetIDToKeyRange() [][]int {
 	return s.basic.IDToKeyRange
 }
 
@@ -549,24 +549,24 @@ func (s *SBWorkload) GetTableCount() int {
 }
 
 func (s *SBWorkload) PrintChecking() {
-	var total float64
+	var total float32
 	nKeys := s.basic.nKeys[CHECKING]
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[CHECKING]
 	keyLen := len(keyRange)
-	compKey := make([]int64, keyLen)
+	compKey := make([]int, keyLen)
 	store := s.basic.store
 	floatRB := &FloatValue{}
 
 	var val Value
 	var k int = 0
-	for i := int64(0); i < nKeys; i++ {
+	for i := 0; i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
 		val = store.GetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
 		total += val.(*FloatValue).floatVal
 
-		for int64(compKey[k]+1) >= keyRange[k] {
+		for compKey[k]+1 >= keyRange[k] {
 			compKey[k] = 0
 			k++
 			if k >= keyLen {
@@ -587,12 +587,12 @@ func (s *SBWorkload) ResetData() {
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[CHECKING]
 	keyLen := len(keyRange)
-	compKey := make([]int64, keyLen)
+	compKey := make([]int, keyLen)
 	store := s.basic.store
 	floatRB := &FloatValue{}
 
 	var k int = 0
-	for i := int64(0); i < nKeys; i++ {
+	for i := 0; i < nKeys; i++ {
 		key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
 
@@ -600,7 +600,7 @@ func (s *SBWorkload) ResetData() {
 		store.SetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
 		store.SetValueByID(SAVINGS, key, partNum, floatRB, SAVING_BAL)
 
-		for int64(compKey[k]+1) >= keyRange[k] {
+		for compKey[k]+1 >= keyRange[k] {
 			compKey[k] = 0
 			k++
 			if k >= keyLen {

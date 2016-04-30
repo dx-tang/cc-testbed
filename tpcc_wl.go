@@ -26,6 +26,8 @@ const (
 
 var LAST_STRING = [10]string{"BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE", "ANTI", "CALLY", "ATION", "EING"}
 
+var lastToIndex map[string]int
+
 const (
 	MAXOLCNT             = 15
 	MINOLCNT             = 5
@@ -78,20 +80,19 @@ func (bt *BaseTrans) DecTrial() {
 type NewOrderTrans struct {
 	padding1 [PADDING]byte
 	BaseTrans
-	w_id            int64
-	d_id            int64
-	c_id            int64
+	w_id            int
+	d_id            int
+	c_id            int
 	o_entry_d       time.Time
-	ol_cnt          int64
-	ol_i_id         [MAXOLCNT]int64
-	ol_quantity     [MAXOLCNT]int64
-	ol_supply_w_id  [MAXOLCNT]int64
+	ol_cnt          int
+	ol_i_id         [MAXOLCNT]int
+	ol_quantity     [MAXOLCNT]int
+	ol_supply_w_id  [MAXOLCNT]int
 	wb_next_o_id    IntValue
 	wb_s_quantity   [MAXOLCNT]IntValue
 	wb_s_ytd        [MAXOLCNT]IntValue
 	wb_s_order_cnt  [MAXOLCNT]IntValue
 	wb_s_remote_cnt [MAXOLCNT]IntValue
-	rb_c_last       StringValue
 	rb_c_credit     StringValue
 	rb_i_name       StringValue
 	rb_o_dist       StringValue
@@ -107,12 +108,12 @@ type PaymentTrans struct {
 	padding1 [PADDING]byte
 	BaseTrans
 	isLast           bool
-	w_id             int64
-	d_id             int64
-	c_id             int64
-	c_last           []byte
-	c_w_id           int64
-	h_amount         float64
+	w_id             int
+	d_id             int
+	c_id             int
+	c_last           int
+	c_w_id           int
+	h_amount         float32
 	wb_w_ytd         FloatValue
 	wb_d_ytd         FloatValue
 	wb_c_balance     FloatValue
@@ -127,19 +128,19 @@ type PaymentTrans struct {
 type OrderStatusTrans struct {
 	padding1 [PADDING]byte
 	BaseTrans
-	w_id     int64
-	d_id     int64
+	w_id     int
+	d_id     int
 	isLast   bool
-	c_id     int64
-	c_last   []byte
+	c_id     int
+	c_last   int
 	padding2 [PADDING]byte
 }
 
 type DeliveryTrans struct {
 	padding1 [PADDING]byte
 	BaseTrans
-	w_id         int64
-	o_carrier_id int64
+	w_id         int
+	o_carrier_id int
 	padding2     [PADDING]byte
 }
 
@@ -147,10 +148,10 @@ type DeliveryTrans struct {
 type StockLevelTrans struct {
 	padding1 [PADDING]byte
 	BaseTrans
-	w_id      int64
-	d_id      int64
-	threshold int64
-	i_id_ar   []int64
+	w_id      int
+	d_id      int
+	threshold int
+	i_id_ar   []int
 	padding2  [PADDING]byte
 }
 
@@ -254,20 +255,20 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 	}
 
 	t.TXN = txn
-	t.w_id = int64(pi)
-	t.d_id = rnd.Int63n(DIST_COUNT)
-	t.c_id = rnd.Int63n(C_ID_PER_DIST)
+	t.w_id = pi
+	t.d_id = rnd.Intn(DIST_COUNT)
+	t.c_id = rnd.Intn(C_ID_PER_DIST)
 	t.o_entry_d = time.Now()
-	t.ol_cnt = MINOLCNT + rnd.Int63n(MAXOLCNT-MINOLCNT)
+	t.ol_cnt = MINOLCNT + rnd.Intn(MAXOLCNT-MINOLCNT)
 	t.oRec = oa.genOrderRec()
 
 	j := 0
-	for i := 0; i < int(t.ol_cnt); i++ {
-		t.ol_supply_w_id[i] = int64(t.accessParts[j])
+	for i := 0; i < t.ol_cnt; i++ {
+		t.ol_supply_w_id[i] = t.accessParts[j]
 		t.ol_i_id[i] = i_id_gen.GetPartRank(t.accessParts[j])
 		j = (j + 1) % len(t.accessParts)
 
-		t.ol_quantity[i] = int64(5)
+		t.ol_quantity[i] = 5
 		t.olRec[i] = ola.genOrderLineRec()
 	}
 
@@ -294,7 +295,7 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 		if rnd.Intn(100) < cr {
 			t.accessParts = t.accessParts[:2]
 			for {
-				tmpPi = int(w_id_gen.GetWholeRank())
+				tmpPi = w_id_gen.GetWholeRank()
 				if tmpPi != pi {
 					break
 				}
@@ -310,8 +311,8 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 			t.accessParts = t.accessParts[:1]
 			t.accessParts[0] = pi
 		}
-		t.w_id = int64(pi)
-		t.c_w_id = int64(tmpPi)
+		t.w_id = pi
+		t.c_w_id = tmpPi
 	} else {
 		t.w_id = w_id_gen.GetWholeRank()
 		t.c_w_id = w_id_gen.GetWholeRank()
@@ -323,38 +324,40 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	if isLast {
 		dist_cust := c_last_gen.GetWholeRank()
 		t.d_id = dist_cust / C_LAST_PER_DIST
-		last_id := dist_cust % C_LAST_PER_DIST
+		t.c_last = dist_cust % C_LAST_PER_DIST
+		//last_id := dist_cust % C_LAST_PER_DIST
 
-		index := 0
-		d := last_id / 100
-		last_id = last_id % 100
-		t.c_last = t.c_last[:len(LAST_STRING[d])]
-		for i := 0; i < len(LAST_STRING[d]); i++ {
-			t.c_last[index] = LAST_STRING[d][i]
-			index++
-		}
+		/*
+			index := 0
+			d := last_id / 100
+			last_id = last_id % 100
+			t.c_last = t.c_last[:len(LAST_STRING[d])]
+			for i := 0; i < len(LAST_STRING[d]); i++ {
+				t.c_last[index] = LAST_STRING[d][i]
+				index++
+			}
 
-		d = last_id / 10
-		last_id = last_id % 10
-		t.c_last = t.c_last[:index+len(LAST_STRING[d])]
-		for i := 0; i < len(LAST_STRING[d]); i++ {
-			t.c_last[index] = LAST_STRING[d][i]
-			index++
-		}
+			d = last_id / 10
+			last_id = last_id % 10
+			t.c_last = t.c_last[:index+len(LAST_STRING[d])]
+			for i := 0; i < len(LAST_STRING[d]); i++ {
+				t.c_last[index] = LAST_STRING[d][i]
+				index++
+			}
 
-		d = last_id
-		t.c_last = t.c_last[:index+len(LAST_STRING[d])]
-		for i := 0; i < len(LAST_STRING[d]); i++ {
-			t.c_last[index] = LAST_STRING[d][i]
-			index++
-		}
+			d = last_id
+			t.c_last = t.c_last[:index+len(LAST_STRING[d])]
+			for i := 0; i < len(LAST_STRING[d]); i++ {
+				t.c_last[index] = LAST_STRING[d][i]
+				index++
+			}*/
 	} else {
 		dist_cust := c_id_gen.GetWholeRank()
 		t.d_id = dist_cust / C_ID_PER_DIST
 		t.c_id = dist_cust % C_ID_PER_DIST
 	}
 
-	t.h_amount = float64(rnd.Int63n(5000) + 1)
+	t.h_amount = float32(rnd.Intn(5000) + 1)
 	t.hRec = tg.ha.genHistoryRec()
 
 	return t
@@ -377,7 +380,7 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	t.isLast = isLast
 
 	if tg.isPartition {
-		t.w_id = int64(pi)
+		t.w_id = pi
 	} else {
 		t.w_id = w_id_gen.GetWholeRank()
 	}
@@ -385,31 +388,34 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	if isLast {
 		dist_cust := c_last_gen.GetWholeRank()
 		t.d_id = dist_cust / C_LAST_PER_DIST
-		last_id := dist_cust % C_LAST_PER_DIST
+		t.c_last = dist_cust % C_LAST_PER_DIST
+		//last_id := dist_cust % C_LAST_PER_DIST
 
-		index := 0
-		d := last_id / 100
-		last_id = last_id % 100
-		t.c_last = t.c_last[:len(LAST_STRING[d])]
-		for i := 0; i < len(LAST_STRING[d]); i++ {
-			t.c_last[index] = LAST_STRING[d][i]
-			index++
-		}
+		/*
+			index := 0
+			d := last_id / 100
+			last_id = last_id % 100
+			t.c_last = t.c_last[:len(LAST_STRING[d])]
+			for i := 0; i < len(LAST_STRING[d]); i++ {
+				t.c_last[index] = LAST_STRING[d][i]
+				index++
+			}
 
-		d = last_id / 10
-		last_id = last_id % 10
-		t.c_last = t.c_last[:index+len(LAST_STRING[d])]
-		for i := 0; i < len(LAST_STRING[d]); i++ {
-			t.c_last[index] = LAST_STRING[d][i]
-			index++
-		}
+			d = last_id / 10
+			last_id = last_id % 10
+			t.c_last = t.c_last[:index+len(LAST_STRING[d])]
+			for i := 0; i < len(LAST_STRING[d]); i++ {
+				t.c_last[index] = LAST_STRING[d][i]
+				index++
+			}
 
-		d = last_id
-		t.c_last = t.c_last[:index+len(LAST_STRING[d])]
-		for i := 0; i < len(LAST_STRING[d]); i++ {
-			t.c_last[index] = LAST_STRING[d][i]
-			index++
-		}
+			d = last_id
+			t.c_last = t.c_last[:index+len(LAST_STRING[d])]
+			for i := 0; i < len(LAST_STRING[d]); i++ {
+				t.c_last[index] = LAST_STRING[d][i]
+				index++
+			}
+		*/
 	} else {
 		dist_cust := c_id_gen.GetWholeRank()
 		t.d_id = dist_cust / C_ID_PER_DIST
@@ -432,12 +438,12 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
 	t.accessParts[0] = pi
 	t.TXN = txn
 	if tg.isPartition {
-		t.w_id = int64(tg.partIndex)
+		t.w_id = tg.partIndex
 	} else {
 		t.w_id = w_id_gen.GetWholeRank()
 	}
-	t.d_id = rnd.Int63n(DIST_COUNT)
-	t.threshold = 10 + rnd.Int63n(11)
+	t.d_id = rnd.Intn(DIST_COUNT)
+	t.threshold = 10 + rnd.Intn(11)
 	t.i_id_ar = t.i_id_ar[:0]
 
 	return t
@@ -447,10 +453,10 @@ type TPCCWorkload struct {
 	padding1        [PADDING]byte
 	transPercentage [TPCCTRANSNUM]int
 	transGen        []TPCCTransGen
-	i_id_range      int64
-	w_id_range      int64
-	c_id_range      int64
-	c_last_range    int64
+	i_id_range      int
+	w_id_range      int
+	c_id_range      int
+	c_last_range    int
 	store           *Store
 	nWorkers        int
 	nParts          int
@@ -522,17 +528,22 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		df.Close()
 	}
 
+	lastToIndex = make(map[string]int)
+	for i, str := range LAST_STRING {
+		lastToIndex[str] = i
+	}
+
 	tpccWL.c_id_range = DIST_COUNT * C_ID_PER_DIST
 	tpccWL.c_last_range = DIST_COUNT * C_LAST_PER_DIST
 
-	kr_i_id := make([]int64, nParts+PADDINGINT64*2)
-	kr_i_id = kr_i_id[PADDINGINT64 : PADDINGINT64+nParts]
-	kr_w_id := make([]int64, nParts+PADDINGINT64*2)
-	kr_w_id = kr_w_id[PADDINGINT64 : PADDINGINT64+nParts]
-	kr_c_id := make([]int64, nParts+PADDINGINT64*2)
-	kr_c_id = kr_c_id[PADDINGINT64 : PADDINGINT64+nParts]
-	kr_c_last := make([]int64, nParts+PADDINGINT64*2)
-	kr_c_last = kr_c_last[PADDINGINT64 : PADDINGINT64+nParts]
+	kr_i_id := make([]int, nParts+PADDINGINT*2)
+	kr_i_id = kr_i_id[PADDINGINT : PADDINGINT+nParts]
+	kr_w_id := make([]int, nParts+PADDINGINT*2)
+	kr_w_id = kr_w_id[PADDINGINT : PADDINGINT+nParts]
+	kr_c_id := make([]int, nParts+PADDINGINT*2)
+	kr_c_id = kr_c_id[PADDINGINT : PADDINGINT+nParts]
+	kr_c_last := make([]int, nParts+PADDINGINT*2)
+	kr_c_last = kr_c_last[PADDINGINT : PADDINGINT+nParts]
 	for i := 0; i < nParts; i++ {
 		kr_i_id[i] = tpccWL.i_id_range
 		kr_w_id[i] = tpccWL.w_id_range
@@ -626,8 +637,8 @@ func makeNewOrderTrans(rnd rand.Rand, id int, rec Record) *NewOrderTrans {
 	trans.accessParts = trans.accessParts[PADDINGINT : PADDINGINT+TPCC_MAXPART]
 	trans.req.id = id
 
-	trans.rb_c_last.stringVal = make([]byte, CAP_C_LAST+2*PADDINGBYTE)
-	trans.rb_c_last.stringVal = trans.rb_c_last.stringVal[PADDINGBYTE : PADDINGBYTE+CAP_C_LAST]
+	//trans.rb_c_last.stringVal = make([]byte, CAP_C_LAST+2*PADDINGBYTE)
+	//trans.rb_c_last.stringVal = trans.rb_c_last.stringVal[PADDINGBYTE : PADDINGBYTE+CAP_C_LAST]
 	trans.rb_c_credit.stringVal = make([]byte, CAP_C_CREDIT+2*PADDINGBYTE)
 	trans.rb_c_credit.stringVal = trans.rb_c_credit.stringVal[PADDINGBYTE : PADDINGBYTE+CAP_C_CREDIT]
 	trans.rb_i_name.stringVal = make([]byte, CAP_I_NAME+2*PADDINGBYTE)
@@ -648,8 +659,8 @@ func makePaymentTrans(rnd rand.Rand, id int) *PaymentTrans {
 	trans.accessParts = trans.accessParts[PADDINGINT : PADDINGINT+TPCC_MAXPART]
 	trans.req.id = id
 
-	trans.c_last = make([]byte, CAP_C_LAST+2*PADDINGBYTE)
-	trans.c_last = trans.c_last[PADDINGBYTE : PADDINGBYTE+CAP_C_LAST]
+	//trans.c_last = make([]byte, CAP_C_LAST+2*PADDINGBYTE)
+	//trans.c_last = trans.c_last[PADDINGBYTE : PADDINGBYTE+CAP_C_LAST]
 	trans.wb_c_data.stringVal = make([]byte, CAP_C_DATA+2*PADDINGBYTE)
 	trans.wb_c_data.stringVal = trans.wb_c_data.stringVal[PADDINGBYTE : PADDINGBYTE+CAP_C_DATA]
 
@@ -665,8 +676,8 @@ func makeOrderStatusTrans(rnd rand.Rand, id int) *OrderStatusTrans {
 	trans.accessParts = make([]int, TPCC_MAXPART+PADDINGINT*2)
 	trans.accessParts = trans.accessParts[PADDINGINT : PADDINGINT+TPCC_MAXPART]
 	trans.req.id = id
-	trans.c_last = make([]byte, CAP_C_LAST+2*PADDINGBYTE)
-	trans.c_last = trans.c_last[PADDINGBYTE : PADDINGBYTE+CAP_C_LAST]
+	//trans.c_last = make([]byte, CAP_C_LAST+2*PADDINGBYTE)
+	//trans.c_last = trans.c_last[PADDINGBYTE : PADDINGBYTE+CAP_C_LAST]
 	return trans
 }
 
@@ -678,13 +689,13 @@ func makeStockLevelTrans(rnd rand.Rand, id int) *StockLevelTrans {
 	}
 	trans.accessParts = make([]int, TPCC_MAXPART+PADDINGINT*2)
 	trans.accessParts = trans.accessParts[PADDINGINT : PADDINGINT+TPCC_MAXPART]
-	trans.i_id_ar = make([]int64, STOCKLEVEL_DISTITEMS+2*PADDINGINT64)
-	trans.i_id_ar = trans.i_id_ar[PADDINGINT64 : PADDINGINT64+STOCKLEVEL_DISTITEMS]
+	trans.i_id_ar = make([]int, STOCKLEVEL_DISTITEMS+2*PADDINGINT)
+	trans.i_id_ar = trans.i_id_ar[PADDINGINT : PADDINGINT+STOCKLEVEL_DISTITEMS]
 	trans.req.id = id
 	return trans
 }
 
-func tpcc_NewKeyGen(s float64, partIndex int, keyRange int64, nParts int, keyArray []int64, isPartition bool) KeyGen {
+func tpcc_NewKeyGen(s float64, partIndex int, keyRange int, nParts int, keyArray []int, isPartition bool) KeyGen {
 	var kg KeyGen
 	if s == 1 {
 		kg = NewUniformRand(partIndex, keyRange, nParts, keyArray, isPartition)
@@ -698,14 +709,14 @@ func tpcc_NewKeyGen(s float64, partIndex int, keyRange int64, nParts int, keyArr
 	return kg
 }
 
-func parseInt(column string) int64 {
-	ret, _ := strconv.ParseInt(column, 10, 64)
-	return ret
+func parseInt(column string) int {
+	ret, _ := strconv.ParseInt(column, 10, 32)
+	return int(ret)
 }
 
-func parseFloat(column string) float64 {
-	ret, _ := strconv.ParseFloat(column, 64)
-	return ret
+func parseFloat(column string) float32 {
+	ret, _ := strconv.ParseFloat(column, 32)
+	return float32(ret)
 }
 
 func parseDate(column string) time.Time {
@@ -726,7 +737,7 @@ func parseDate(column string) time.Time {
 
 func parseWarehouse(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int
 	tuple := &WarehouseTuple{}
 	columns := strings.Split(row, "\t")
@@ -770,7 +781,7 @@ func parseWarehouse(row string) (Key, int, Tuple) {
 
 func parseDistrict(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int
 	tuple := &DistrictTuple{}
 	columns := strings.Split(row, "\t")
@@ -815,7 +826,7 @@ func parseDistrict(row string) (Key, int, Tuple) {
 
 func parseCustomer(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int
 	tuple := &CustomerTuple{}
 	columns := strings.Split(row, "\t")
@@ -831,9 +842,22 @@ func parseCustomer(row string) (Key, int, Tuple) {
 	c_middle := tuple.c_middle[:CAP_C_MIDDLE]
 	copy(c_middle, []byte(columns[C_MIDDLE]))
 
-	tuple.len_c_last = len(columns[C_LAST])
-	c_last := tuple.c_last[:tuple.len_c_last]
-	copy(c_last, []byte(columns[C_LAST]))
+	//tuple.len_c_last = len(columns[C_LAST])
+	//c_last := tuple.c_last[:tuple.len_c_last]
+	//copy(c_last, []byte(columns[C_LAST]))
+	var c_last int
+	lastStr := columns[C_LAST]
+	for p := 0; p < 3; p++ {
+		var i int
+		for i = 0; i < len(LAST_STRING); i++ {
+			if strings.HasPrefix(lastStr, LAST_STRING[i]) {
+				c_last += c_last*10 + i
+				break
+			}
+		}
+		lastStr = strings.TrimPrefix(lastStr, LAST_STRING[i])
+	}
+	tuple.c_last = c_last
 
 	tuple.len_c_street_1 = len(columns[C_STREET_1])
 	c_street_1 := tuple.c_street_1[:tuple.len_c_street_1]
@@ -884,7 +908,7 @@ func parseCustomer(row string) (Key, int, Tuple) {
 
 func parseHistory(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &HistoryTuple{}
 	columns := strings.Split(row, "\t")
@@ -911,7 +935,7 @@ func parseHistory(row string) (Key, int, Tuple) {
 
 func parseNewOrder(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &NewOrderTuple{}
 	columns := strings.Split(row, "\t")
@@ -931,7 +955,7 @@ func parseNewOrder(row string) (Key, int, Tuple) {
 
 func parseOrder(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &OrderTuple{}
 	columns := strings.Split(row, "\t")
@@ -962,7 +986,7 @@ func parseOrder(row string) (Key, int, Tuple) {
 
 func parseOrderLine(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &OrderLineTuple{}
 	columns := strings.Split(row, "\t")
@@ -995,7 +1019,7 @@ func parseOrderLine(row string) (Key, int, Tuple) {
 
 func parseItem(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &ItemTuple{}
 	columns := strings.Split(row, "\t")
@@ -1022,7 +1046,7 @@ func parseItem(row string) (Key, int, Tuple) {
 
 func parseStock(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int64
+	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &StockTuple{}
 	columns := strings.Split(row, "\t")

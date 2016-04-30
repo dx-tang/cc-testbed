@@ -44,8 +44,8 @@ const (
 )
 
 const (
-	INTEGER = iota // int64
-	FLOAT          // floate64
+	INTEGER = iota // int
+	FLOAT          // floate32
 	STRING         // string
 	DATE           // date
 )
