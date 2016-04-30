@@ -183,6 +183,8 @@ func NewStore(schema string, nParts int, isPartition bool) *Store {
 			s.tables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
 		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
 			s.tables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
+		} else if strings.Compare(schemaStrs[0], "ORDERLINE") == 0 {
+			s.tables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
 		} else {
 			s.tables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode)
 		}

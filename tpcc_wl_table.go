@@ -223,59 +223,93 @@ func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum 
 }
 
 const (
-	CAP_ORDER_ENTRY = 100
+	CAP_ORDER_SEC_ENTRY    = 10
+	CAP_ORDER_BUCKET_ENTRY = 100
+	CAP_BUCKET_COUNT       = 100
 )
 
-type OrderPart struct {
+var orderbucketcount int
+
+type OrderSecPart struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
-	o_id_map map[Key]*OrderEntry
+	o_id_map map[Key]*OrderSecEntry
 	padding2 [PADDING]byte
 }
 
-type OrderEntry struct {
+type OrderSecEntry struct {
 	padding1   [PADDING]byte
-	o_id_array [CAP_ORDER_ENTRY]int
-	next       *OrderEntry
+	o_id_array [CAP_ORDER_SEC_ENTRY]int
+	next       *OrderSecEntry
 	t          int
 	padding2   [PADDING]byte
 }
 
+type OrderPart struct {
+	padding1 [PADDING]byte
+	buckets  []OrderBucket
+	padding2 [PADDING]byte
+}
+
+type OrderBucket struct {
+	padding1 [PADDING]byte
+	spinlock.RWSpinlock
+	tail     *OrderBucketEntry
+	padding2 [PADDING]byte
+}
+
+type OrderBucketEntry struct {
+	padding1 [PADDING]byte
+	oRecs    [CAP_ORDER_BUCKET_ENTRY]Record
+	keys     [CAP_ORDER_BUCKET_ENTRY]Key
+	before   *OrderBucketEntry
+	t        int
+	padding2 [PADDING]byte
+}
+
 type OrderTable struct {
 	padding1    [PADDING]byte
-	data        []Partition
-	secIndex    []OrderPart
+	data        []OrderPart
+	secIndex    []OrderSecPart
 	nKeys       int
 	nParts      int
 	isPartition bool
 	mode        int
-	shardHash   func(Key) int
+	bucketHash  func(k Key) int
 	padding2    [PADDING]byte
 }
 
 func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *OrderTable {
 	oTable := &OrderTable{
-		data:        make([]Partition, nParts),
-		secIndex:    make([]OrderPart, warehouse*DIST_COUNT),
+		data:        make([]OrderPart, nParts),
+		secIndex:    make([]OrderSecPart, warehouse*DIST_COUNT),
 		nKeys:       0,
 		nParts:      nParts,
 		isPartition: isPartition,
 		mode:        mode,
 	}
 
+	orderbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+
 	for k := 0; k < nParts; k++ {
-		oTable.data[k].shardedMap = make([]Shard, SHARDCOUNT)
-		for i := 0; i < SHARDCOUNT; i++ {
-			oTable.data[k].shardedMap[i].rows = make(map[Key]Record)
+		oTable.data[k].buckets = make([]OrderBucket, orderbucketcount)
+		for i := 0; i < orderbucketcount; i++ {
+			oTable.data[k].buckets[i].tail = &OrderBucketEntry{}
 		}
 	}
 
 	for i := 0; i < warehouse*DIST_COUNT; i++ {
-		oTable.secIndex[i].o_id_map = make(map[Key]*OrderEntry)
+		oTable.secIndex[i].o_id_map = make(map[Key]*OrderSecEntry)
 	}
 
-	oTable.shardHash = func(k Key) int {
-		return (int(k[BIT0])*3 + int(k[BIT4])*11 + int(k[BIT8])*13) % SHARDCOUNT
+	if isPartition {
+		oTable.bucketHash = func(k Key) int {
+			return (int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11 + int(k[11])*13) % orderbucketcount
+		}
+	} else {
+		oTable.bucketHash = func(k Key) int {
+			return (int(k[BIT0])*17 + int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11) % orderbucketcount
+		}
 	}
 
 	return oTable
@@ -290,17 +324,24 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	}
 
 	// Insert Order
-	shardNum := o.shardHash(k)
-	shard := &o.data[partNum].shardedMap[shardNum]
-
-	if _, ok := shard.rows[k]; ok {
-		return nil, EDUPKEY //One record with that key has existed;
-	}
+	bucketNum := o.bucketHash(k)
+	bucket := &o.data[partNum].buckets[bucketNum]
 
 	rec := MakeRecord(o, k, tuple)
-	shard.rows[k] = rec
 
-	// Insert OrderPart
+	cur := bucket.tail.t
+	if cur == CAP_ORDER_BUCKET_ENTRY {
+		obe := &OrderBucketEntry{
+			before: bucket.tail,
+		}
+		bucket.tail = obe
+		cur = bucket.tail.t
+	}
+	bucket.tail.keys[cur] = k
+	bucket.tail.oRecs[cur] = rec
+	bucket.tail.t++
+
+	// Insert OrderSecPart
 	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
 	var keyAr [KEYLENTH]int
 	var cKey Key
@@ -312,7 +353,7 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	oPart := o.secIndex[index]
 	oEntry, ok := oPart.o_id_map[cKey]
 	if !ok {
-		oEntry = &OrderEntry{
+		oEntry = &OrderSecEntry{
 			next: nil,
 			t:    0,
 		}
@@ -324,8 +365,8 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 			oEntry = oEntry.next
 		}
 
-		if oEntry.t == CAP_ORDER_ENTRY {
-			nextEntry := &OrderEntry{
+		if oEntry.t == CAP_ORDER_SEC_ENTRY {
+			nextEntry := &OrderSecEntry{
 				next: nil,
 				t:    0,
 			}
@@ -349,20 +390,26 @@ func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, error) {
 		partNum = 0
 	}
 
-	shardNum := o.shardHash(k)
-	shard := &o.data[partNum].shardedMap[shardNum]
+	bucketNum := o.bucketHash(k)
+	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
-		shard.RLock()
-		defer shard.RUnlock()
+		bucket.RLock()
+		defer bucket.RUnlock()
 	}
 
-	r, ok := shard.rows[k]
-	if !ok {
-		return nil, ENOKEY
-	} else {
-		return r, nil
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				return tail.oRecs[i], nil
+			}
+		}
+		tail = tail.before
 	}
+
+	return nil, ENOKEY
+
 }
 
 func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
@@ -371,44 +418,53 @@ func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) e
 		partNum = 0
 	}
 
-	shardNum := o.shardHash(k)
-	shard := &o.data[partNum].shardedMap[shardNum]
+	bucketNum := o.bucketHash(k)
+	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
-		shard.RLock()
-		defer shard.RUnlock()
+		bucket.RLock()
+		defer bucket.RUnlock()
 	}
 
-	r, ok := shard.rows[k]
-	if !ok {
-		return ENOKEY
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				tail.oRecs[i].SetValue(value, colNum)
+				return nil
+			}
+		}
+		tail = tail.before
 	}
 
-	r.SetValue(value, colNum)
-	return nil
+	return ENOKEY
 }
 
 func (o *OrderTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
-
 	if !o.isPartition {
 		partNum = 0
 	}
 
-	shardNum := o.shardHash(k)
-	shard := &o.data[partNum].shardedMap[shardNum]
+	bucketNum := o.bucketHash(k)
+	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
-		shard.RLock()
-		defer shard.RUnlock()
+		bucket.RLock()
+		defer bucket.RUnlock()
 	}
 
-	r, ok := shard.rows[k]
-	if !ok {
-		return ENOKEY
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				tail.oRecs[i].GetValue(value, colNum)
+				return nil
+			}
+		}
+		tail = tail.before
 	}
 
-	r.GetValue(value, colNum)
-	return nil
+	return ENOKEY
 }
 
 func (o *OrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -443,34 +499,31 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 		}
 
 		// Insert Order
-		shardNum := o.shardHash(k)
-		shard := &o.data[partNum].shardedMap[shardNum]
+		bucketNum := o.bucketHash(k)
+		bucket := &o.data[partNum].buckets[bucketNum]
 
 		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
 		oPart := &o.secIndex[index]
 
-		//clog.Info("Write Waiting %v ", index)
-
 		if !o.isPartition {
 			oPart.Lock()
-			//defer clog.Info("Write Unlock %v", index)
 		}
 
 		if o.mode != PARTITION {
-			shard.Lock()
+			bucket.Lock()
 		}
 
-		if _, ok := shard.rows[k]; ok {
-			if !o.isPartition {
-				oPart.Unlock()
+		cur := bucket.tail.t
+		if cur == CAP_ORDER_BUCKET_ENTRY {
+			obe := &OrderBucketEntry{
+				before: bucket.tail,
 			}
-			if o.mode != PARTITION {
-				shard.Unlock()
-			}
-			return EDUPKEY //One record with that key has existed;
+			bucket.tail = obe
+			cur = bucket.tail.t
 		}
-
-		shard.rows[k] = rec
+		bucket.tail.keys[cur] = k
+		bucket.tail.oRecs[cur] = rec
+		bucket.tail.t++
 
 		// Insert OrderPart
 		var keyAr [KEYLENTH]int
@@ -483,7 +536,7 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 
 		oEntry, ok := oPart.o_id_map[cKey]
 		if !ok {
-			oEntry = &OrderEntry{
+			oEntry = &OrderSecEntry{
 				next: nil,
 				t:    0,
 			}
@@ -495,8 +548,8 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 				oEntry = oEntry.next
 			}
 
-			if oEntry.t == CAP_ORDER_ENTRY {
-				nextEntry := &OrderEntry{
+			if oEntry.t == CAP_ORDER_SEC_ENTRY {
+				nextEntry := &OrderSecEntry{
 					next: nil,
 					t:    0,
 				}
@@ -513,7 +566,7 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 			oPart.Unlock()
 		}
 		if o.mode != PARTITION {
-			shard.Unlock()
+			bucket.Unlock()
 		}
 
 	}
@@ -527,12 +580,10 @@ func (o *OrderTable) ReleaseInsert(k Key, partNum int) {
 func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
 	oPart := &o.secIndex[index]
-	//clog.Info("Wating %v", index)
 
 	if !o.isPartition {
 		oPart.RLock()
 		defer oPart.RUnlock()
-		//defer clog.Info("Read UnLock %v", index)
 	}
 
 	iv := val.(*IntValue)
@@ -554,21 +605,26 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 		partNum = 0
 	}
 
-	shardNum := o.shardHash(k)
-	shard := &o.data[partNum].shardedMap[shardNum]
+	bucketNum := o.bucketHash(k)
+	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
-		shard.RLock()
-		defer shard.RUnlock()
+		bucket.RLock()
+		defer bucket.RUnlock()
 	}
 
-	r, ok := shard.rows[k]
-	if !ok {
-		return ENOKEY
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				tail.oRecs[i].DeltaValue(value, colNum)
+				return nil
+			}
+		}
+		tail = tail.before
 	}
 
-	r.DeltaValue(value, colNum)
-	return nil
+	return ENOKEY
 }
 
 const (
@@ -949,4 +1005,285 @@ func (h *HistoryTable) SetMode(mode int) {
 func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
 	clog.Error("HistoryTable Table Not Support SetValueByID")
 	return nil
+}
+
+var olbucketcount int
+
+const (
+	CAP_ORDERLINE_BUCKET_ENTRY = 100
+)
+
+type OrderLinePart struct {
+	padding1 [PADDING]byte
+	buckets  []OrderLineBucket
+	padding2 [PADDING]byte
+}
+
+type OrderLineBucket struct {
+	padding1 [PADDING]byte
+	spinlock.RWSpinlock
+	tail     *OrderLineBucketEntry
+	padding2 [PADDING]byte
+}
+
+type OrderLineBucketEntry struct {
+	padding1 [PADDING]byte
+	oRecs    [CAP_ORDERLINE_BUCKET_ENTRY]Record
+	keys     [CAP_ORDERLINE_BUCKET_ENTRY]Key
+	before   *OrderLineBucketEntry
+	t        int
+	padding2 [PADDING]byte
+}
+
+type OrderLineTable struct {
+	padding1    [PADDING]byte
+	data        []OrderLinePart
+	nKeys       int
+	nParts      int
+	isPartition bool
+	mode        int
+	bucketHash  func(k Key) int
+	padding2    [PADDING]byte
+}
+
+func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *OrderLineTable {
+	olTable := &OrderLineTable{
+		data:        make([]OrderLinePart, nParts),
+		nKeys:       0,
+		nParts:      nParts,
+		isPartition: isPartition,
+		mode:        mode,
+	}
+
+	olbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+
+	for k := 0; k < nParts; k++ {
+		olTable.data[k].buckets = make([]OrderLineBucket, olbucketcount)
+		for i := 0; i < olbucketcount; i++ {
+			olTable.data[k].buckets[i].tail = &OrderLineBucketEntry{}
+		}
+	}
+
+	if isPartition {
+		olTable.bucketHash = func(k Key) int {
+			return (int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11 + int(k[11])*13) % olbucketcount
+		}
+	} else {
+		olTable.bucketHash = func(k Key) int {
+			return (int(k[BIT0])*17 + int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11) % olbucketcount
+		}
+	}
+
+	return olTable
+
+}
+func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	ol.nKeys++
+
+	if !ol.isPartition {
+		partNum = 0
+	}
+
+	// Insert Order
+	bucketNum := ol.bucketHash(k)
+	bucket := &ol.data[partNum].buckets[bucketNum]
+
+	rec := MakeRecord(ol, k, tuple)
+
+	cur := bucket.tail.t
+	if cur == CAP_ORDERLINE_BUCKET_ENTRY {
+		obe := &OrderLineBucketEntry{
+			before: bucket.tail,
+		}
+		bucket.tail = obe
+		cur = bucket.tail.t
+	}
+	bucket.tail.keys[cur] = k
+	bucket.tail.oRecs[cur] = rec
+	bucket.tail.t++
+
+	return rec, nil
+}
+
+func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, error) {
+
+	if !ol.isPartition {
+		partNum = 0
+	}
+
+	bucketNum := ol.bucketHash(k)
+	bucket := &ol.data[partNum].buckets[bucketNum]
+
+	if ol.mode != PARTITION {
+		bucket.RLock()
+		defer bucket.RUnlock()
+	}
+
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				return tail.oRecs[i], nil
+			}
+		}
+		tail = tail.before
+	}
+
+	return nil, ENOKEY
+
+}
+
+func (ol *OrderLineTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
+
+	if !ol.isPartition {
+		partNum = 0
+	}
+
+	bucketNum := ol.bucketHash(k)
+	bucket := &ol.data[partNum].buckets[bucketNum]
+
+	if ol.mode != PARTITION {
+		bucket.RLock()
+		defer bucket.RUnlock()
+	}
+
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				tail.oRecs[i].SetValue(value, colNum)
+				return nil
+			}
+		}
+		tail = tail.before
+	}
+
+	return ENOKEY
+}
+
+func (ol *OrderLineTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
+	if !ol.isPartition {
+		partNum = 0
+	}
+
+	bucketNum := ol.bucketHash(k)
+	bucket := &ol.data[partNum].buckets[bucketNum]
+
+	if ol.mode != PARTITION {
+		bucket.RLock()
+		defer bucket.RUnlock()
+	}
+
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				tail.oRecs[i].GetValue(value, colNum)
+				return nil
+			}
+		}
+		tail = tail.before
+	}
+
+	return ENOKEY
+}
+
+func (ol *OrderLineTable) PrepareDelete(k Key, partNum int) (Record, error) {
+	clog.Error("OrderLine Table Not Support PrepareDelete")
+	return nil, nil
+}
+
+func (ol *OrderLineTable) DeleteRecord(k Key, partNum int) error {
+	clog.Error("OrderLine Table Not Support DeleteRecord")
+	return nil
+}
+
+func (ol *OrderLineTable) ReleaseDelete(k Key, partNum int) {
+	clog.Error("OrderLine Table Not Support ReleaseDelete")
+}
+
+func (ol *OrderLineTable) PrepareInsert(k Key, partNum int) error {
+	return nil
+}
+
+func (ol *OrderLineTable) InsertRecord(recs []InsertRec) error {
+	ol.nKeys += len(recs)
+
+	for i, _ := range recs {
+		iRec := &recs[i]
+		partNum := iRec.partNum
+		k := iRec.k
+		rec := iRec.rec
+
+		if !ol.isPartition {
+			partNum = 0
+		}
+
+		// Insert Order
+		bucketNum := ol.bucketHash(k)
+		bucket := &ol.data[partNum].buckets[bucketNum]
+
+		if ol.mode != PARTITION {
+			bucket.Lock()
+		}
+
+		cur := bucket.tail.t
+		if cur == CAP_ORDERLINE_BUCKET_ENTRY {
+			obe := &OrderLineBucketEntry{
+				before: bucket.tail,
+			}
+			bucket.tail = obe
+			cur = bucket.tail.t
+		}
+		bucket.tail.keys[cur] = k
+		bucket.tail.oRecs[cur] = rec
+		bucket.tail.t++
+
+		if ol.mode != PARTITION {
+			bucket.Unlock()
+		}
+
+	}
+
+	return nil
+}
+
+func (ol *OrderLineTable) ReleaseInsert(k Key, partNum int) {
+}
+
+func (ol *OrderLineTable) GetValueBySec(k Key, partNum int, val Value) error {
+	clog.Error("OrderLine Table Not Support GetValueBySec")
+	return nil
+}
+
+func (ol *OrderLineTable) SetMode(mode int) {
+	ol.mode = mode
+}
+
+func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
+
+	if !ol.isPartition {
+		partNum = 0
+	}
+
+	bucketNum := ol.bucketHash(k)
+	bucket := &ol.data[partNum].buckets[bucketNum]
+
+	if ol.mode != PARTITION {
+		bucket.RLock()
+		defer bucket.RUnlock()
+	}
+
+	tail := bucket.tail
+	for tail != nil {
+		for i := tail.t; i >= 0; i-- {
+			if tail.keys[i] == k {
+				tail.oRecs[i].DeltaValue(value, colNum)
+				return nil
+			}
+		}
+		tail = tail.before
+	}
+
+	return ENOKEY
 }
