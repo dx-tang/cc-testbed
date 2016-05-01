@@ -225,7 +225,7 @@ func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum 
 const (
 	CAP_ORDER_SEC_ENTRY    = 10
 	CAP_ORDER_BUCKET_ENTRY = 100
-	CAP_BUCKET_COUNT       = 100
+	CAP_BUCKET_COUNT       = 1
 )
 
 var orderbucketcount int
@@ -240,7 +240,7 @@ type OrderSecPart struct {
 type OrderSecEntry struct {
 	padding1   [PADDING]byte
 	o_id_array [CAP_ORDER_SEC_ENTRY]int
-	next       *OrderSecEntry
+	before     *OrderSecEntry
 	t          int
 	padding2   [PADDING]byte
 }
@@ -354,25 +354,23 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	oEntry, ok := oPart.o_id_map[cKey]
 	if !ok {
 		oEntry = &OrderSecEntry{
-			next: nil,
-			t:    0,
+			before: nil,
+			t:      0,
 		}
 		oPart.o_id_map[cKey] = oEntry
 		oEntry.o_id_array[oEntry.t] = oTuple.o_id
 		oEntry.t++
 	} else {
-		for oEntry.next != nil {
-			oEntry = oEntry.next
-		}
 
 		if oEntry.t == CAP_ORDER_SEC_ENTRY {
 			nextEntry := &OrderSecEntry{
-				next: nil,
-				t:    0,
+				before: nil,
+				t:      0,
 			}
 			nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
 			nextEntry.t++
-			oEntry.next = nextEntry
+			nextEntry.before = oEntry
+			oPart.o_id_map[cKey] = nextEntry
 		} else {
 			oEntry.o_id_array[oEntry.t] = oTuple.o_id
 			oEntry.t++
@@ -537,25 +535,22 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 		oEntry, ok := oPart.o_id_map[cKey]
 		if !ok {
 			oEntry = &OrderSecEntry{
-				next: nil,
-				t:    0,
+				before: nil,
+				t:      0,
 			}
 			oPart.o_id_map[cKey] = oEntry
 			oEntry.o_id_array[oEntry.t] = oTuple.o_id
 			oEntry.t++
 		} else {
-			for oEntry.next != nil {
-				oEntry = oEntry.next
-			}
-
 			if oEntry.t == CAP_ORDER_SEC_ENTRY {
 				nextEntry := &OrderSecEntry{
-					next: nil,
-					t:    0,
+					before: nil,
+					t:      0,
 				}
 				nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
 				nextEntry.t++
-				oEntry.next = nextEntry
+				nextEntry.before = oEntry
+				oPart.o_id_map[cKey] = nextEntry
 			} else {
 				oEntry.o_id_array[oEntry.t] = oTuple.o_id
 				oEntry.t++
@@ -591,7 +586,7 @@ func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 	if !ok {
 		return ENOORDER
 	}
-	iv.intVal = oEntry.o_id_array[0]
+	iv.intVal = oEntry.o_id_array[oEntry.t]
 	return nil
 }
 

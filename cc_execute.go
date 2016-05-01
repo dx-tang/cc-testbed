@@ -303,10 +303,12 @@ func (p *PTransaction) Commit(req *LockReq) TID {
 		}
 		t.wRecs = t.wRecs[0:0]
 
-		for j := 0; j < len(t.iRecs); j++ {
-			//s.InsertRecord(i, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
+		//for j := 0; j < len(t.iRecs); j++ {
+		//s.InsertRecord(i, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
+		if len(t.iRecs) != 0 {
 			s.InsertRecord(i, t.iRecs)
 		}
+		//}
 		t.iRecs = t.iRecs[0:0]
 
 		for j := 0; j < len(t.dRecs); j++ {
@@ -803,7 +805,9 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 		//for j := 0; j < len(t.iRecs); j++ {
 		//	s.InsertRecord(p, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
 		//}
-		s.InsertRecord(p, t.iRecs)
+		if len(t.iRecs) != 0 {
+			s.InsertRecord(p, t.iRecs)
+		}
 	}
 
 	for p := 0; p < len(o.tt); p++ {
@@ -1323,7 +1327,9 @@ func (l *LTransaction) Commit(req *LockReq) TID {
 		//for j := 0; j < len(t.iRecs); j++ {
 		//	s.InsertRecord(i, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
 		//}
-		s.InsertRecord(i, t.iRecs)
+		if len(t.iRecs) != 0 {
+			s.InsertRecord(i, t.iRecs)
+		}
 
 		t.iRecs = t.iRecs[:0]
 	}
