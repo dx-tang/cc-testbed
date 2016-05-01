@@ -1214,8 +1214,13 @@ func (ol *OrderLineTable) PrepareInsert(k Key, partNum int) error {
 func (ol *OrderLineTable) InsertRecord(recs []InsertRec) error {
 	ol.nKeys += len(recs)
 
+	partNum := recs[0].partNum
+	if !ol.isPartition {
+		partNum = 0
+	}
+
 	bucketNum := ol.bucketHash(recs[0].k)
-	bucket := &ol.data[recs[0].partNum].buckets[bucketNum]
+	bucket := &ol.data[partNum].buckets[bucketNum]
 
 	if ol.mode != PARTITION {
 		bucket.Lock()
