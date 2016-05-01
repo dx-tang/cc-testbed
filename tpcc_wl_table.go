@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	CAP_NEWORDER_ENTRY = 10000
+	CAP_NEWORDER_ENTRY = 1000
 	DIST_COUNT         = 10
 )
 
@@ -28,6 +28,7 @@ type NewOrderTable struct {
 	isPartition bool
 	mode        int
 	delLock     []SpinLockPad
+	insertLock  []RWSpinLockPad
 	padding2    [PADDING]byte
 }
 
@@ -37,6 +38,7 @@ func MakeNewOrderTable(warehouse int, isPartition bool, mode int) *NewOrderTable
 		isPartition: isPartition,
 		mode:        mode,
 		delLock:     make([]SpinLockPad, warehouse*DIST_COUNT),
+		insertLock:  make([]RWSpinLockPad, warehouse*DIST_COUNT),
 	}
 
 	noTable.head = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
@@ -161,11 +163,14 @@ func (no *NewOrderTable) DeleteRecord(k Key, partNum int) error {
 }
 
 func (no *NewOrderTable) PrepareInsert(k Key, partNum int) error {
-	if !no.isPartition {
+	/*if !no.isPartition {
 		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+		no.insertLock[index].RLock()
 		entry := no.tail[index]
-		entry.rec.WLock(nil)
-	}
+		no.insertLock[index].Unlock()
+		//entry.rec.WLock(nil)
+		//clog.Info("Get")
+	}*/
 	return nil
 }
 
@@ -175,6 +180,14 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
 		k := iRec.k
 
 		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+		//if !no.isPartition {
+		//	no.delLock[index].Lock()
+		//}
+
+		if !no.isPartition {
+			no.insertLock[index].Lock()
+		}
+
 		entry := no.tail[index]
 		entry.o_id_array[entry.t] = iRec.rec.GetTuple().(*NewOrderTuple).no_o_id
 		entry.t++
@@ -194,7 +207,8 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
 		}
 
 		if !no.isPartition {
-			entry.rec.WUnlock(nil)
+			//entry.rec.WUnlock(nil)
+			no.insertLock[index].Unlock()
 		}
 	}
 
@@ -202,10 +216,11 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
 }
 
 func (no *NewOrderTable) ReleaseInsert(k Key, partNum int) {
-	if !no.isPartition {
-		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
-		no.tail[index].rec.WUnlock(nil)
-	}
+	//if !no.isPartition {
+	//	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+	//no.delLock[index].Lock()
+	//	no.tail[index].rec.WUnlock(nil)
+	//}
 }
 
 func (no *NewOrderTable) GetValueBySec(k Key, partNum int, val Value) error {

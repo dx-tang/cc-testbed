@@ -470,6 +470,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 		if rk.k == k {
 			ok, _ = rk.rec.IsUnlocked()
 			if !ok {
+				o.Abort(req)
 				o.w.NStats[NREADABORTS]++
 				return nil, true, EABORT
 			}
@@ -492,6 +493,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	if !ok {
+		o.Abort(req)
 		o.w.NStats[NREADABORTS]++
 		return nil, true, EABORT
 	}
@@ -799,10 +801,7 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 			s.DeleteRecord(p, t.dRecs[j].k, t.dRecs[j].partNum)
 		}
 
-		//for j := 0; j < len(t.iRecs); j++ {
-		//	s.InsertRecord(p, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
-		//}
-		if len(t.iRecs) != 0 {
+		if len(t.iRecs) != 0 && p == NEWORDER {
 			s.InsertRecord(p, t.iRecs)
 		}
 	}
@@ -1285,6 +1284,7 @@ func (l *LTransaction) Abort(req *LockReq) TID {
 		for j := 0; j < len(t.iRecs); j++ {
 			s.ReleaseInsert(i, t.iRecs[j].k, t.iRecs[j].partNum)
 		}
+
 		t.iRecs = t.iRecs[:0]
 
 		for j, _ := range t.rRecs {

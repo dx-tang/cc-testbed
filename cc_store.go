@@ -84,6 +84,12 @@ type SpinLockPad struct {
 	padding2 [PADDING]byte
 }
 
+type RWSpinLockPad struct {
+	padding1 [PADDING]byte
+	spinlock.RWSpinlock
+	padding2 [PADDING]byte
+}
+
 type WFMuTexPad struct {
 	padding1 [PADDING]byte
 	lock     wfmutex.WFMutex
