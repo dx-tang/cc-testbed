@@ -298,8 +298,18 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 		}
 	}
 
+	var cKey Key
+	var keyAr [KEYLENTH]int
 	for i := 0; i < warehouse*DIST_COUNT; i++ {
+		keyAr[0] = i / DIST_COUNT
+		keyAr[1] = i % DIST_COUNT
 		oTable.secIndex[i].o_id_map = make(map[Key]*OrderSecEntry)
+		for j := 0; j < 3000; j++ {
+			keyAr[2] = j
+			UKey(keyAr, &cKey)
+			entry := &OrderSecEntry{}
+			oTable.secIndex[i].o_id_map[cKey] = entry
+		}
 	}
 
 	if isPartition {
@@ -1204,23 +1214,17 @@ func (ol *OrderLineTable) PrepareInsert(k Key, partNum int) error {
 func (ol *OrderLineTable) InsertRecord(recs []InsertRec) error {
 	ol.nKeys += len(recs)
 
+	bucketNum := ol.bucketHash(recs[0].k)
+	bucket := &ol.data[recs[0].partNum].buckets[bucketNum]
+
+	if ol.mode != PARTITION {
+		bucket.Lock()
+	}
+
 	for i, _ := range recs {
 		iRec := &recs[i]
-		partNum := iRec.partNum
 		k := iRec.k
 		rec := iRec.rec
-
-		if !ol.isPartition {
-			partNum = 0
-		}
-
-		// Insert Order
-		bucketNum := ol.bucketHash(k)
-		bucket := &ol.data[partNum].buckets[bucketNum]
-
-		if ol.mode != PARTITION {
-			bucket.Lock()
-		}
 
 		cur := bucket.tail.t
 		if cur == CAP_ORDERLINE_BUCKET_ENTRY {
@@ -1234,10 +1238,10 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec) error {
 		bucket.tail.oRecs[cur] = rec
 		bucket.tail.t++
 
-		if ol.mode != PARTITION {
-			bucket.Unlock()
-		}
+	}
 
+	if ol.mode != PARTITION {
+		bucket.Unlock()
 	}
 
 	return nil
