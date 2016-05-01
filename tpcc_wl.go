@@ -233,29 +233,36 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 	oa := &tg.oa
 	ola := &tg.ola
 
+	t.w_id = pi
 	var tmpPi int
-	if isPart && rnd.Intn(100) < cr {
-		t.accessParts = t.accessParts[:2]
-		for {
-			tmpPi = int(w_id_gen.GetWholeRank())
-			if tmpPi != pi {
-				break
+	if isPart {
+		if rnd.Intn(100) < cr {
+			t.accessParts = t.accessParts[:2]
+			for {
+				tmpPi = int(w_id_gen.GetWholeRank())
+				if tmpPi != pi {
+					break
+				}
 			}
-		}
-		if tmpPi > pi {
-			t.accessParts[0] = pi
-			t.accessParts[1] = tmpPi
+			if tmpPi > pi {
+				t.accessParts[0] = pi
+				t.accessParts[1] = tmpPi
+			} else {
+				t.accessParts[0] = tmpPi
+				t.accessParts[1] = pi
+			}
 		} else {
-			t.accessParts[0] = tmpPi
-			t.accessParts[1] = pi
+			t.accessParts = t.accessParts[:1]
+			t.accessParts[0] = pi
 		}
+
 	} else {
 		t.accessParts = t.accessParts[:1]
-		t.accessParts[0] = pi
+		t.accessParts[0] = w_id_gen.GetWholeRank()
+		t.w_id = t.accessParts[0]
 	}
 
 	t.TXN = txn
-	t.w_id = pi
 	t.d_id = rnd.Intn(DIST_COUNT)
 	t.c_id = rnd.Intn(C_ID_PER_DIST)
 	t.o_entry_d = time.Now()
