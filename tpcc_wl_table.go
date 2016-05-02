@@ -334,11 +334,17 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 
 	if isPartition {
 		oTable.bucketHash = func(k Key) int {
-			return (int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11 + int(k[11])*13) % orderbucketcount
+			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
+			hash := int64(k[BIT4]) * 17
+			hash = (hash + int64(oid)) * 17
+			return int(hash % int64(orderbucketcount))
 		}
 	} else {
 		oTable.bucketHash = func(k Key) int {
-			return (int(k[BIT0])*17 + int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11) % orderbucketcount
+			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
+			hash := (int64(k[BIT0])*10 + int64(k[BIT4])) * 17
+			hash = (hash + int64(oid)) * 17
+			return int(hash % int64(orderbucketcount))
 		}
 	}
 
@@ -431,7 +437,7 @@ func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, error) {
 
 	tail := bucket.tail
 	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
+		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				return tail.oRecs[i], nil
 			}
@@ -459,7 +465,7 @@ func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) e
 
 	tail := bucket.tail
 	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
+		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].SetValue(value, colNum)
 				return nil
@@ -486,7 +492,7 @@ func (o *OrderTable) GetValueByID(k Key, partNum int, value Value, colNum int) e
 
 	tail := bucket.tail
 	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
+		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].GetValue(value, colNum)
 				return nil
@@ -616,10 +622,10 @@ func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 	iv := val.(*IntValue)
 	oEntry, ok := oPart.o_id_map[k]
-	if !ok {
+	if !ok || oEntry.t == 0 {
 		return ENOORDER
 	}
-	iv.intVal = oEntry.o_id_array[oEntry.t]
+	iv.intVal = oEntry.o_id_array[oEntry.t-1]
 	return nil
 }
 
@@ -1046,7 +1052,7 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 var olbucketcount int
 
 const (
-	CAP_ORDERLINE_BUCKET_ENTRY = 100
+	CAP_ORDERLINE_BUCKET_ENTRY = 20
 )
 
 type OrderLinePart struct {
@@ -1059,6 +1065,7 @@ type OrderLineBucket struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
 	tail     *OrderLineBucketEntry
+	nKeys    int
 	padding2 [PADDING]byte
 }
 
@@ -1103,11 +1110,17 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 
 	if isPartition {
 		olTable.bucketHash = func(k Key) int {
-			return (int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11 + int(k[11])*13) % olbucketcount
+			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
+			hash := int64(k[BIT4]) * 17
+			hash = (hash + int64(oid)) * 17
+			return int(hash % int64(olbucketcount))
 		}
 	} else {
 		olTable.bucketHash = func(k Key) int {
-			return (int(k[BIT0])*17 + int(k[BIT4])*3 + int(k[BIT8])*5 + int(k[9])*7 + int(k[10])*11) % olbucketcount
+			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
+			hash := (int64(k[BIT0])*10 + int64(k[BIT4])) * 17
+			hash = (hash + int64(oid)) * 17
+			return int(hash % int64(olbucketcount))
 		}
 	}
 
@@ -1127,6 +1140,7 @@ func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record
 	// Insert Order
 	bucketNum := ol.bucketHash(k)
 	bucket := &ol.data[partNum].buckets[bucketNum]
+	bucket.nKeys++
 
 	rec := MakeRecord(ol, k, tuple)
 
@@ -1161,7 +1175,7 @@ func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, error) {
 
 	tail := bucket.tail
 	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
+		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				return tail.oRecs[i], nil
 			}
@@ -1189,7 +1203,7 @@ func (ol *OrderLineTable) SetValueByID(k Key, partNum int, value Value, colNum i
 
 	tail := bucket.tail
 	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
+		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].SetValue(value, colNum)
 				return nil
@@ -1216,7 +1230,7 @@ func (ol *OrderLineTable) GetValueByID(k Key, partNum int, value Value, colNum i
 
 	tail := bucket.tail
 	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
+		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].GetValue(value, colNum)
 				return nil
@@ -1315,7 +1329,7 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 
 	tail := bucket.tail
 	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
+		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].DeltaValue(value, colNum)
 				return nil

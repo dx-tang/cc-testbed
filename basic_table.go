@@ -55,6 +55,11 @@ type BasicTable struct {
 	padding2    [PADDING]byte
 }
 
+const (
+	HASHINIT  = 2166136261
+	HASHMULTI = 16777619
+)
+
 func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int) *BasicTable {
 
 	// We allocate more space to make the array algined to cache line
@@ -67,8 +72,18 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int) 
 		mode:        mode,
 	}
 
-	bt.shardHash = func(k Key) int {
-		return (int(k[BIT0])*3 + int(k[BIT4])*11 + int(k[BIT8])*13) % SHARDCOUNT
+	if isPartition {
+		bt.shardHash = func(k Key) int {
+			hash := int(k[BIT4]) * 11
+			hash = (hash + int(k[BIT8])) * 11
+			return hash % SHARDCOUNT
+		}
+	} else {
+		bt.shardHash = func(k Key) int {
+			hash := (int(k[BIT0])*10 + int(k[BIT4])) * 11
+			hash = (hash + int(k[BIT8])) * 11
+			return hash % SHARDCOUNT
+		}
 	}
 
 	for j := 0; j < len(schemaStrs)-1; j++ {
