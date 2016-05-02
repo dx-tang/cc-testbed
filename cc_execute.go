@@ -801,7 +801,7 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 			s.DeleteRecord(p, t.dRecs[j].k, t.dRecs[j].partNum)
 		}
 
-		if len(t.iRecs) != 0 && p == NEWORDER {
+		if len(t.iRecs) != 0 {
 			s.InsertRecord(p, t.iRecs)
 		}
 	}

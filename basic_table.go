@@ -51,6 +51,7 @@ type BasicTable struct {
 	nParts      int
 	shardHash   func(Key) int
 	mode        int
+	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
 }
 
@@ -98,6 +99,8 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int) 
 }
 
 func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	bt.iLock.Lock()
+	defer bt.iLock.Unlock()
 	bt.nKeys++
 
 	if !bt.isPartition {

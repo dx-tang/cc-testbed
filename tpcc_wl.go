@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
@@ -500,6 +501,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	tpccWL.nParts = nParts
 	tpccWL.isPartition = isPartition
 
+	tpccWL.w_id_range = *NumPart
+
 	parseFuncAR := [TPCCTABLENUM]ParseFunc{parseWarehouse, parseDistrict, parseCustomer, parseHistory, parseNewOrder, parseOrder, parseOrderLine, parseItem, parseStock}
 
 	dataFiles := [TPCCTABLENUM]string{WAREHOUSE_FILE, DISTRICT_FILE, CUSTOMER_FILE, HISTORY_FILE, NEWORDER_FILE, ORDER_FILE, ORDERLINE_FILE, ITEM_FILE, STOCK_FILE}
@@ -509,31 +512,69 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	var partNum int
 	var tuple Tuple
 	store := tpccWL.store
-	for i := 0; i < TPCCTABLENUM; i++ {
-		parseFunc := parseFuncAR[i]
-		file := dataFiles[i]
-		df, err := os.OpenFile(dataDir+"/"+file, os.O_RDONLY, 0600)
-		reader := bufio.NewReader(df)
-		for {
-			rowBytes, _, err = reader.ReadLine()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				clog.Error("Reading File %s Error", file)
-				df.Close()
-				return nil
-			}
-			k, partNum, tuple = parseFunc(string(rowBytes))
-			store.CreateRecByID(i, k, partNum, tuple)
-
-			if i == ITEM {
-				tpccWL.i_id_range++
-			} else if i == WAREHOUSE {
-				tpccWL.w_id_range++
-			}
+	// First Load Item in a single thread
+	df, err := os.OpenFile(dataDir+"/"+ITEM_FILE, os.O_RDONLY, 0600)
+	reader := bufio.NewReader(df)
+	for {
+		rowBytes, _, err = reader.ReadLine()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			clog.Error("Reading File %s Error", ITEM_FILE)
+			df.Close()
+			return nil
 		}
-		df.Close()
+		k, partNum, tuple = parseItem(string(rowBytes))
+		store.CreateRecByID(ITEM, k, partNum, tuple)
+
+		tpccWL.i_id_range++
 	}
+	df.Close()
+
+	// Load other data using Parallel threading
+	var wg sync.WaitGroup
+	for j := 0; j < *NumPart; j++ {
+		wg.Add(1)
+		go func(n int) {
+			var rowBytes []byte
+			var k Key
+			var partNum int
+			var tuple Tuple
+			for i := 0; i < TPCCTABLENUM; i++ {
+				if i == ITEM {
+					continue
+				}
+				parseFunc := parseFuncAR[i]
+				file := "shard-" + strconv.Itoa(n) + "/" + dataFiles[i]
+				df, err := os.OpenFile(dataDir+"/"+file, os.O_RDONLY, 0600)
+				reader := bufio.NewReader(df)
+				for {
+					rowBytes, _, err = reader.ReadLine()
+					if err == io.EOF {
+						break
+					} else if err != nil {
+						clog.Error("Reading File %s Error", file)
+						df.Close()
+						break
+					}
+					k, partNum, tuple = parseFunc(string(rowBytes))
+					store.tables[i].CreateRecByID(k, partNum, tuple)
+				}
+				df.Close()
+			}
+			wg.Done()
+		}(j)
+	}
+
+	wg.Wait()
+
+	/*var tmpKey Key
+	tmpKey[4] = 31
+	tmpKey[5] = 51
+	_, err = store.tables[STOCK].GetRecByID(tmpKey, 0)
+	if err != nil {
+		clog.Info("No Key")
+	}*/
 
 	lastToIndex = make(map[string]int)
 	for i, str := range LAST_STRING {

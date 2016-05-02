@@ -29,6 +29,7 @@ type NewOrderTable struct {
 	mode        int
 	delLock     []SpinLockPad
 	insertLock  []RWSpinLockPad
+	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
 }
 
@@ -64,6 +65,9 @@ func MakeNewOrderTable(warehouse int, isPartition bool, mode int) *NewOrderTable
 }
 
 func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	no.iLock.Lock()
+	defer no.iLock.Unlock()
+
 	w_id := k[BIT0]
 	d_id := k[BIT4]
 	index := w_id*DIST_COUNT + d_id
@@ -291,6 +295,7 @@ type OrderTable struct {
 	isPartition bool
 	mode        int
 	bucketHash  func(k Key) int
+	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
 }
 
@@ -342,6 +347,9 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 }
 
 func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	o.iLock.Lock()
+	defer o.iLock.Unlock()
+
 	o.nKeys++
 
 	if !o.isPartition {
@@ -675,6 +683,7 @@ type CustomerTable struct {
 	nParts      int
 	mode        int
 	shardHash   func(Key) int
+	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
 }
 
@@ -707,6 +716,9 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, mode int) *C
 }
 
 func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	c.iLock.Lock()
+	defer c.iLock.Unlock()
+
 	// Insert Partition
 	c.nKeys++
 
@@ -911,6 +923,7 @@ type HistoryShard struct {
 type HistoryTable struct {
 	padding1  [PADDING]byte
 	shards    [SHARDCOUNT]HistoryShard
+	iLock     spinlock.Spinlock
 	shardHash func(Key) int
 	padding2  [PADDING]byte
 }
@@ -934,6 +947,9 @@ func MakeHistoryTable(nParts int, warehouse int, isPartition bool, mode int) *Hi
 }
 
 func (h *HistoryTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	h.iLock.Lock()
+	defer h.iLock.Unlock()
+
 	shard := h.shards[h.shardHash(k)]
 	cur := shard.tail
 	if cur.index == CAP_HISTORY_ENTRY {
@@ -1063,6 +1079,7 @@ type OrderLineTable struct {
 	isPartition bool
 	mode        int
 	bucketHash  func(k Key) int
+	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
 }
 
@@ -1098,6 +1115,9 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 
 }
 func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+	ol.iLock.Lock()
+	defer ol.iLock.Unlock()
+
 	ol.nKeys++
 
 	if !ol.isPartition {
