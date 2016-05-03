@@ -243,16 +243,23 @@ func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum 
 	return nil
 }
 
-func (no *NewOrderTable) Iterate() {
-	var compKey int
-	nKeys := 0
+func (no *NewOrderTable) BulkLoad(table Table) {
+	var compKey Key
+	tuple := &NewOrderTuple{}
+	rec := MakeRecord(no, compKey, tuple)
+	iRecs := make([]InsertRec, 1)
+	iRecs[0].rec = rec
 	start := time.Now()
-	for _, entry := range no.head {
+	for i, entry := range no.head {
+		tuple.no_w_id = i / DIST_COUNT
+		tuple.no_d_id = i % DIST_COUNT
+		iRecs[0].k[0] = byte(tuple.no_w_id)
+		iRecs[0].k[4] = byte(tuple.no_d_id)
+		iRecs[0].partNum = tuple.no_w_id
 		for entry != nil {
 			for _, k := range entry.o_id_array {
-				if compKey == k {
-					nKeys++
-				}
+				tuple.no_o_id = k
+				table.InsertRecord(iRecs)
 			}
 			entry = entry.next
 		}
@@ -680,36 +687,37 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 	return ENOKEY
 }
 
-func (o *OrderTable) Iterate() {
-	var compKey Key
-	nKeys := 0
+func (o *OrderTable) BulkLoad(table Table) {
+	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range o.data {
 		part := &o.data[i]
+		iRecs[0].partNum = i
 		for j, _ := range part.buckets {
 			bucket := &part.buckets[j]
 			tail := bucket.tail
 			for tail != nil {
 				for p := tail.t - 1; p >= 0; p-- {
-					if tail.keys[p] == compKey {
-						nKeys++
-					}
+					iRecs[0].k = tail.keys[p]
+					iRecs[0].rec = tail.oRecs[p]
+					table.InsertRecord(iRecs)
 				}
 				tail = tail.before
 			}
 		}
 	}
 
-	for i, _ := range o.secIndex {
-		secPart := &o.secIndex[i]
-		for k, _ := range secPart.o_id_map {
-			if k == compKey {
-				nKeys++
+	/*
+		for i, _ := range o.secIndex {
+			secPart := &o.secIndex[i]
+			for k, _ := range secPart.o_id_map {
+				if k == compKey {
+					nKeys++
+				}
 			}
 		}
-	}
-
-	clog.Info("OrderTable Iteration Takes %.2fs", time.Since(start).Seconds())
+	*/
+	clog.Info("OrderTable Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
 const (
@@ -912,7 +920,66 @@ func (c *CustomerTable) PrepareInsert(k Key, partNum int) error {
 }
 
 func (c *CustomerTable) InsertRecord(recs []InsertRec) error {
-	clog.Error("Customer Table Not Support InsertRecord")
+	for i, _ := range recs {
+		rec := recs[i].rec
+		k := recs[i].k
+		partNum := recs[i].partNum
+		tuple := rec.GetTuple()
+
+		c.nKeys++
+
+		if !c.isPartition {
+			partNum = 0
+		}
+
+		shardNum := c.shardHash(k)
+		shard := &c.data[partNum].shardedMap[shardNum]
+		shard.rows[k] = rec
+
+		// Insert CustomerPart
+		var keyAr [KEYLENTH]int
+		var cKey Key
+		cTuple := tuple.(*CustomerTuple)
+		keyAr[0] = cTuple.c_w_id
+		keyAr[1] = cTuple.c_d_id
+		keyAr[2] = cTuple.c_last
+		UKey(keyAr, &cKey)
+		//for i := 0; i < cTuple.len_c_last; i++ {
+		//	cKey[i+16] = cTuple.c_last[i]
+		//}
+		cPart := &c.secIndex[partNum]
+		cEntry, ok := cPart.c_id_map[cKey]
+		if !ok {
+			cEntry = &CustomerEntry{
+				next: nil,
+				t:    0,
+			}
+			cPart.c_id_map[cKey] = cEntry
+			cEntry.c_id_array[cEntry.t] = cTuple.c_id
+			cEntry.t++
+			cEntry.total++
+		} else {
+			cEntry.total++
+			for cEntry.next != nil {
+				cEntry = cEntry.next
+			}
+
+			if cEntry.t == CAP_CUSTOMER_ENTRY {
+				nextEntry := &CustomerEntry{
+					next: nil,
+					t:    0,
+				}
+				nextEntry.c_id_array[nextEntry.t] = cTuple.c_id
+				nextEntry.t++
+				cEntry.next = nextEntry
+			} else {
+				cEntry.c_id_array[cEntry.t] = cTuple.c_id
+				cEntry.t++
+			}
+
+		}
+
+	}
 	return nil
 }
 
@@ -957,22 +1024,22 @@ func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum i
 	return nil
 }
 
-func (c *CustomerTable) Iterate() {
-	nKeys := 0
-	var compKey Key
+func (c *CustomerTable) BulkLoad(table Table) {
+	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range c.data {
 		part := &c.data[i]
+		iRecs[0].partNum = i
 		for j, _ := range part.shardedMap {
 			shard := &part.shardedMap[j]
-			for k, _ := range shard.rows {
-				if k == compKey {
-					nKeys++
-				}
+			for k, v := range shard.rows {
+				iRecs[0].k = k
+				iRecs[0].rec = v
+				table.InsertRecord(iRecs)
 			}
 		}
 	}
-	clog.Info("CustomerTable Iteration Takes %.2fs", time.Since(start).Seconds())
+	clog.Info("CustomerTable Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
 const (
@@ -1118,8 +1185,7 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 	return nil
 }
 
-func (h *HistoryTable) Iterate() {
-
+func (h *HistoryTable) BulkLoad(table Table) {
 }
 
 var olbucketcount int
@@ -1414,20 +1480,20 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 	return ENOKEY
 }
 
-func (ol *OrderLineTable) Iterate() {
-	var compKey Key
-	nKeys := 0
+func (ol *OrderLineTable) BulkLoad(table Table) {
+	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range ol.data {
 		part := &ol.data[i]
+		iRecs[0].partNum = i
 		for j, _ := range part.buckets {
 			bucket := &part.buckets[j]
 			tail := bucket.tail
 			for tail != nil {
 				for p := tail.t - 1; p >= 0; p-- {
-					if tail.keys[p] == compKey {
-						nKeys++
-					}
+					iRecs[0].k = tail.keys[p]
+					iRecs[0].rec = tail.oRecs[p]
+					table.InsertRecord(iRecs)
 				}
 				tail = tail.before
 			}

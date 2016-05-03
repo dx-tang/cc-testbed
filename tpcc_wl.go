@@ -572,7 +572,6 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 						noRec.SetTuple(tuple)
 						iRecs[0].rec = noRec
 						store.tables[i].InsertRecord(iRecs)
-
 					} else if i == CUSTOMER {
 						store.tables[i].CreateRecByID(k, partNum, tuple)
 					} else {
@@ -684,9 +683,14 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 
 	clog.Info("Generating Trans Pool %.2fs", time.Since(start).Seconds())
 
-	for _, table := range store.tables {
-		table.Iterate()
+	// Loading data into another store
+	start = time.Now()
+	tmpStore := NewStore(workload, nParts, isPartition)
+
+	for i, table := range store.tables {
+		table.BulkLoad(tmpStore.tables[i])
 	}
+	clog.Info("Bulkloading Another Store %.2fs", time.Since(start).Seconds())
 
 	return tpccWL
 

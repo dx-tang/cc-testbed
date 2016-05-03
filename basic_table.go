@@ -27,7 +27,7 @@ type Table interface {
 	ReleaseInsert(k Key, partNum int)
 	GetValueBySec(k Key, partNum int, val Value) error
 	SetMode(mode int)
-	Iterate()
+	BulkLoad(table Table)
 }
 
 type Shard struct {
@@ -285,22 +285,22 @@ func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int
 	r.DeltaValue(value, colNum)
 	return nil
 }
-func (bt *BasicTable) Iterate() {
-	nKeys := 0
-	var compKey Key
+func (bt *BasicTable) BulkLoad(table Table) {
+	recs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range bt.data {
 		part := &bt.data[i]
+		recs[0].partNum = i
 		for j, _ := range part.shardedMap {
 			shard := &part.shardedMap[j]
-			for k, _ := range shard.rows {
-				if k == compKey {
-					nKeys++
-				}
+			for k, v := range shard.rows {
+				recs[0].k = k
+				recs[0].rec = v
+				table.InsertRecord(recs)
 			}
 		}
 	}
-	clog.Info("Basic Table Iteration Takes %.2fs", time.Since(start).Seconds())
+	clog.Info("Basic Table Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
 func checkSchema(v []Value, valueSchema []BTYPE) bool {
