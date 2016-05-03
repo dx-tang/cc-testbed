@@ -1,6 +1,8 @@
 package testbed
 
 import (
+	"time"
+
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
 )
@@ -241,10 +243,27 @@ func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum 
 	return nil
 }
 
+func (no *NewOrderTable) Iterate() {
+	var compKey int
+	nKeys := 0
+	start := time.Now()
+	for _, entry := range no.head {
+		for entry != nil {
+			for _, k := range entry.o_id_array {
+				if compKey == k {
+					nKeys++
+				}
+			}
+			entry = entry.next
+		}
+	}
+	clog.Info("NewOrder Iteration Take %.2fs", time.Since(start).Seconds())
+}
+
 const (
-	CAP_ORDER_SEC_ENTRY    = 10
-	CAP_ORDER_BUCKET_ENTRY = 100
-	CAP_BUCKET_COUNT       = 1
+	CAP_ORDER_SEC_ENTRY    = 5
+	CAP_ORDER_BUCKET_ENTRY = 5
+	CAP_BUCKET_COUNT       = 2000
 )
 
 var orderbucketcount int
@@ -661,6 +680,38 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 	return ENOKEY
 }
 
+func (o *OrderTable) Iterate() {
+	var compKey Key
+	nKeys := 0
+	start := time.Now()
+	for i, _ := range o.data {
+		part := &o.data[i]
+		for j, _ := range part.buckets {
+			bucket := &part.buckets[j]
+			tail := bucket.tail
+			for tail != nil {
+				for p := tail.t - 1; p >= 0; p-- {
+					if tail.keys[p] == compKey {
+						nKeys++
+					}
+				}
+				tail = tail.before
+			}
+		}
+	}
+
+	for i, _ := range o.secIndex {
+		secPart := &o.secIndex[i]
+		for k, _ := range secPart.o_id_map {
+			if k == compKey {
+				nKeys++
+			}
+		}
+	}
+
+	clog.Info("OrderTable Iteration Takes %.2fs", time.Since(start).Seconds())
+}
+
 const (
 	CAP_CUSTOMER_ENTRY = 5
 )
@@ -906,6 +957,24 @@ func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum i
 	return nil
 }
 
+func (c *CustomerTable) Iterate() {
+	nKeys := 0
+	var compKey Key
+	start := time.Now()
+	for i, _ := range c.data {
+		part := &c.data[i]
+		for j, _ := range part.shardedMap {
+			shard := &part.shardedMap[j]
+			for k, _ := range shard.rows {
+				if k == compKey {
+					nKeys++
+				}
+			}
+		}
+	}
+	clog.Info("CustomerTable Iteration Takes %.2fs", time.Since(start).Seconds())
+}
+
 const (
 	CAP_HISTORY_ENTRY = 1000
 )
@@ -1049,10 +1118,14 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 	return nil
 }
 
+func (h *HistoryTable) Iterate() {
+
+}
+
 var olbucketcount int
 
 const (
-	CAP_ORDERLINE_BUCKET_ENTRY = 20
+	CAP_ORDERLINE_BUCKET_ENTRY = 50
 )
 
 type OrderLinePart struct {
@@ -1339,4 +1412,27 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 	}
 
 	return ENOKEY
+}
+
+func (ol *OrderLineTable) Iterate() {
+	var compKey Key
+	nKeys := 0
+	start := time.Now()
+	for i, _ := range ol.data {
+		part := &ol.data[i]
+		for j, _ := range part.buckets {
+			bucket := &part.buckets[j]
+			tail := bucket.tail
+			for tail != nil {
+				for p := tail.t - 1; p >= 0; p-- {
+					if tail.keys[p] == compKey {
+						nKeys++
+					}
+				}
+				tail = tail.before
+			}
+		}
+	}
+
+	clog.Info("OrderLineTable Iteration Takes %.2fs", time.Since(start).Seconds())
 }

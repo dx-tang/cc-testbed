@@ -3,6 +3,7 @@ package testbed
 import (
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
+	"time"
 )
 
 const (
@@ -26,6 +27,7 @@ type Table interface {
 	ReleaseInsert(k Key, partNum int)
 	GetValueBySec(k Key, partNum int, val Value) error
 	SetMode(mode int)
+	Iterate()
 }
 
 type Shard struct {
@@ -282,6 +284,23 @@ func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int
 
 	r.DeltaValue(value, colNum)
 	return nil
+}
+func (bt *BasicTable) Iterate() {
+	nKeys := 0
+	var compKey Key
+	start := time.Now()
+	for i, _ := range bt.data {
+		part := &bt.data[i]
+		for j, _ := range part.shardedMap {
+			shard := &part.shardedMap[j]
+			for k, _ := range shard.rows {
+				if k == compKey {
+					nKeys++
+				}
+			}
+		}
+	}
+	clog.Info("Basic Table Iteration Takes %.2fs", time.Since(start).Seconds())
 }
 
 func checkSchema(v []Value, valueSchema []BTYPE) bool {

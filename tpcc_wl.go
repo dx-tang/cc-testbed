@@ -496,7 +496,10 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
+	start := time.Now()
 	tpccWL.store = NewStore(workload, nParts, isPartition)
+	clog.Info("Building Store %.2fs \n", time.Since(start).Seconds())
+
 	tpccWL.nWorkers = nWorkers
 	tpccWL.nParts = nParts
 	tpccWL.isPartition = isPartition
@@ -506,6 +509,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	parseFuncAR := [TPCCTABLENUM]ParseFunc{parseWarehouse, parseDistrict, parseCustomer, parseHistory, parseNewOrder, parseOrder, parseOrderLine, parseItem, parseStock}
 
 	dataFiles := [TPCCTABLENUM]string{WAREHOUSE_FILE, DISTRICT_FILE, CUSTOMER_FILE, HISTORY_FILE, NEWORDER_FILE, ORDER_FILE, ORDERLINE_FILE, ITEM_FILE, STOCK_FILE}
+
+	start = time.Now()
 
 	var rowBytes []byte
 	var k Key
@@ -568,6 +573,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 
 	wg.Wait()
 
+	clog.Info("Loading Data %.2fs \n", time.Since(start).Seconds())
+
 	/*var tmpKey Key
 	tmpKey[4] = 31
 	tmpKey[5] = 51
@@ -598,6 +605,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		kr_c_id[i] = tpccWL.c_id_range
 		kr_c_last[i] = tpccWL.c_last_range
 	}
+
+	start = time.Now()
 
 	tpccWL.transGen = make([]TPCCTransGen, nWorkers)
 	for i := 0; i < nWorkers; i++ {
@@ -653,6 +662,12 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		tg.ola.OneAllocate()
 		tg.ha.OneAllocate()
 
+	}
+
+	clog.Info("Generating Trans Pool %.2fs", time.Since(start).Seconds())
+
+	for _, table := range store.tables {
+		table.Iterate()
 	}
 
 	return tpccWL
