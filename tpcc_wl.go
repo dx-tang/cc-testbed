@@ -545,6 +545,9 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 			var k Key
 			var partNum int
 			var tuple Tuple
+			iRecs := make([]InsertRec, 1)
+			noTuple := &NewOrderTuple{}
+			noRec := MakeRecord(store.tables[NEWORDER], k, noTuple)
 			for i := 0; i < TPCCTABLENUM; i++ {
 				if i == ITEM {
 					continue
@@ -563,7 +566,22 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 						break
 					}
 					k, partNum, tuple = parseFunc(string(rowBytes))
-					store.tables[i].CreateRecByID(k, partNum, tuple)
+					iRecs[0].k = k
+					iRecs[0].partNum = partNum
+					if i == NEWORDER {
+						noRec.SetTuple(tuple)
+						iRecs[0].rec = noRec
+						store.tables[i].InsertRecord(iRecs)
+
+					} else if i == CUSTOMER {
+						store.tables[i].CreateRecByID(k, partNum, tuple)
+					} else {
+						rec := MakeRecord(store.tables[i], k, tuple)
+						iRecs[0].rec = rec
+						store.tables[i].InsertRecord(iRecs)
+
+					}
+					//store.tables[i].CreateRecByID(k, partNum, tuple)
 				}
 				df.Close()
 			}
