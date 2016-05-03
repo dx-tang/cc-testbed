@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/nowaitlock"
@@ -182,18 +183,31 @@ func NewStore(schema string, nParts int, isPartition bool) *Store {
 		}
 
 		if strings.Compare(schemaStrs[0], "NEWORDER") == 0 {
+			start := time.Now()
 			s.tables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
+			clog.Info("Making NewOrder %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDER") == 0 {
+			start := time.Now()
 			s.tables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
+			clog.Info("Making Order %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "CUSTOMER") == 0 {
+			start := time.Now()
 			s.tables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
+			clog.Info("Making Customer %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
+			start := time.Now()
 			s.tables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
+			clog.Info("Making History %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDERLINE") == 0 {
+			start := time.Now()
 			s.tables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
+			clog.Info("Making OrderLine %.2f", time.Since(start).Seconds())
 		} else {
+			start := time.Now()
 			s.tables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode)
+			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		}
+
 	}
 	return s
 }
