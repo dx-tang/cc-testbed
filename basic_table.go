@@ -156,13 +156,18 @@ func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, error) {
 
 	if bt.mode != PARTITION {
 		shard.RLock()
-		defer shard.RUnlock()
 	}
 
 	r, ok := shard.rows[k]
 	if !ok {
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return nil, ENOKEY
 	} else {
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return r, nil
 	}
 }
@@ -178,15 +183,20 @@ func (bt *BasicTable) SetValueByID(k Key, partNum int, value Value, colNum int) 
 
 	if bt.mode != PARTITION {
 		shard.RLock()
-		defer shard.RUnlock()
 	}
 
 	r, ok := shard.rows[k]
 	if !ok {
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return ENOKEY
 	}
 
 	r.SetValue(value, colNum)
+	if bt.mode != PARTITION {
+		shard.RUnlock()
+	}
 	return nil
 }
 
@@ -201,15 +211,21 @@ func (bt *BasicTable) GetValueByID(k Key, partNum int, value Value, colNum int) 
 
 	if bt.mode != PARTITION {
 		shard.RLock()
-		defer shard.RUnlock()
 	}
 
 	r, ok := shard.rows[k]
 	if !ok {
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return ENOKEY
 	}
 
 	r.GetValue(value, colNum)
+
+	if bt.mode != PARTITION {
+		shard.RUnlock()
+	}
 	return nil
 }
 

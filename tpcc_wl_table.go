@@ -458,17 +458,23 @@ func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, error) {
 
 	if o.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
 	for tail != nil {
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
+				if o.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return tail.oRecs[i], nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if o.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return nil, ENOKEY
@@ -486,7 +492,6 @@ func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) e
 
 	if o.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
@@ -494,10 +499,17 @@ func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) e
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].SetValue(value, colNum)
+				if o.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if o.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return ENOKEY
@@ -513,7 +525,6 @@ func (o *OrderTable) GetValueByID(k Key, partNum int, value Value, colNum int) e
 
 	if o.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
@@ -521,10 +532,17 @@ func (o *OrderTable) GetValueByID(k Key, partNum int, value Value, colNum int) e
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].GetValue(value, colNum)
+				if o.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if o.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return ENOKEY
@@ -643,15 +661,21 @@ func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 	if !o.isPartition {
 		oPart.RLock()
-		defer oPart.RUnlock()
 	}
 
 	iv := val.(*IntValue)
 	oEntry, ok := oPart.o_id_map[k]
 	if !ok || oEntry.t == 0 {
+		if !o.isPartition {
+			oPart.RUnlock()
+		}
 		return ENOORDER
 	}
 	iv.intVal = oEntry.o_id_array[oEntry.t-1]
+
+	if !o.isPartition {
+		oPart.RUnlock()
+	}
 	return nil
 }
 
@@ -670,7 +694,6 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 
 	if o.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
@@ -678,10 +701,17 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 		for i := tail.t; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].DeltaValue(value, colNum)
+				if o.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if o.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return ENOKEY
@@ -1309,17 +1339,23 @@ func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, error) {
 
 	if ol.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
 	for tail != nil {
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
+				if ol.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return tail.oRecs[i], nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if ol.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return nil, ENOKEY
@@ -1337,7 +1373,6 @@ func (ol *OrderLineTable) SetValueByID(k Key, partNum int, value Value, colNum i
 
 	if ol.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
@@ -1345,10 +1380,17 @@ func (ol *OrderLineTable) SetValueByID(k Key, partNum int, value Value, colNum i
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].SetValue(value, colNum)
+				if ol.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if ol.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return ENOKEY
@@ -1364,7 +1406,6 @@ func (ol *OrderLineTable) GetValueByID(k Key, partNum int, value Value, colNum i
 
 	if ol.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
@@ -1372,10 +1413,17 @@ func (ol *OrderLineTable) GetValueByID(k Key, partNum int, value Value, colNum i
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].GetValue(value, colNum)
+				if ol.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if ol.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return ENOKEY
@@ -1463,7 +1511,6 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 
 	if ol.mode != PARTITION {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
@@ -1471,10 +1518,17 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
 				tail.oRecs[i].DeltaValue(value, colNum)
+				if ol.mode != PARTITION {
+					bucket.RUnlock()
+				}
 				return nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if ol.mode != PARTITION {
+		bucket.RUnlock()
 	}
 
 	return ENOKEY
