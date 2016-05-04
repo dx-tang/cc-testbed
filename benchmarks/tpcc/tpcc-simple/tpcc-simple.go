@@ -74,8 +74,6 @@ func main() {
 
 	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps, *dataDir)
 
-	clog.Error("End")
-
 	coord := testbed.NewCoordinator(nWorkers, tpcc.GetStore(), tpcc.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
 
 	clog.Info("Done with Populating Store\n")
