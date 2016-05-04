@@ -393,18 +393,19 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 		nKeys := sbWorkload.basic.nKeys[i]
 		store := sbWorkload.basic.store
 		keyLen := len(keyRange)
-		compKey := make([]int, keyLen)
+		//compKey := make([]int, keyLen)
+		var key Key
 
 		var k int = 0
 		for j := 0; j < nKeys; j++ {
 
-			key := CKey(compKey)
+			//key := CKey(compKey)
 			partNum := hp.GetPart(i, key)
 
 			// Generate One Value
 			if i == ACCOUNTS {
 				at := &AccoutsTuple{
-					accoutID: compKey[0],
+					accoutID: key[0],
 					//name:     make([]byte, 0, SBSTRMAXLEN+2*PADDINGBYTE),
 				}
 				//at.name = at.name[PADDINGBYTE:PADDINGBYTE]
@@ -415,27 +416,27 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 				store.CreateRecByID(i, key, partNum, at)
 			} else if i == SAVINGS {
 				st := &SavingsTuple{
-					accoutID: compKey[0],
+					accoutID: key[0],
 					balance:  BAL,
 				}
 				store.CreateRecByID(i, key, partNum, st)
 			} else { // CHECKING
 				ct := &CheckingTuple{
-					accoutID: compKey[0],
+					accoutID: key[0],
 					balance:  BAL,
 				}
 				store.CreateRecByID(i, key, partNum, ct)
 			}
 
-			for compKey[k]+1 >= keyRange[k] {
-				compKey[k] = 0
+			for key[k]+1 >= keyRange[k] {
+				key[k] = 0
 				k++
 				if k >= keyLen {
 					break
 				}
 			}
 			if k < keyLen {
-				compKey[k]++
+				key[k]++
 				k = 0
 			}
 		}
@@ -554,27 +555,28 @@ func (s *SBWorkload) PrintChecking() {
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[CHECKING]
 	keyLen := len(keyRange)
-	compKey := make([]int, keyLen)
+	//compKey := make([]int, keyLen)
+	var key Key
 	store := s.basic.store
 	floatRB := &FloatValue{}
 
 	var val Value
 	var k int = 0
 	for i := 0; i < nKeys; i++ {
-		key := CKey(compKey)
+		//key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
 		val = store.GetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
 		total += val.(*FloatValue).floatVal
 
-		for compKey[k]+1 >= keyRange[k] {
-			compKey[k] = 0
+		for key[k]+1 >= keyRange[k] {
+			key[k] = 0
 			k++
 			if k >= keyLen {
 				break
 			}
 		}
 		if k < keyLen {
-			compKey[k]++
+			key[k]++
 			k = 0
 		}
 	}
@@ -587,28 +589,29 @@ func (s *SBWorkload) ResetData() {
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[CHECKING]
 	keyLen := len(keyRange)
-	compKey := make([]int, keyLen)
+	//compKey := make([]int, keyLen)
+	var key Key
 	store := s.basic.store
 	floatRB := &FloatValue{}
 
 	var k int = 0
 	for i := 0; i < nKeys; i++ {
-		key := CKey(compKey)
+		//key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
 
 		floatRB.floatVal = BAL
 		store.SetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
 		store.SetValueByID(SAVINGS, key, partNum, floatRB, SAVING_BAL)
 
-		for compKey[k]+1 >= keyRange[k] {
-			compKey[k] = 0
+		for key[k]+1 >= keyRange[k] {
+			key[k] = 0
 			k++
 			if k >= keyLen {
 				break
 			}
 		}
 		if k < keyLen {
-			compKey[k]++
+			key[k]++
 			k = 0
 		}
 	}

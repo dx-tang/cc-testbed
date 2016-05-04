@@ -418,30 +418,30 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 	nKeys := singleWL.basic.nKeys[SINGLE]
 	store := singleWL.basic.store
 	keyLen := len(keyRange)
-	compKey := make([]int, keyLen)
+	//compKey := make([]int, keyLen)
+	var key Key
 
 	var k int = 0
 	for j := 0; j < nKeys; j++ {
 
-		key := CKey(compKey)
 		partNum := hp.GetPart(SINGLE, key)
 
 		st := &SingleTuple{
-			id:  int(compKey[0]),
+			id:  int(key[0]),
 			val: int(INITVAL),
 		}
 
 		store.CreateRecByID(SINGLE, key, partNum, st)
 
-		for compKey[k]+1 >= keyRange[k] {
-			compKey[k] = 0
+		for key[k]+1 >= keyRange[k] {
+			key[k] = 0
 			k++
 			if k >= keyLen {
 				break
 			}
 		}
 		if k < keyLen {
-			compKey[k]++
+			key[k]++
 			k = 0
 		}
 	}
@@ -551,26 +551,27 @@ func (singleWL *SingelWorkload) ResetData() {
 	gen := singleWL.basic.generators[0]
 	keyRange := singleWL.basic.IDToKeyRange[SINGLE]
 	keyLen := len(keyRange)
-	compKey := make([]int, keyLen)
+	//compKey := make([]int, keyLen)
+	var key Key
 	store := singleWL.basic.store
 	iv := &IntValue{
 		intVal: INITVAL,
 	}
 	var k int = 0
 	for i := int(0); i < nKeys; i++ {
-		key := CKey(compKey)
+
 		partNum := gen.GetPart(SINGLE, key)
 		store.SetValueByID(SINGLE, key, partNum, iv, SINGLE_VAL)
 
-		for compKey[k]+1 >= keyRange[k] {
-			compKey[k] = 0
+		for key[k]+1 >= keyRange[k] {
+			key[k] = 0
 			k++
 			if k >= keyLen {
 				break
 			}
 		}
 		if k < keyLen {
-			compKey[k]++
+			key[k]++
 			k = 0
 		}
 	}
@@ -590,13 +591,12 @@ func (s *SingelWorkload) PrintSum() {
 	gen := s.basic.generators[0]
 	keyRange := s.basic.IDToKeyRange[SINGLE]
 	keyLen := len(keyRange)
-	compKey := make([]int, keyLen)
+	var key Key
 	store := s.basic.store
 	intRB := &IntValue{}
 
 	var k int = 0
 	for i := 0; i < nKeys; i++ {
-		key := CKey(compKey)
 		partNum := gen.GetPart(SINGLE, key)
 		err := store.GetValueByID(SINGLE, key, partNum, intRB, SINGLE_VAL)
 		if err != nil {
@@ -604,15 +604,15 @@ func (s *SingelWorkload) PrintSum() {
 		}
 		total += intRB.intVal
 
-		for compKey[k]+1 >= keyRange[k] {
-			compKey[k] = 0
+		for key[k]+1 >= keyRange[k] {
+			key[k] = 0
 			k++
 			if k >= keyLen {
 				break
 			}
 		}
 		if k < keyLen {
-			compKey[k]++
+			key[k]++
 			k = 0
 		}
 	}

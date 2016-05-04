@@ -1,18 +1,13 @@
 package testbed
 
-import (
-	//"runtime/debug"
-
-	"github.com/totemtang/cc-testbed/clog"
-)
-
 const (
 	ONEKEYWIDTH  = 4
 	KEYLENTH     = 4
 	KEYLENTHBYTE = 16
 )
 
-type Key [KEYLENTHBYTE]byte
+//type Key [KEYLENTHBYTE]byte
+type Key [KEYLENTH]int
 
 //type int64 int64
 
@@ -21,6 +16,7 @@ type CompKey struct {
 	keysArray []int
 }
 
+/*
 func CKey(x []int) Key {
 	var k Key
 	var i, j uint
@@ -48,13 +44,10 @@ func ParseKey(key Key, index int) int {
 	}
 
 	var onekey int
-	/*
-		for i := uint(0); i < ONEKEYWIDTH; i++ {
-			onekey += int64(key[index*ONEKEYWIDTH+int(i)]) << (i * 8)
-		}*/
+
 	for i := ONEKEYWIDTH - 1; i >= 0; i-- {
 		onekey += int(key[index*ONEKEYWIDTH+i]) << (uint(i) * 8)
 	}
 
 	return int(onekey)
-}
+}*/

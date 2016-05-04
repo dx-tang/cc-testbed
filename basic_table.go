@@ -8,9 +8,10 @@ import (
 
 const (
 	SHARDCOUNT = 256
-	BIT0       = 0
-	BIT4       = 4
-	BIT8       = 8
+	KEY0       = 0
+	KEY1       = 1
+	KEY2       = 2
+	KEY3       = 3
 )
 
 type Table interface {
@@ -76,23 +77,21 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 
 	if isPartition {
 		bt.shardHash = func(k Key) int {
-			hash := int(k[BIT4]) * 11
-			hash = (hash + int(k[BIT8])) * 11
+			hash := int(k[KEY1]) * 11
+			hash = (hash + int(k[KEY2])) * 11
 			return hash % SHARDCOUNT
 		}
 	} else {
 		bt.shardHash = func(k Key) int {
-			hash := (int(k[BIT0])*10 + int(k[BIT4])) * 11
-			hash = (hash + int(k[BIT8])) * 11
+			hash := (int(k[KEY0])*10 + int(k[KEY1])) * 11
+			hash = (hash + int(k[KEY2])) * 11
 			return hash % SHARDCOUNT
 		}
 	}
 
 	if tableID == ITEM {
 		bt.shardHash = func(k Key) int {
-			hash := int(k[BIT0]) * 11
-			hash = (hash + int(k[1])) * 11
-			return hash % SHARDCOUNT
+			return k[KEY0] % SHARDCOUNT
 		}
 	}
 

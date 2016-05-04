@@ -105,7 +105,6 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	distRead := false
 	var k Key
-	var keyAr [KEYLENTH]int
 
 	floatRB := &noTrans.floatRB
 	intRB := &noTrans.intRB
@@ -126,8 +125,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	// Get W_TAX
 	w_id := noTrans.w_id
-	keyAr[0] = w_id
-	UKey(keyAr, &k)
+	k[0] = w_id
 	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -137,8 +135,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	// Get D_TAX and D_NEXT_O_ID
 	d_id := noTrans.d_id
-	keyAr[1] = d_id
-	UKey(keyAr, &k)
+	k[1] = d_id
 	rec, err = exec.GetRecord(DISTRICT, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -158,8 +155,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	// Get One Record from Customer
 	c_id := noTrans.c_id
-	keyAr[2] = c_id
-	UKey(keyAr, &k)
+	k[2] = c_id
 	rec, err = exec.GetRecord(CUSTOMER, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -180,8 +176,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	noTuple.no_w_id = w_id
 	noTuple.no_d_id = d_id
 	noTuple.no_o_id = d_next_o_id
-	keyAr[2] = 0
-	UKey(keyAr, &k)
+	k[2] = 0
 	err = exec.InsertRecord(NEWORDER, k, partNum, noTrans.noRec)
 	if err != nil {
 		return nil, err
@@ -197,8 +192,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	oTuple.o_carrier_id = -1
 	oTuple.o_ol_cnt = noTrans.ol_cnt
 	oTuple.o_all_local = allLocal
-	keyAr[2] = d_next_o_id
-	UKey(keyAr, &k)
+	k[2] = d_next_o_id
 	err = exec.InsertRecord(ORDER, k, partNum, noTrans.oRec)
 	if err != nil {
 		return nil, err
@@ -206,29 +200,26 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	// Insert Order-Line and Update Stock
 	var sKey Key
-	var sKeyAr [KEYLENTH]int
-	keyAr[1] = 0
-	keyAr[2] = 0
+	k[1] = 0
+	k[2] = 0
 	var totalAmount float32
 	rb_o_dist := &noTrans.rb_o_dist
 
 	for i := 0; i < int(noTrans.ol_cnt); i++ {
-		keyAr[0] = noTrans.ol_i_id[i]
-		UKey(keyAr, &k)
+		k[0] = noTrans.ol_i_id[i]
 		rec, err = exec.GetRecord(ITEM, k, 0, req)
 		if err != nil {
 			return nil, err
 		}
 		iTuple := rec.GetTuple().(*ItemTuple)
 
-		sKeyAr[0] = noTrans.ol_supply_w_id[i]
-		sKeyAr[1] = noTrans.ol_i_id[i]
-		sKeyAr[2] = 0
-		sKeyAr[3] = 0
-		UKey(sKeyAr, &sKey)
+		sKey[0] = noTrans.ol_supply_w_id[i]
+		sKey[1] = noTrans.ol_i_id[i]
+		sKey[2] = 0
+		sKey[3] = 0
 
 		if !distRead {
-			val, _, err = exec.ReadValue(STOCK, sKey, sKeyAr[0], rb_o_dist, S_DIST_01+d_id, req)
+			val, _, err = exec.ReadValue(STOCK, sKey, sKey[0], rb_o_dist, S_DIST_01+d_id, req)
 			if err != nil {
 				return nil, err
 			}
@@ -236,7 +227,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		}
 
 		// Update s_quantity
-		val, _, err = exec.ReadValue(STOCK, sKey, sKeyAr[0], intRB, S_QUANTITY, req)
+		val, _, err = exec.ReadValue(STOCK, sKey, sKey[0], intRB, S_QUANTITY, req)
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +238,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 			s_quantity = s_quantity - noTrans.ol_quantity[i] + 91
 		}
 		noTrans.wb_s_quantity[i].intVal = s_quantity
-		err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_quantity[i], S_QUANTITY, req, false)
+		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_quantity[i], S_QUANTITY, req, false)
 		if err != nil {
 			return nil, err
 		}
@@ -258,7 +249,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		//	return nil, err
 		//}
 		noTrans.wb_s_ytd[i].intVal = 1
-		err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_ytd[i], S_YTD, req, true)
+		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_ytd[i], S_YTD, req, true)
 		if err != nil {
 			return nil, err
 		}
@@ -269,19 +260,19 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		//	return nil, err
 		//}
 		noTrans.wb_s_order_cnt[i].intVal = 1
-		err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req, true)
+		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req, true)
 		if err != nil {
 			return nil, err
 		}
 
 		// Update S_REMOTE_CNT
-		if sKeyAr[0] != w_id { // remote
+		if sKey[0] != w_id { // remote
 			//val, _, err = exec.ReadValue(STOCK, sKey, int(sKeyAr[0]), intRB, S_REMOTE_CNT, req)
 			//if err != nil {
 			//	return nil, err
 			//}
 			noTrans.wb_s_remote_cnt[i].intVal = 1
-			err = exec.WriteValue(STOCK, sKey, sKeyAr[0], &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req, true)
+			err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req, true)
 			if err != nil {
 				return nil, err
 			}
@@ -300,12 +291,11 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		ol_dist_info := olTuple.ol_dist_info[:CAP_DIST]
 		copy(ol_dist_info, rb_o_dist.stringVal)
 
-		sKeyAr[0] = w_id
-		sKeyAr[1] = d_id
-		sKeyAr[2] = d_next_o_id
-		sKeyAr[3] = i
-		UKey(sKeyAr, &sKey)
-		exec.InsertRecord(ORDERLINE, sKey, sKeyAr[0], noTrans.olRec[i])
+		sKey[0] = w_id
+		sKey[1] = d_id
+		sKey[2] = d_next_o_id
+		sKey[3] = i
+		exec.InsertRecord(ORDERLINE, sKey, sKey[0], noTrans.olRec[i])
 
 		totalAmount += olTuple.ol_amount
 	}
@@ -323,7 +313,6 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	payTrans := t.(*PaymentTrans)
 
 	var k Key
-	var keyAr [KEYLENTH]int
 
 	//floatRB := &payTrans.floatRB
 	intRB := &payTrans.intRB
@@ -337,8 +326,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	remotePart := payTrans.c_w_id
 
 	// Increment w_ytd in warehouse
-	keyAr[0] = payTrans.w_id
-	UKey(keyAr, &k)
+	k[0] = payTrans.w_id
 	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -351,8 +339,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	}
 
 	// Increment D_YTD in district
-	keyAr[1] = payTrans.d_id
-	UKey(keyAr, &k)
+	k[1] = payTrans.d_id
 	rec, err = exec.GetRecord(DISTRICT, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -364,11 +351,10 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
-	keyAr[0] = payTrans.c_w_id
-	keyAr[1] = payTrans.d_id
+	k[0] = payTrans.c_w_id
+	k[1] = payTrans.d_id
 	if payTrans.isLast {
-		keyAr[2] = payTrans.c_last
-		UKey(keyAr, &k)
+		k[2] = payTrans.c_last
 		//for i, b := range payTrans.c_last {
 		//	k[i+16] = b
 		//}
@@ -376,11 +362,10 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		keyAr[2] = intRB.intVal
+		k[2] = intRB.intVal
 	} else {
-		keyAr[2] = payTrans.c_id
+		k[2] = payTrans.c_id
 	}
-	UKey(keyAr, &k)
 	rec, err = exec.GetRecord(CUSTOMER, k, remotePart, req)
 	if err != nil {
 		return nil, err
@@ -433,10 +418,9 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 		}
 	}
 
-	keyAr[0] = payTrans.w_id
-	keyAr[1] = payTrans.d_id
-	keyAr[2] = payTrans.c_id
-	UKey(keyAr, &k)
+	k[0] = payTrans.w_id
+	k[1] = payTrans.d_id
+	k[2] = payTrans.c_id
 
 	hTuple := payTrans.hRec.GetTuple().(*HistoryTuple)
 	hTuple.h_c_id = payTrans.c_id
@@ -470,7 +454,6 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	orderTrans := t.(*OrderStatusTrans)
 
 	var k Key
-	var keyAr [KEYLENTH]int
 
 	var rec Record
 	var err error
@@ -481,11 +464,10 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	partNum := orderTrans.w_id
 
 	// Select one row from Customer
-	keyAr[0] = orderTrans.w_id
-	keyAr[1] = orderTrans.d_id
+	k[0] = orderTrans.w_id
+	k[1] = orderTrans.d_id
 	if orderTrans.isLast {
-		keyAr[2] = orderTrans.c_last
-		UKey(keyAr, &k)
+		k[2] = orderTrans.c_last
 		//for i, b := range orderTrans.c_last {
 		//	k[i+16] = b
 		//}
@@ -493,11 +475,10 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		keyAr[2] = intRB.intVal
+		k[2] = intRB.intVal
 	} else {
-		keyAr[2] = orderTrans.c_id
+		k[2] = orderTrans.c_id
 	}
-	UKey(keyAr, &k)
 	_, err = exec.GetRecord(CUSTOMER, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -514,8 +495,7 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	}
 	o_id := intRB.intVal
 
-	keyAr[2] = o_id
-	UKey(keyAr, &k)
+	k[2] = o_id
 	rec, err = exec.GetRecord(ORDER, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -523,8 +503,7 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 
 	ol_cnt := rec.GetTuple().(*OrderTuple).o_ol_cnt
 	for i := 0; i < ol_cnt; i++ {
-		keyAr[3] = i
-		UKey(keyAr, &k)
+		k[3] = i
 		_, err = exec.GetRecord(ORDERLINE, k, partNum, req)
 		if err != nil {
 			return nil, err
@@ -546,9 +525,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 	stockTrans := t.(*StockLevelTrans)
 
 	var k Key
-	var keyAr [KEYLENTH]int
 	var s_k Key
-	var s_keyAr [KEYLENTH]int
 
 	var rec Record
 	var err error
@@ -557,9 +534,8 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 	req := &stockTrans.req
 
 	// Select one row from District Table
-	keyAr[0] = stockTrans.w_id
-	keyAr[1] = stockTrans.d_id
-	UKey(keyAr, &k)
+	k[0] = stockTrans.w_id
+	k[1] = stockTrans.d_id
 	rec, err = exec.GetRecord(DISTRICT, k, partNum, req)
 	if err != nil {
 		return nil, err
@@ -571,12 +547,11 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 	ol_cnt := 0
 	count := 0
 
-	s_keyAr[0] = stockTrans.w_id
+	s_k[0] = stockTrans.w_id
 	for i := next_o_id - 1; i >= next_o_id-20; i-- {
 		// Read one row from ORDER Table
-		keyAr[2] = i
-		keyAr[3] = 0
-		UKey(keyAr, &k)
+		k[2] = i
+		k[3] = 0
 		rec, err = exec.GetRecord(ORDER, k, partNum, req)
 		if err != nil {
 			return nil, err
@@ -585,8 +560,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 		ol_cnt = rec.GetTuple().(*OrderTuple).o_ol_cnt
 		for j := 0; j < ol_cnt; j++ {
 			// Read ol_cnt rows from OrderLine Table
-			keyAr[3] = j
-			UKey(keyAr, &k)
+			k[3] = j
 			rec, err = exec.GetRecord(ORDERLINE, k, partNum, req)
 			if err != nil {
 				return nil, err
@@ -609,8 +583,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 			i_id_ar[n] = i_id
 
 			// Check threshold; Read s_quantity from Stock Table
-			s_keyAr[1] = i_id
-			UKey(s_keyAr, &s_k)
+			s_k[1] = i_id
 			rec, err = exec.GetRecord(STOCK, s_k, partNum, req)
 			if err != nil {
 				return nil, err

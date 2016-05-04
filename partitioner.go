@@ -17,7 +17,7 @@ type HashPartitioner struct {
 	pKeysArray []int
 	keyLen     int
 	keyRange   []int
-	compKey    []int
+	compKey    Key
 }
 
 func NewHashPartitioner(NParts int, keyRange []int) *HashPartitioner {
@@ -26,9 +26,7 @@ func NewHashPartitioner(NParts int, keyRange []int) *HashPartitioner {
 		pKeysArray: make([]int, NParts),
 		keyLen:     len(keyRange),
 		keyRange:   make([]int, len(keyRange)),
-		compKey:    make([]int, len(keyRange)+2*PADDINGINT),
 	}
-	hp.compKey = hp.compKey[PADDINGINT : hp.keyLen+PADDINGINT]
 
 	var unit int = 1
 
@@ -53,30 +51,33 @@ func NewHashPartitioner(NParts int, keyRange []int) *HashPartitioner {
 }
 
 func (hp *HashPartitioner) GetPart(key Key) int {
-	k := ParseKey(key, 0)
-	return k % hp.NParts
+	return key[0] % hp.NParts
 }
 
 func (hp *HashPartitioner) GetPartKey(partIndex int, rank int) Key {
+	var key Key
+
 	if hp.NParts == 0 {
 		hp.GetWholeKey(rank)
 	}
 
 	for i := len(hp.keyRange) - 1; i >= 0; i-- {
-		hp.compKey[i] = rank % hp.keyRange[i]
+		key[i] = rank % hp.keyRange[i]
 		rank = rank / hp.keyRange[i]
 	}
 
-	hp.compKey[0] = hp.compKey[0]*hp.NParts + partIndex
+	key[0] = key[0]*hp.NParts + partIndex
 
 	//clog.Info("CompKey %v\n", hp.compKey)
 
-	return CKey(hp.compKey)
+	return key
 }
 
 func (hp *HashPartitioner) GetWholeKey(rank int) Key {
-	hp.compKey[0] = rank
-	return CKey(hp.compKey)
+	var key Key
+	key[0] = rank
+	//return CKey(hp.compKey)
+	return key
 }
 
 func (hp *HashPartitioner) GetKeyArray() []int {

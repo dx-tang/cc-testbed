@@ -205,7 +205,7 @@ func NewStore(schema string, nParts int, isPartition bool) *Store {
 		} else if strings.Compare(schemaStrs[0], "ITEM") == 0 {
 			start := time.Now()
 			s.tables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
-			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
+			clog.Info("Making ITEM %.2f", time.Since(start).Seconds())
 		} else {
 			start := time.Now()
 			s.tables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)

@@ -822,7 +822,6 @@ func parseDate(column string) time.Time {
 
 func parseWarehouse(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int
 	tuple := &WarehouseTuple{}
 	columns := strings.Split(row, "\t")
@@ -855,8 +854,7 @@ func parseWarehouse(row string) (Key, int, Tuple) {
 	tuple.w_ytd = parseFloat(columns[W_YTD])
 
 	// Build Key
-	keyAr[0] = tuple.w_id
-	UKey(keyAr, &k)
+	k[0] = tuple.w_id
 
 	partNum = int(tuple.w_id)
 
@@ -866,7 +864,6 @@ func parseWarehouse(row string) (Key, int, Tuple) {
 
 func parseDistrict(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int
 	tuple := &DistrictTuple{}
 	columns := strings.Split(row, "\t")
@@ -900,9 +897,8 @@ func parseDistrict(row string) (Key, int, Tuple) {
 	tuple.d_ytd = parseFloat(columns[D_YTD])
 	tuple.d_next_o_id = parseInt(columns[D_NEXT_O_ID])
 
-	keyAr[0] = tuple.d_w_id
-	keyAr[1] = tuple.d_id
-	UKey(keyAr, &k)
+	k[0] = tuple.d_w_id
+	k[1] = tuple.d_id
 
 	partNum = int(tuple.d_w_id)
 
@@ -911,7 +907,6 @@ func parseDistrict(row string) (Key, int, Tuple) {
 
 func parseCustomer(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int
 	tuple := &CustomerTuple{}
 	columns := strings.Split(row, "\t")
@@ -981,10 +976,9 @@ func parseCustomer(row string) (Key, int, Tuple) {
 	c_data := tuple.c_data[:tuple.len_c_data]
 	copy(c_data, []byte(columns[C_DATA]))
 
-	keyAr[0] = tuple.c_w_id
-	keyAr[1] = tuple.c_d_id
-	keyAr[2] = tuple.c_id
-	UKey(keyAr, &k)
+	k[0] = tuple.c_w_id
+	k[1] = tuple.c_d_id
+	k[2] = tuple.c_id
 
 	partNum = int(tuple.c_w_id)
 
@@ -993,7 +987,6 @@ func parseCustomer(row string) (Key, int, Tuple) {
 
 func parseHistory(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &HistoryTuple{}
 	columns := strings.Split(row, "\t")
@@ -1010,17 +1003,15 @@ func parseHistory(row string) (Key, int, Tuple) {
 	h_data := tuple.h_data[:tuple.len_h_data]
 	copy(h_data, []byte(columns[H_DATA]))
 
-	keyAr[0] = tuple.h_w_id
-	keyAr[1] = tuple.h_d_id
-	keyAr[2] = tuple.h_c_id
-	UKey(keyAr, &k)
+	k[0] = tuple.h_w_id
+	k[1] = tuple.h_d_id
+	k[2] = tuple.h_c_id
 
 	return k, partNum, tuple
 }
 
 func parseNewOrder(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &NewOrderTuple{}
 	columns := strings.Split(row, "\t")
@@ -1029,9 +1020,8 @@ func parseNewOrder(row string) (Key, int, Tuple) {
 	tuple.no_d_id = parseInt(columns[NO_D_ID])
 	tuple.no_w_id = parseInt(columns[NO_W_ID])
 
-	keyAr[0] = tuple.no_w_id
-	keyAr[1] = tuple.no_d_id
-	UKey(keyAr, &k)
+	k[0] = tuple.no_w_id
+	k[1] = tuple.no_d_id
 
 	partNum = int(tuple.no_w_id)
 
@@ -1040,7 +1030,6 @@ func parseNewOrder(row string) (Key, int, Tuple) {
 
 func parseOrder(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &OrderTuple{}
 	columns := strings.Split(row, "\t")
@@ -1058,10 +1047,9 @@ func parseOrder(row string) (Key, int, Tuple) {
 	tuple.o_ol_cnt = parseInt(columns[O_OL_CNT])
 	tuple.o_all_local = parseInt(columns[O_ALL_LOCAL])
 
-	keyAr[0] = tuple.o_w_id
-	keyAr[1] = tuple.o_d_id
-	keyAr[2] = tuple.o_id
-	UKey(keyAr, &k)
+	k[0] = tuple.o_w_id
+	k[1] = tuple.o_d_id
+	k[2] = tuple.o_id
 
 	partNum = int(tuple.o_w_id)
 
@@ -1071,7 +1059,6 @@ func parseOrder(row string) (Key, int, Tuple) {
 
 func parseOrderLine(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &OrderLineTuple{}
 	columns := strings.Split(row, "\t")
@@ -1091,11 +1078,10 @@ func parseOrderLine(row string) (Key, int, Tuple) {
 	ol_dist_info := tuple.ol_dist_info[:CAP_DIST]
 	copy(ol_dist_info, []byte(columns[OL_DIST_INFO]))
 
-	keyAr[0] = tuple.ol_w_id
-	keyAr[1] = tuple.ol_d_id
-	keyAr[2] = tuple.ol_o_id
-	keyAr[3] = tuple.ol_number
-	UKey(keyAr, &k)
+	k[0] = tuple.ol_w_id
+	k[1] = tuple.ol_d_id
+	k[2] = tuple.ol_o_id
+	k[3] = tuple.ol_number
 
 	partNum = int(tuple.ol_w_id)
 
@@ -1104,7 +1090,6 @@ func parseOrderLine(row string) (Key, int, Tuple) {
 
 func parseItem(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &ItemTuple{}
 	columns := strings.Split(row, "\t")
@@ -1122,8 +1107,7 @@ func parseItem(row string) (Key, int, Tuple) {
 	i_data := tuple.i_data[:tuple.len_i_data]
 	copy(i_data, []byte(columns[I_DATA]))
 
-	keyAr[0] = tuple.i_id
-	UKey(keyAr, &k)
+	k[0] = tuple.i_id
 
 	return k, partNum, tuple
 
@@ -1131,7 +1115,6 @@ func parseItem(row string) (Key, int, Tuple) {
 
 func parseStock(row string) (Key, int, Tuple) {
 	var k Key
-	var keyAr [KEYLENTH]int
 	var partNum int = 0
 	tuple := &StockTuple{}
 	columns := strings.Split(row, "\t")
@@ -1178,9 +1161,8 @@ func parseStock(row string) (Key, int, Tuple) {
 	s_data := tuple.s_data[:tuple.len_s_data]
 	copy(s_data, []byte(columns[S_DATA]))
 
-	keyAr[0] = tuple.s_w_id
-	keyAr[1] = tuple.s_i_id
-	UKey(keyAr, &k)
+	k[0] = tuple.s_w_id
+	k[1] = tuple.s_i_id
 
 	partNum = int(tuple.s_w_id)
 

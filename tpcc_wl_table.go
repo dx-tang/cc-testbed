@@ -70,8 +70,8 @@ func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record,
 	no.iLock.Lock()
 	defer no.iLock.Unlock()
 
-	w_id := k[BIT0]
-	d_id := k[BIT4]
+	w_id := k[KEY0]
+	d_id := k[KEY1]
 	index := w_id*DIST_COUNT + d_id
 	noTuple := tuple.(*NewOrderTuple)
 	entry := no.tail[index]
@@ -84,8 +84,8 @@ func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record,
 		// New a Entry
 		dRec := &DRecord{}
 		dRec.tuple = &NewOrderTuple{
-			no_w_id: int(w_id),
-			no_d_id: int(d_id),
+			no_w_id: w_id,
+			no_d_id: d_id,
 		}
 		newEntry := &NoEntry{}
 		newEntry.rec = dRec
@@ -118,7 +118,7 @@ func (no *NewOrderTable) GetValueByID(k Key, partNum int, val Value, colNum int)
 }
 
 func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
-	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+	index := k[KEY0]*DIST_COUNT + k[KEY1]
 
 	if !no.isPartition {
 		no.delLock[index].Lock() // Lock index
@@ -145,14 +145,14 @@ func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
 
 func (no *NewOrderTable) ReleaseDelete(k Key, partNum int) {
 	if !no.isPartition {
-		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+		index := k[KEY0]*DIST_COUNT + k[KEY1]
 		no.head[index].rec.WUnlock(nil)
 		no.delLock[index].Unlock()
 	}
 }
 
 func (no *NewOrderTable) DeleteRecord(k Key, partNum int) error {
-	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+	index := k[KEY0]*DIST_COUNT + k[KEY1]
 	entry := no.head[index]
 	entry.h++
 	if entry.h == CAP_NEWORDER_ENTRY && entry.next != nil { //No Data in this entry
@@ -185,7 +185,7 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
 		iRec := &recs[i]
 		k := iRec.k
 
-		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+		index := k[KEY0]*DIST_COUNT + k[KEY1]
 		//if !no.isPartition {
 		//	no.delLock[index].Lock()
 		//}
@@ -201,8 +201,8 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
 			// New a Entry
 			dRec := &DRecord{}
 			dRec.tuple = &NewOrderTuple{
-				no_w_id: int(k[BIT0]),
-				no_d_id: int(k[BIT4]),
+				no_w_id: k[KEY0],
+				no_d_id: k[KEY1],
 			}
 			newEntry := &NoEntry{}
 			newEntry.rec = dRec
@@ -253,8 +253,8 @@ func (no *NewOrderTable) BulkLoad(table Table) {
 	for i, entry := range no.head {
 		tuple.no_w_id = i / DIST_COUNT
 		tuple.no_d_id = i % DIST_COUNT
-		iRecs[0].k[0] = byte(tuple.no_w_id)
-		iRecs[0].k[4] = byte(tuple.no_d_id)
+		iRecs[0].k[KEY0] = tuple.no_w_id
+		iRecs[0].k[KEY1] = tuple.no_d_id
 		iRecs[0].partNum = tuple.no_w_id
 		for entry != nil {
 			for _, k := range entry.o_id_array {
@@ -345,14 +345,12 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 	}
 
 	var cKey Key
-	var keyAr [KEYLENTH]int
 	for i := 0; i < warehouse*DIST_COUNT; i++ {
-		keyAr[0] = i / DIST_COUNT
-		keyAr[1] = i % DIST_COUNT
+		cKey[KEY0] = i / DIST_COUNT
+		cKey[KEY1] = i % DIST_COUNT
 		oTable.secIndex[i].o_id_map = make(map[Key]*OrderSecEntry)
 		for j := 0; j < 3000; j++ {
-			keyAr[2] = j
-			UKey(keyAr, &cKey)
+			cKey[KEY2] = j
 			entry := &OrderSecEntry{}
 			oTable.secIndex[i].o_id_map[cKey] = entry
 		}
@@ -360,16 +358,14 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 
 	if isPartition {
 		oTable.bucketHash = func(k Key) int {
-			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
-			hash := int64(k[BIT4]) * 17
-			hash = (hash + int64(oid)) * 17
+			oid := k[KEY2] + k[KEY1]*17
+			hash := int64(oid) * 17
 			return int(hash % int64(orderbucketcount))
 		}
 	} else {
 		oTable.bucketHash = func(k Key) int {
-			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
-			hash := (int64(k[BIT0])*10 + int64(k[BIT4])) * 17
-			hash = (hash + int64(oid)) * 17
+			oid := k[KEY2] + (k[KEY0]*DIST_COUNT+k[KEY1])*17
+			hash := int64(oid) * 17
 			return int(hash % int64(orderbucketcount))
 		}
 	}
@@ -407,14 +403,12 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	bucket.tail.t++
 
 	// Insert OrderSecPart
-	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
-	var keyAr [KEYLENTH]int
+	index := k[KEY0]*DIST_COUNT + k[KEY1]
 	var cKey Key
 	oTuple := tuple.(*OrderTuple)
-	keyAr[0] = oTuple.o_w_id
-	keyAr[1] = oTuple.o_d_id
-	keyAr[2] = oTuple.o_c_id
-	UKey(keyAr, &cKey)
+	cKey[KEY0] = oTuple.o_w_id
+	cKey[KEY1] = oTuple.o_d_id
+	cKey[KEY2] = oTuple.o_c_id
 	oPart := o.secIndex[index]
 	oEntry, ok := oPart.o_id_map[cKey]
 	if !ok {
@@ -583,7 +577,7 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 		bucketNum := o.bucketHash(k)
 		bucket := &o.data[partNum].buckets[bucketNum]
 
-		index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+		index := k[KEY0]*DIST_COUNT + k[KEY1]
 		oPart := &o.secIndex[index]
 
 		if !o.isPartition {
@@ -607,13 +601,11 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 		bucket.tail.t++
 
 		// Insert OrderPart
-		var keyAr [KEYLENTH]int
 		var cKey Key
 		oTuple := rec.GetTuple().(*OrderTuple)
-		keyAr[0] = oTuple.o_w_id
-		keyAr[1] = oTuple.o_d_id
-		keyAr[2] = oTuple.o_c_id
-		UKey(keyAr, &cKey)
+		cKey[KEY0] = oTuple.o_w_id
+		cKey[KEY1] = oTuple.o_d_id
+		cKey[KEY2] = oTuple.o_c_id
 
 		oEntry, ok := oPart.o_id_map[cKey]
 		if !ok {
@@ -656,7 +648,7 @@ func (o *OrderTable) ReleaseInsert(k Key, partNum int) {
 }
 
 func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
-	index := int(k[BIT0])*DIST_COUNT + int(k[BIT4])
+	index := k[KEY0]*DIST_COUNT + k[KEY1]
 	oPart := &o.secIndex[index]
 
 	if !o.isPartition {
@@ -803,7 +795,9 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, mode int) *C
 	}
 
 	cTable.shardHash = func(k Key) int {
-		return (int(k[BIT0])*3 + int(k[BIT4])*11 + int(k[BIT8])*13) % SHARDCOUNT
+		dist := (k[KEY0]*DIST_COUNT + k[KEY1]) * 11
+		hash := int64(dist+k[KEY2]) * 11
+		return int(hash % SHARDCOUNT)
 	}
 
 	return cTable
@@ -827,13 +821,11 @@ func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, 
 	shard.rows[k] = rec
 
 	// Insert CustomerPart
-	var keyAr [KEYLENTH]int
 	var cKey Key
 	cTuple := tuple.(*CustomerTuple)
-	keyAr[0] = cTuple.c_w_id
-	keyAr[1] = cTuple.c_d_id
-	keyAr[2] = cTuple.c_last
-	UKey(keyAr, &cKey)
+	cKey[KEY0] = cTuple.c_w_id
+	cKey[KEY1] = cTuple.c_d_id
+	cKey[KEY2] = cTuple.c_last
 	//for i := 0; i < cTuple.len_c_last; i++ {
 	//	cKey[i+16] = cTuple.c_last[i]
 	//}
@@ -967,13 +959,11 @@ func (c *CustomerTable) InsertRecord(recs []InsertRec) error {
 		shard.rows[k] = rec
 
 		// Insert CustomerPart
-		var keyAr [KEYLENTH]int
 		var cKey Key
 		cTuple := tuple.(*CustomerTuple)
-		keyAr[0] = cTuple.c_w_id
-		keyAr[1] = cTuple.c_d_id
-		keyAr[2] = cTuple.c_last
-		UKey(keyAr, &cKey)
+		cKey[KEY0] = cTuple.c_w_id
+		cKey[KEY1] = cTuple.c_d_id
+		cKey[KEY2] = cTuple.c_last
 		//for i := 0; i < cTuple.len_c_last; i++ {
 		//	cKey[i+16] = cTuple.c_last[i]
 		//}
@@ -1103,7 +1093,7 @@ type HistoryTable struct {
 func MakeHistoryTable(nParts int, warehouse int, isPartition bool, mode int) *HistoryTable {
 	ht := &HistoryTable{}
 	ht.shardHash = func(k Key) int {
-		return (int(k[BIT0])*3 + int(k[BIT4])*11 + int(k[BIT8])*13) % SHARDCOUNT
+		return (int(k[KEY0])*3 + int(k[KEY1])*11 + int(k[KEY2])) % SHARDCOUNT
 	}
 	for i := 0; i < SHARDCOUNT; i++ {
 		shard := &ht.shards[i]
@@ -1279,16 +1269,14 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 
 	if isPartition {
 		olTable.bucketHash = func(k Key) int {
-			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
-			hash := int64(k[BIT4]) * 17
-			hash = (hash + int64(oid)) * 17
+			oid := k[KEY2] + k[KEY1]*17
+			hash := int64(oid) * 17
 			return int(hash % int64(olbucketcount))
 		}
 	} else {
 		olTable.bucketHash = func(k Key) int {
-			oid := int(k[11])<<24 ^ int(k[10])<<16 ^ int(k[9])<<8 ^ int(k[8])
-			hash := (int64(k[BIT0])*10 + int64(k[BIT4])) * 17
-			hash = (hash + int64(oid)) * 17
+			oid := k[KEY2] + (k[KEY0]*DIST_COUNT+k[KEY1])*17
+			hash := int64(oid) * 17
 			return int(hash % int64(olbucketcount))
 		}
 	}
