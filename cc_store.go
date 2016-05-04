@@ -202,9 +202,13 @@ func NewStore(schema string, nParts int, isPartition bool) *Store {
 			start := time.Now()
 			s.tables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
 			clog.Info("Making OrderLine %.2f", time.Since(start).Seconds())
+		} else if strings.Compare(schemaStrs[0], "ITEM") == 0 {
+			start := time.Now()
+			s.tables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
+			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		} else {
 			start := time.Now()
-			s.tables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode)
+			s.tables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)
 			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		}
 
