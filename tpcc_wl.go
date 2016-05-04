@@ -684,13 +684,13 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	clog.Info("Generating Trans Pool %.2fs", time.Since(start).Seconds())
 
 	// Loading data into another store
-	start = time.Now()
+	/*start = time.Now()
 	tmpStore := NewStore(workload, nParts, isPartition)
 
 	for i, table := range store.tables {
 		table.BulkLoad(tmpStore.tables[i])
 	}
-	clog.Info("Bulkloading Another Store %.2fs", time.Since(start).Seconds())
+	clog.Info("Bulkloading Another Store %.2fs", time.Since(start).Seconds())*/
 
 	return tpccWL
 

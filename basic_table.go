@@ -77,14 +77,11 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 
 	if isPartition {
 		bt.shardHash = func(k Key) int {
-			hash := int(k[KEY1]) * 11
-			hash = (hash + int(k[KEY2])) * 11
-			return hash % SHARDCOUNT
+			return k[KEY1] % SHARDCOUNT
 		}
 	} else {
 		bt.shardHash = func(k Key) int {
-			hash := (int(k[KEY0])*10 + int(k[KEY1])) * 11
-			hash = (hash + int(k[KEY2])) * 11
+			hash := k[KEY1]*(*NumPart) + k[KEY0]
 			return hash % SHARDCOUNT
 		}
 	}
@@ -92,6 +89,16 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 	if tableID == ITEM {
 		bt.shardHash = func(k Key) int {
 			return k[KEY0] % SHARDCOUNT
+		}
+	} else if tableID == STOCK {
+		if isPartition {
+			bt.shardHash = func(k Key) int {
+				return k[KEY1] % SHARDCOUNT
+			}
+		} else {
+			bt.shardHash = func(k Key) int {
+				return (k[KEY1]*(*NumPart) + k[KEY0]) % SHARDCOUNT
+			}
 		}
 	}
 

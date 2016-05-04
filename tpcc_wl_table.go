@@ -358,15 +358,13 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 
 	if isPartition {
 		oTable.bucketHash = func(k Key) int {
-			oid := k[KEY2] + k[KEY1]*17
-			hash := int64(oid) * 17
-			return int(hash % int64(orderbucketcount))
+			oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
+			return int(oid % int64(orderbucketcount))
 		}
 	} else {
 		oTable.bucketHash = func(k Key) int {
-			oid := k[KEY2] + (k[KEY0]*DIST_COUNT+k[KEY1])*17
-			hash := int64(oid) * 17
-			return int(hash % int64(orderbucketcount))
+			oid := int64(k[KEY2]*(*NumPart))*DIST_COUNT + int64(k[KEY0]*DIST_COUNT+k[KEY1])
+			return int(oid % int64(orderbucketcount))
 		}
 	}
 
@@ -794,10 +792,16 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, mode int) *C
 		}
 	}
 
-	cTable.shardHash = func(k Key) int {
-		dist := (k[KEY0]*DIST_COUNT + k[KEY1]) * 11
-		hash := int64(dist+k[KEY2]) * 11
-		return int(hash % SHARDCOUNT)
+	if isPartition {
+		cTable.shardHash = func(k Key) int {
+			hash := int64(k[KEY2]*DIST_COUNT) + int64(k[KEY1])
+			return int(hash % SHARDCOUNT)
+		}
+	} else {
+		cTable.shardHash = func(k Key) int {
+			hash := int64(k[KEY2]*(*NumPart)*DIST_COUNT) + int64(k[KEY0]*DIST_COUNT+k[KEY1])
+			return int(hash % SHARDCOUNT)
+		}
 	}
 
 	return cTable
@@ -1269,15 +1273,13 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 
 	if isPartition {
 		olTable.bucketHash = func(k Key) int {
-			oid := k[KEY2] + k[KEY1]*17
-			hash := int64(oid) * 17
-			return int(hash % int64(olbucketcount))
+			oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
+			return int(oid % int64(orderbucketcount))
 		}
 	} else {
 		olTable.bucketHash = func(k Key) int {
-			oid := k[KEY2] + (k[KEY0]*DIST_COUNT+k[KEY1])*17
-			hash := int64(oid) * 17
-			return int(hash % int64(olbucketcount))
+			oid := int64(k[KEY2]*(*NumPart))*DIST_COUNT + int64(k[KEY0]*DIST_COUNT+k[KEY1])
+			return int(oid % int64(orderbucketcount))
 		}
 	}
 
