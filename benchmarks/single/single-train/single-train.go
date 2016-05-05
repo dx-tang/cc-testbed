@@ -38,6 +38,7 @@ var tc = flag.String("tc", "train.conf", "configuration for training")
 var np = flag.Bool("np", false, "Whether not test partition")
 var prune = flag.Bool("prune", false, "Whether prune tests")
 var isPart = flag.Bool("p", true, "Whether partition index")
+var isTest = flag.Bool("test", false, "Whether test or train")
 
 var cr []float64
 var mp []int
@@ -49,6 +50,10 @@ var rr []int
 const (
 	TRIALS  = 3
 	BUFSIZE = 3
+)
+
+var (
+	lockInit = false
 )
 
 func main() {
@@ -74,15 +79,8 @@ func main() {
 		clog.Error("Report not Needed for Training\n")
 	}
 
-	/*
-		if !*np && !*isPart {
-			clog.Error("When Partition Included, isPartition must be Indicated")
-		}
-	*/
-
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
-	lockInit := false
 
 	if *prof {
 		f, err := os.Create("single.prof")
@@ -125,15 +123,26 @@ func main() {
 		}
 	}
 
-	totalTests := len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
-	prevCR := float64(0.0)
-	prevMode := 0
+	var totalTests int
+	if !*isTest && !*np { // Training for Partition
+		totalTests = len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
+	} else {
+		totalTests = len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
+	}
+
 	count := 0
 	for k := 0; k < totalTests; k++ {
+		startCR := 0
+		endCR := 50
+		curCR := 0
+
 		d := k
-		r := d % len(cr)
-		tmpCR := cr[r]
-		d = d / len(cr)
+		r := 0
+		if *isTest || *np {
+			r = d % len(cr)
+			curCR = int(cr[r])
+			d = d / len(cr)
+		}
 
 		r = d % len(mp)
 		tmpMP := mp[r]
@@ -155,13 +164,19 @@ func main() {
 
 		// Prune
 		if tmpTlen == 1 {
-			if tmpCR != 0 || tmpMP != 1 || tmpPS != 0 {
+			if curCR != 0 || tmpMP != 1 || tmpPS != 0 {
 				continue
 			}
 		} else {
-			if tmpCR == 0 || tmpMP == 1 {
-				if tmpCR != 0 || tmpMP != 1 || tmpPS != 0 {
+			if !*isTest && !*np {
+				if tmpMP == 1 && tmpPS != 0 {
 					continue
+				}
+			} else {
+				if curCR == 0 || tmpMP == 1 {
+					if curCR != 0 || tmpMP != 1 || tmpPS != 0 {
+						continue
+					}
 				}
 			}
 		}
@@ -170,209 +185,206 @@ func main() {
 			continue
 		}
 
-		//if *np && tmpMP != tmpTlen {
-		//	continue
-		//}
-
-		if *prune {
-			if tmpCR > prevCR {
-				if prevMode != 0 {
-					prevCR = tmpCR
-					continue
-				} else {
-					prevCR = tmpCR
-				}
+		for {
+			if single == nil {
+				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, tmpPS)
+				coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SINGLEWL)
 			} else {
-				prevCR = tmpCR
+				basic := single.GetBasicWL()
+				keyGens, ok := keyGenPool[tmpContention]
+				if !ok {
+					keyGens = basic.NewKeyGen(tmpContention)
+					keyGenPool[tmpContention] = keyGens
+				}
+
+				partGens, ok1 := partGenPool[tmpPS]
+				if !ok1 {
+					partGens = basic.NewPartGen(tmpPS)
+					partGenPool[tmpPS] = partGens
+				}
+				basic.SetKeyGen(keyGens)
+				basic.SetPartGen(partGens)
+				single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR)
 			}
-		}
+			clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", curCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
 
-		if single == nil {
-			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS)
-			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1, testbed.SINGLEWL)
-		} else {
-			basic := single.GetBasicWL()
-			keyGens, ok := keyGenPool[tmpContention]
-			if !ok {
-				keyGens = basic.NewKeyGen(tmpContention)
-				keyGenPool[tmpContention] = keyGens
-			}
+			oneTest(single, coord, ft, nWorkers)
 
-			partGens, ok1 := partGenPool[tmpPS]
-			if !ok1 {
-				partGens = basic.NewPartGen(tmpPS)
-				partGenPool[tmpPS] = partGens
-			}
-			basic.SetKeyGen(keyGens)
-			basic.SetPartGen(partGens)
-			single.ResetConf(*tp, tmpCR, tmpMP, tmpTlen, tmpRR)
-		}
-		clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
-
-		// One Test
-		for a := 0; a < 3; a++ {
-			for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
-
-				if *np {
-					if j == testbed.PARTITION {
-						continue
+			for z := 0; z < testbed.ADAPTIVE; z++ {
+				tmpFeature := ft[z]
+				for x := 0; x < 2; x++ {
+					tmp := tmpFeature[x]
+					tmpI := x
+					for y := x + 1; y < testbed.ADAPTIVE; y++ {
+						if tmp.Txn < tmpFeature[y].Txn {
+							tmp = tmpFeature[y]
+							tmpI = y
+						}
 					}
+					tmp = tmpFeature[x]
+					tmpFeature[x] = tmpFeature[tmpI]
+					tmpFeature[tmpI] = tmp
 				}
-
-				if !*isPart && !*np {
-					if j == testbed.PARTITION {
-						single.ResetPart(nWorkers, true)
-					} else {
-						single.ResetPart(1, false)
-					}
-				}
-
-				ts := testbed.TID(0)
-				var wg sync.WaitGroup
-				coord.SetMode(j)
-				for i := 0; i < nWorkers; i++ {
-					wg.Add(1)
-					go func(n int) {
-						if !lockInit {
-							testbed.InitLockReqBuffer(n)
-						}
-						var t testbed.Trans
-						w := coord.Workers[n]
-						gen := single.GetTransGen(n)
-						tq := testbed.NewTransQueue(BUFSIZE)
-						end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
-						w.Start()
-						for {
-							tm := time.Now()
-							if !end_time.After(tm) {
-								break
-							}
-							if tq.IsFull() {
-								t = tq.Dequeue()
-							} else {
-								t = gen.GenOneTrans(j)
-								t.SetTrial(TRIALS)
-								if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
-									tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
-									t.SetTID(tid)
-								}
-							}
-							w.NGen += time.Since(tm)
-
-							//tm = time.Now()
-							_, err := w.One(t)
-							//w.NExecute += time.Since(tm)
-
-							if err != nil {
-								if err == testbed.EABORT {
-									t.DecTrial()
-									if t.GetTrial() == 0 {
-										gen.ReleaseOneTrans(t)
-									} else {
-										tq.Enqueue(t)
-									}
-								} else if err != testbed.EABORT {
-									clog.Error("%s\n", err.Error())
-								}
-							} else {
-								gen.ReleaseOneTrans(t)
-							}
-						}
-						w.Finish()
-						for !tq.IsEmpty() {
-							gen.ReleaseOneTrans(tq.Dequeue())
-						}
-						wg.Done()
-					}(i)
-				}
-				wg.Wait()
-
-				coord.Finish()
-
-				if !lockInit {
-					lockInit = true
-				}
-
-				if *np && j == testbed.PARTITION {
-					coord.Reset()
-					continue
-				}
-
-				tmpFt := coord.GetFeature()
-
-				ft[j][a].Set(tmpFt)
-
-				coord.Reset()
 			}
-		}
 
-		for z := 0; z < testbed.ADAPTIVE; z++ {
-			tmpFeature := ft[z]
 			for x := 0; x < 2; x++ {
-				tmp := tmpFeature[x]
+				tmp := ft[x][1]
 				tmpI := x
 				for y := x + 1; y < testbed.ADAPTIVE; y++ {
-					if tmp.Txn < tmpFeature[y].Txn {
-						tmp = tmpFeature[y]
+					if tmp.Txn < ft[y][1].Txn {
+						tmp = ft[y][1]
 						tmpI = y
 					}
 				}
-				tmp = tmpFeature[x]
-				tmpFeature[x] = tmpFeature[tmpI]
-				tmpFeature[tmpI] = tmp
+				tmp = ft[x][1]
+				ft[x][1] = ft[tmpI][1]
+				ft[tmpI][1] = tmp
 			}
-		}
 
-		for x := 0; x < 2; x++ {
-			tmp := ft[x][1]
-			tmpI := x
-			for y := x + 1; y < testbed.ADAPTIVE; y++ {
-				if tmp.Txn < ft[y][1].Txn {
-					tmp = ft[y][1]
-					tmpI = y
+			if !*isTest {
+				for z := 0; z < 9; z++ {
+					x := z / 3
+					y := z % 3
+					if !(x == 0 && y == 1) {
+						ft[0][1].Add(ft[x][y])
+					}
+				}
+
+				if *np {
+					ft[0][1].Avg(float64(6))
+				} else {
+					ft[0][1].Avg(float64(9))
 				}
 			}
-			tmp = ft[x][1]
-			ft[x][1] = ft[tmpI][1]
-			ft[tmpI][1] = tmp
-		}
 
-		prevMode = ft[0][1].Mode
+			// One Test Finished
+			f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))
+			if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {
+				f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode, ft[1][1].Mode))
 
-		for z := 0; z < 9; z++ {
-			x := z / 3
-			y := z % 3
-			if !(x == 0 && y == 1) {
-				ft[0][1].Add(ft[x][y])
+			} else {
+				f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode))
+			}
+
+			win := ft[0][1].Mode
+
+			// One Test Finished
+			for _, features := range ft {
+				for _, tmp := range features {
+					tmp.Reset()
+				}
+			}
+			count++
+
+			if *isTest || *np || endCR-startCR <= 3 {
+				break
+			} else {
+				if win == testbed.PARTITION {
+					startCR = curCR
+				} else {
+					endCR = curCR
+				}
+				curCR = (startCR + endCR) / 2
 			}
 		}
+	}
+}
 
-		if *np {
-			ft[0][1].Avg(float64(6))
-		} else {
-			ft[0][1].Avg(float64(9))
-		}
+func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]*testbed.Feature, nWorkers int) {
+	for a := 0; a < 3; a++ {
+		for j := testbed.PARTITION; j < testbed.ADAPTIVE; j++ {
 
-		// One Test Finished
-		// ID
-		f.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))
-		if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {
-			//f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].PartConf, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode, ft[1][1].Mode))
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t%v\n", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode, ft[1][1].Mode))
-
-		} else {
-			//f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f%.4f\t\t%v\n", ft[0][1].PartAvg, ft[0][1].PartVar, ft[0][1].PartLenVar, ft[0][1].PartConf, ft[0][1].RecAvg, ft[0][1].HitRate, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode))
-			f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\n", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate, ft[0][1].Mode))
-		}
-		//ft.Avg(testbed.ADAPTIVE)
-		//f.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v\t\n", ft.PartAvg, ft.PartVar, ft.PartLenVar, ft.RecAvg, ft.PartVar, ft.ReadRate, curMode))
-		// One Test Finished
-		for _, features := range ft {
-			for _, tmp := range features {
-				tmp.Reset()
+			if *np {
+				if j == testbed.PARTITION {
+					continue
+				}
 			}
+
+			if !*isPart && !*np {
+				if j == testbed.PARTITION {
+					single.ResetPart(nWorkers, true)
+				} else {
+					single.ResetPart(1, false)
+				}
+			}
+
+			ts := testbed.TID(0)
+			var wg sync.WaitGroup
+			coord.SetMode(j)
+			for i := 0; i < nWorkers; i++ {
+				wg.Add(1)
+				go func(n int) {
+					if !lockInit {
+						testbed.InitLockReqBuffer(n)
+					}
+					var t testbed.Trans
+					w := coord.Workers[n]
+					gen := single.GetTransGen(n)
+					tq := testbed.NewTransQueue(BUFSIZE)
+					end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+					w.Start()
+					for {
+						tm := time.Now()
+						if !end_time.After(tm) {
+							break
+						}
+						if tq.IsFull() {
+							t = tq.Dequeue()
+						} else {
+							t = gen.GenOneTrans(j)
+							t.SetTrial(TRIALS)
+							if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
+								tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
+								t.SetTID(tid)
+							}
+						}
+						w.NGen += time.Since(tm)
+
+						//tm = time.Now()
+						_, err := w.One(t)
+						//w.NExecute += time.Since(tm)
+
+						if err != nil {
+							if err == testbed.EABORT {
+								t.DecTrial()
+								if t.GetTrial() == 0 {
+									gen.ReleaseOneTrans(t)
+								} else {
+									tq.Enqueue(t)
+								}
+							} else if err != testbed.EABORT {
+								clog.Error("%s\n", err.Error())
+							}
+						} else {
+							gen.ReleaseOneTrans(t)
+						}
+					}
+					w.Finish()
+					for !tq.IsEmpty() {
+						gen.ReleaseOneTrans(tq.Dequeue())
+					}
+					wg.Done()
+				}(i)
+			}
+			wg.Wait()
+
+			coord.Finish()
+
+			if !lockInit {
+				lockInit = true
+			}
+
+			if *np && j == testbed.PARTITION {
+				coord.Reset()
+				continue
+			}
+
+			tmpFt := coord.GetFeature()
+
+			ft[j][a].Set(tmpFt)
+
+			coord.Reset()
 		}
-		count++
 	}
 }
 
