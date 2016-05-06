@@ -27,6 +27,10 @@ func NewOrderAllocator() *OrderAllocator {
 	return oa
 }
 
+func (oa *OrderAllocator) Reset() {
+	oa.cur = 0
+}
+
 func (oa *OrderAllocator) OneAllocate() {
 	oa.tuples = make([]OrderTuple, ORDER_PER_ALLOC)
 	oa.lRecs = nil
@@ -96,6 +100,10 @@ func NewOrderLineAllocator() *OrderLineAllocator {
 	ola := &OrderLineAllocator{}
 	ola.OneAllocate()
 	return ola
+}
+
+func (ola *OrderLineAllocator) Reset() {
+	ola.cur = 0
 }
 
 func (ola *OrderLineAllocator) OneAllocate() {
@@ -213,4 +221,8 @@ func (ha *HistoryAllocator) genHistoryRec() Record {
 	ha.cur++
 
 	return rec
+}
+
+func (ha *HistoryAllocator) Reset() {
+	ha.cur = 0
 }

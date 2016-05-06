@@ -5,7 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -802,16 +802,18 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64) {
 			tg.head[j] = 0
 			tg.tail[j] = -1
 		}
-		tg.oa.OneAllocate()
-		tg.ola.OneAllocate()
-		tg.ha.OneAllocate()
+		tg.oa.Reset()
+		tg.ola.Reset()
+		tg.ha.Reset()
 	}
 
 	for _, table := range tpccWL.store.tables {
 		table.Reset()
 	}
 
-	runtime.GC()
+	debug.SetGCPercent(1)
+	debug.FreeOSMemory()
+	debug.SetGCPercent(-1)
 
 }
 
