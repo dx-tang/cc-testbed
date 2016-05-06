@@ -29,6 +29,7 @@ type Table interface {
 	GetValueBySec(k Key, partNum int, val Value) error
 	SetMode(mode int)
 	BulkLoad(table Table)
+	Reset()
 }
 
 type Shard struct {
@@ -54,14 +55,8 @@ type BasicTable struct {
 	nParts      int
 	shardHash   func(Key) int
 	mode        int
-	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
 }
-
-const (
-	HASHINIT  = 2166136261
-	HASHMULTI = 16777619
-)
 
 func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, tableID int) *BasicTable {
 
@@ -130,9 +125,6 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 }
 
 func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	bt.iLock.Lock()
-	defer bt.iLock.Unlock()
-	bt.nKeys++
 
 	if !bt.isPartition {
 		partNum = 0
@@ -142,12 +134,21 @@ func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, er
 
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
+	if !bt.isPartition {
+		shard.Lock()
+	}
+
 	if _, ok := shard.rows[k]; ok {
 		return nil, EDUPKEY //One record with that key has existed;
 	}
 
 	r := MakeRecord(bt, k, tuple)
 	shard.rows[k] = r
+
+	if !bt.isPartition {
+		shard.Unlock()
+	}
+
 	return r, nil
 }
 
@@ -331,6 +332,10 @@ func (bt *BasicTable) BulkLoad(table Table) {
 		}
 	}
 	clog.Info("Basic Table Bulkload Takes %.2fs", time.Since(start).Seconds())
+}
+
+func (bt *BasicTable) Reset() {
+
 }
 
 func checkSchema(v []Value, valueSchema []BTYPE) bool {

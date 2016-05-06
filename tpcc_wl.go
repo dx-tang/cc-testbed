@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -461,10 +462,14 @@ type TPCCWorkload struct {
 	padding1        [PADDING]byte
 	transPercentage [TPCCTRANSNUM]int
 	transGen        []TPCCTransGen
-	i_id_range      int
 	w_id_range      int
+	kr_w_id         []int
 	c_id_range      int
+	kr_c_id         []int
 	c_last_range    int
+	kr_c_last       []int
+	i_id_range      int
+	kr_i_id         []int
 	store           *Store
 	nWorkers        int
 	nParts          int
@@ -545,9 +550,9 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 			var k Key
 			var partNum int
 			var tuple Tuple
-			iRecs := make([]InsertRec, 1)
-			noTuple := &NewOrderTuple{}
-			noRec := MakeRecord(store.tables[NEWORDER], k, noTuple)
+			//iRecs := make([]InsertRec, 1)
+			//noTuple := &NewOrderTuple{}
+			//noRec := MakeRecord(store.tables[NEWORDER], k, noTuple)
 			for i := 0; i < TPCCTABLENUM; i++ {
 				if i == ITEM {
 					continue
@@ -566,9 +571,9 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 						break
 					}
 					k, partNum, tuple = parseFunc(string(rowBytes))
-					iRecs[0].k = k
-					iRecs[0].partNum = partNum
-					if i == NEWORDER {
+					//iRecs[0].k = k
+					//iRecs[0].partNum = partNum
+					/*if i == NEWORDER {
 						noRec.SetTuple(tuple)
 						iRecs[0].rec = noRec
 						store.tables[i].InsertRecord(iRecs)
@@ -578,9 +583,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 						rec := MakeRecord(store.tables[i], k, tuple)
 						iRecs[0].rec = rec
 						store.tables[i].InsertRecord(iRecs)
-
-					}
-					//store.tables[i].CreateRecByID(k, partNum, tuple)
+					}*/
+					store.tables[i].CreateRecByID(k, partNum, tuple)
 				}
 				df.Close()
 			}
@@ -622,6 +626,11 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		kr_c_id[i] = tpccWL.c_id_range
 		kr_c_last[i] = tpccWL.c_last_range
 	}
+
+	tpccWL.kr_w_id = kr_w_id
+	tpccWL.kr_c_id = kr_c_id
+	tpccWL.kr_c_last = kr_c_last
+	tpccWL.kr_i_id = kr_i_id
 
 	start = time.Now()
 
@@ -709,6 +718,101 @@ func (tpccWL *TPCCWorkload) GetTransGen(partIndex int) TransGen {
 		clog.Error("Part Index %v Out of Range %v for TransGen\n", partIndex, len(tpccWL.transGen))
 	}
 	return &tpccWL.transGen[partIndex]
+}
+
+func (tpccWL *TPCCWorkload) GetKeyGens() [][]KeyGen {
+	keygens := make([][]KeyGen, tpccWL.nWorkers)
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		keygens[i] = make([]KeyGen, 3)
+		keygens[i][0] = tpccWL.transGen[i].c_id_gen
+		keygens[i][1] = tpccWL.transGen[i].c_last_gen
+		keygens[i][2] = tpccWL.transGen[i].i_id_gen
+	}
+	return keygens
+}
+
+func (tpccWL *TPCCWorkload) SetKeyGens(keygens [][]KeyGen) {
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		tpccWL.transGen[i].c_id_gen = keygens[i][0]
+		tpccWL.transGen[i].c_last_gen = keygens[i][1]
+		tpccWL.transGen[i].i_id_gen = keygens[i][2]
+	}
+}
+
+func (tpccWL *TPCCWorkload) NewKeyGen(s float64) [][]KeyGen {
+	keygens := make([][]KeyGen, tpccWL.nWorkers)
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		keygens[i] = make([]KeyGen, 3)
+		keygens[i][0] = tpcc_NewKeyGen(s, i, tpccWL.c_id_range, tpccWL.nParts, tpccWL.kr_c_id, tpccWL.isPartition)
+		keygens[i][1] = tpcc_NewKeyGen(s, i, tpccWL.c_last_range, tpccWL.nParts, tpccWL.kr_c_last, tpccWL.isPartition)
+		keygens[i][2] = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, tpccWL.nParts, tpccWL.kr_i_id, tpccWL.isPartition)
+	}
+
+	return keygens
+}
+
+func (tpccWL *TPCCWorkload) GetPartGens() []KeyGen {
+	keygens := make([]KeyGen, tpccWL.nWorkers)
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		keygens[i] = tpccWL.transGen[i].w_id_gen
+	}
+	return keygens
+}
+
+func (tpccWL *TPCCWorkload) SetPartGens(keygens []KeyGen) {
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		tpccWL.transGen[i].w_id_gen = keygens[i]
+	}
+}
+
+func (tpccWL *TPCCWorkload) NewPartGen(ps float64) []KeyGen {
+	keygens := make([]KeyGen, tpccWL.nWorkers)
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		keygens[i] = tpcc_NewKeyGen(ps, i, tpccWL.w_id_range, tpccWL.nParts, tpccWL.kr_w_id, tpccWL.isPartition)
+	}
+	return keygens
+}
+
+func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64) {
+	tp := strings.Split(transPercentage, ":")
+	if len(tp) != TPCCTRANSNUM {
+		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
+	}
+	for i, str := range tp {
+		per, err := strconv.Atoi(str)
+		if err != nil {
+			clog.Error("TransPercentage Format Error %s\n", str)
+		}
+		if i != 0 {
+			tpccWL.transPercentage[i] = tpccWL.transPercentage[i-1] + per
+		} else {
+			tpccWL.transPercentage[i] = per
+		}
+	}
+
+	if tpccWL.transPercentage[TPCCTRANSNUM-1] != 100 {
+		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
+	}
+
+	for i := 0; i < len(tpccWL.transGen); i++ {
+		tg := &tpccWL.transGen[i]
+		tg.transPercentage = tpccWL.transPercentage
+		tg.cr = cr
+		for j := 0; j < len(tg.head); j++ {
+			tg.head[j] = 0
+			tg.tail[j] = -1
+		}
+		tg.oa.OneAllocate()
+		tg.ola.OneAllocate()
+		tg.ha.OneAllocate()
+	}
+
+	for _, table := range tpccWL.store.tables {
+		table.Reset()
+	}
+
+	runtime.GC()
+
 }
 
 func makeNewOrderTrans(rnd rand.Rand, id int, rec Record) *NewOrderTrans {
@@ -925,13 +1029,13 @@ func parseCustomer(row string) (Key, int, Tuple) {
 	//tuple.len_c_last = len(columns[C_LAST])
 	//c_last := tuple.c_last[:tuple.len_c_last]
 	//copy(c_last, []byte(columns[C_LAST]))
-	var c_last int
+	var c_last int = 0
 	lastStr := columns[C_LAST]
 	for p := 0; p < 3; p++ {
 		var i int
 		for i = 0; i < len(LAST_STRING); i++ {
 			if strings.HasPrefix(lastStr, LAST_STRING[i]) {
-				c_last += c_last*10 + i
+				c_last = c_last*10 + i
 				break
 			}
 		}

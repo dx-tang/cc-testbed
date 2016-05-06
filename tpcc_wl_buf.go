@@ -29,6 +29,10 @@ func NewOrderAllocator() *OrderAllocator {
 
 func (oa *OrderAllocator) OneAllocate() {
 	oa.tuples = make([]OrderTuple, ORDER_PER_ALLOC)
+	oa.lRecs = nil
+	oa.pRecs = nil
+	oa.pRecs = nil
+	oa.aRecs = nil
 	if *SysType == LOCKING {
 		oa.lRecs = make([]LRecord, ORDER_PER_ALLOC)
 		for i := 0; i < ORDER_PER_ALLOC; i++ {

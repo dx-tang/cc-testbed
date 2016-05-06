@@ -26,6 +26,7 @@ type NewOrderTable struct {
 	padding1    [PADDING]byte
 	head        []*NoEntry
 	tail        []*NoEntry
+	initKeys    []int
 	nKeys       int
 	isPartition bool
 	mode        int
@@ -37,12 +38,15 @@ type NewOrderTable struct {
 
 func MakeNewOrderTable(warehouse int, isPartition bool, mode int) *NewOrderTable {
 	noTable := &NewOrderTable{
+		initKeys:    make([]int, warehouse*DIST_COUNT+2*PADDINGINT),
 		nKeys:       0,
 		isPartition: isPartition,
 		mode:        mode,
 		delLock:     make([]SpinLockPad, warehouse*DIST_COUNT),
 		insertLock:  make([]RWSpinLockPad, warehouse*DIST_COUNT),
 	}
+
+	noTable.initKeys = noTable.initKeys[PADDINGINT : PADDINGINT+warehouse*DIST_COUNT]
 
 	noTable.head = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
 	noTable.head = noTable.head[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
@@ -67,13 +71,11 @@ func MakeNewOrderTable(warehouse int, isPartition bool, mode int) *NewOrderTable
 }
 
 func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	no.iLock.Lock()
-	defer no.iLock.Unlock()
-
 	w_id := k[KEY0]
 	d_id := k[KEY1]
 	index := w_id*DIST_COUNT + d_id
 	noTuple := tuple.(*NewOrderTuple)
+	no.initKeys[index]++
 	entry := no.tail[index]
 	var retRec Record
 	if entry.t < CAP_NEWORDER_ENTRY { // Not Full in this entry
@@ -267,6 +269,23 @@ func (no *NewOrderTable) BulkLoad(table Table) {
 	clog.Info("NewOrder Iteration Take %.2fs", time.Since(start).Seconds())
 }
 
+func (no *NewOrderTable) Reset() {
+	for i := 0; i < len(no.head); i++ {
+		initKeys := no.initKeys[i]
+		head := no.head[i]
+		for {
+			if initKeys >= CAP_NEWORDER_ENTRY {
+				initKeys -= CAP_NEWORDER_ENTRY
+			} else {
+				head.t = initKeys
+				head.next = nil
+				break
+			}
+			head = head.next
+		}
+	}
+}
+
 const (
 	CAP_ORDER_SEC_ENTRY    = 5
 	CAP_ORDER_BUCKET_ENTRY = 5
@@ -278,14 +297,17 @@ var orderbucketcount int
 type OrderSecPart struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
-	o_id_map map[Key]*OrderSecEntry
-	padding2 [PADDING]byte
+	o_id_map      map[Key]*OrderSecEntry
+	o_id_head_map map[Key]*OrderSecEntry
+	initKey_map   map[Key]int
+	padding2      [PADDING]byte
 }
 
 type OrderSecEntry struct {
 	padding1   [PADDING]byte
 	o_id_array [CAP_ORDER_SEC_ENTRY]int
 	before     *OrderSecEntry
+	next       *OrderSecEntry
 	t          int
 	padding2   [PADDING]byte
 }
@@ -299,7 +321,9 @@ type OrderPart struct {
 type OrderBucket struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
+	initKeys int
 	tail     *OrderBucketEntry
+	head     *OrderBucketEntry
 	padding2 [PADDING]byte
 }
 
@@ -308,6 +332,7 @@ type OrderBucketEntry struct {
 	oRecs    [CAP_ORDER_BUCKET_ENTRY]Record
 	keys     [CAP_ORDER_BUCKET_ENTRY]Key
 	before   *OrderBucketEntry
+	next     *OrderBucketEntry
 	t        int
 	padding2 [PADDING]byte
 }
@@ -340,7 +365,11 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 	for k := 0; k < nParts; k++ {
 		oTable.data[k].buckets = make([]OrderBucket, orderbucketcount)
 		for i := 0; i < orderbucketcount; i++ {
-			oTable.data[k].buckets[i].tail = &OrderBucketEntry{}
+			oTable.data[k].buckets[i].tail = &OrderBucketEntry{
+				before: nil,
+				next:   nil,
+			}
+			oTable.data[k].buckets[i].head = oTable.data[k].buckets[i].tail
 		}
 	}
 
@@ -349,10 +378,17 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 		cKey[KEY0] = i / DIST_COUNT
 		cKey[KEY1] = i % DIST_COUNT
 		oTable.secIndex[i].o_id_map = make(map[Key]*OrderSecEntry)
+		oTable.secIndex[i].initKey_map = make(map[Key]int)
+		oTable.secIndex[i].o_id_head_map = make(map[Key]*OrderSecEntry)
 		for j := 0; j < 3000; j++ {
 			cKey[KEY2] = j
-			entry := &OrderSecEntry{}
+			entry := &OrderSecEntry{
+				before: nil,
+				next:   nil,
+			}
 			oTable.secIndex[i].o_id_map[cKey] = entry
+			oTable.secIndex[i].o_id_head_map[cKey] = entry
+			oTable.secIndex[i].initKey_map[cKey] = 0
 		}
 	}
 
@@ -373,10 +409,6 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 }
 
 func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	o.iLock.Lock()
-	defer o.iLock.Unlock()
-
-	o.nKeys++
 
 	if !o.isPartition {
 		partNum = 0
@@ -386,13 +418,21 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	bucketNum := o.bucketHash(k)
 	bucket := &o.data[partNum].buckets[bucketNum]
 
+	if !o.isPartition {
+		bucket.Lock()
+	}
+
+	bucket.initKeys++
+
 	rec := MakeRecord(o, k, tuple)
 
 	cur := bucket.tail.t
 	if cur == CAP_ORDER_BUCKET_ENTRY {
 		obe := &OrderBucketEntry{
+			next:   nil,
 			before: bucket.tail,
 		}
+		bucket.tail.next = obe
 		bucket.tail = obe
 		cur = bucket.tail.t
 	}
@@ -412,27 +452,38 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	if !ok {
 		oEntry = &OrderSecEntry{
 			before: nil,
+			next:   nil,
 			t:      0,
 		}
 		oPart.o_id_map[cKey] = oEntry
+		oPart.o_id_head_map[cKey] = oEntry
+		oPart.initKey_map[cKey] = 0
 		oEntry.o_id_array[oEntry.t] = oTuple.o_id
 		oEntry.t++
 	} else {
 
 		if oEntry.t == CAP_ORDER_SEC_ENTRY {
 			nextEntry := &OrderSecEntry{
+				next:   nil,
 				before: nil,
 				t:      0,
 			}
 			nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
 			nextEntry.t++
 			nextEntry.before = oEntry
+			oEntry.next = nextEntry
 			oPart.o_id_map[cKey] = nextEntry
 		} else {
 			oEntry.o_id_array[oEntry.t] = oTuple.o_id
 			oEntry.t++
 		}
+		initKey := oPart.initKey_map[cKey]
+		oPart.initKey_map[cKey] = initKey + 1
 
+	}
+
+	if !o.isPartition {
+		bucket.Unlock()
 	}
 
 	return rec, nil
@@ -622,6 +673,7 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 				}
 				nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
 				nextEntry.t++
+				oEntry.next = nextEntry
 				nextEntry.before = oEntry
 				oPart.o_id_map[cKey] = nextEntry
 			} else {
@@ -740,12 +792,54 @@ func (o *OrderTable) BulkLoad(table Table) {
 	clog.Info("OrderTable Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
+func (o *OrderTable) Reset() {
+	for i, _ := range o.data {
+		part := &o.data[i]
+		for j, _ := range part.buckets {
+			bucket := &part.buckets[j]
+			initKeys := bucket.initKeys
+			head := bucket.head
+			for {
+				if initKeys > CAP_ORDER_BUCKET_ENTRY {
+					initKeys -= CAP_ORDER_BUCKET_ENTRY
+				} else {
+					head.t = initKeys
+					head.next = nil
+					bucket.tail = head
+					break
+				}
+				head = head.next
+			}
+		}
+	}
+
+	for i, _ := range o.secIndex {
+		secPart := &o.secIndex[i]
+		for k, oPart := range secPart.o_id_head_map {
+			initKeys := secPart.initKey_map[k]
+			head := oPart
+			for {
+				if initKeys >= CAP_ORDER_SEC_ENTRY {
+					initKeys -= CAP_ORDER_SEC_ENTRY
+				} else {
+					head.t = initKeys
+					head.next = nil
+					secPart.o_id_map[k] = head
+					break
+				}
+				head = head.next
+			}
+		}
+	}
+}
+
 const (
 	CAP_CUSTOMER_ENTRY = 5
 )
 
 type CustomerPart struct {
 	padding1 [PADDING]byte
+	spinlock.Spinlock
 	c_id_map map[Key]*CustomerEntry
 	padding2 [PADDING]byte
 }
@@ -809,11 +903,6 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, mode int) *C
 }
 
 func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	c.iLock.Lock()
-	defer c.iLock.Unlock()
-
-	// Insert Partition
-	c.nKeys++
 
 	if !c.isPartition {
 		partNum = 0
@@ -821,6 +910,13 @@ func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, 
 
 	shardNum := c.shardHash(k)
 	shard := &c.data[partNum].shardedMap[shardNum]
+	cPart := &c.secIndex[partNum]
+
+	if !c.isPartition {
+		cPart.Lock()
+		defer cPart.Unlock()
+	}
+
 	rec := MakeRecord(c, k, tuple)
 	shard.rows[k] = rec
 
@@ -833,7 +929,6 @@ func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, 
 	//for i := 0; i < cTuple.len_c_last; i++ {
 	//	cKey[i+16] = cTuple.c_last[i]
 	//}
-	cPart := &c.secIndex[partNum]
 	cEntry, ok := cPart.c_id_map[cKey]
 	if !ok {
 		cEntry = &CustomerEntry{
@@ -1066,6 +1161,10 @@ func (c *CustomerTable) BulkLoad(table Table) {
 	clog.Info("CustomerTable Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
+func (c *CustomerTable) Reset() {
+
+}
+
 const (
 	CAP_HISTORY_ENTRY = 1000
 )
@@ -1081,23 +1180,29 @@ type HistoryEntry struct {
 type HistoryShard struct {
 	padding1 [PADDING]byte
 	latch    spinlock.Spinlock
+	initKeys int
 	head     *HistoryEntry
 	tail     *HistoryEntry
+	numEntry int
 	padding2 [PADDING]byte
 }
 
 type HistoryTable struct {
-	padding1  [PADDING]byte
-	shards    [SHARDCOUNT]HistoryShard
-	iLock     spinlock.Spinlock
-	shardHash func(Key) int
-	padding2  [PADDING]byte
+	padding1    [PADDING]byte
+	shards      [SHARDCOUNT]HistoryShard
+	iLock       spinlock.Spinlock
+	shardHash   func(Key) int
+	isPartition bool
+	padding2    [PADDING]byte
 }
 
 func MakeHistoryTable(nParts int, warehouse int, isPartition bool, mode int) *HistoryTable {
-	ht := &HistoryTable{}
+	ht := &HistoryTable{
+		isPartition: isPartition,
+	}
+
 	ht.shardHash = func(k Key) int {
-		return (int(k[KEY0])*3 + int(k[KEY1])*11 + int(k[KEY2])) % SHARDCOUNT
+		return (k[KEY2]*(*NumPart*DIST_COUNT) + k[KEY0]*DIST_COUNT + k[KEY1]) % SHARDCOUNT
 	}
 	for i := 0; i < SHARDCOUNT; i++ {
 		shard := &ht.shards[i]
@@ -1113,10 +1218,12 @@ func MakeHistoryTable(nParts int, warehouse int, isPartition bool, mode int) *Hi
 }
 
 func (h *HistoryTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	h.iLock.Lock()
-	defer h.iLock.Unlock()
 
-	shard := h.shards[h.shardHash(k)]
+	shard := &h.shards[h.shardHash(k)]
+	shard.latch.Lock()
+	defer shard.latch.Unlock()
+
+	shard.initKeys++
 	cur := shard.tail
 	if cur.index == CAP_HISTORY_ENTRY {
 		he := &HistoryEntry{
@@ -1175,7 +1282,7 @@ func (h *HistoryTable) InsertRecord(recs []InsertRec) error {
 		k := recs[i].k
 		rec := recs[i].rec
 
-		shard := h.shards[h.shardHash(k)]
+		shard := &h.shards[h.shardHash(k)]
 		shard.latch.Lock()
 		cur := shard.tail
 		if cur.index == CAP_HISTORY_ENTRY {
@@ -1210,6 +1317,26 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 }
 
 func (h *HistoryTable) BulkLoad(table Table) {
+
+}
+
+func (h *HistoryTable) Reset() {
+	for i, _ := range h.shards {
+		shard := &h.shards[i]
+		initKeys := shard.initKeys
+		head := shard.head
+		for {
+			if initKeys > CAP_HISTORY_ENTRY {
+				initKeys -= CAP_HISTORY_ENTRY
+			} else {
+				head.index = initKeys
+				head.next = nil
+				shard.tail = head
+				break
+			}
+			head = head.next
+		}
+	}
 }
 
 var olbucketcount int
@@ -1228,6 +1355,8 @@ type OrderLineBucket struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
 	tail     *OrderLineBucketEntry
+	head     *OrderLineBucketEntry
+	initKeys int
 	nKeys    int
 	padding2 [PADDING]byte
 }
@@ -1236,6 +1365,7 @@ type OrderLineBucketEntry struct {
 	padding1 [PADDING]byte
 	oRecs    [CAP_ORDERLINE_BUCKET_ENTRY]Record
 	keys     [CAP_ORDERLINE_BUCKET_ENTRY]Key
+	next     *OrderLineBucketEntry
 	before   *OrderLineBucketEntry
 	t        int
 	padding2 [PADDING]byte
@@ -1267,7 +1397,11 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 	for k := 0; k < nParts; k++ {
 		olTable.data[k].buckets = make([]OrderLineBucket, olbucketcount)
 		for i := 0; i < olbucketcount; i++ {
-			olTable.data[k].buckets[i].tail = &OrderLineBucketEntry{}
+			olTable.data[k].buckets[i].tail = &OrderLineBucketEntry{
+				next:   nil,
+				before: nil,
+			}
+			olTable.data[k].buckets[i].head = olTable.data[k].buckets[i].tail
 		}
 	}
 
@@ -1287,10 +1421,6 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 
 }
 func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
-	ol.iLock.Lock()
-	defer ol.iLock.Unlock()
-
-	ol.nKeys++
 
 	if !ol.isPartition {
 		partNum = 0
@@ -1299,7 +1429,13 @@ func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record
 	// Insert Order
 	bucketNum := ol.bucketHash(k)
 	bucket := &ol.data[partNum].buckets[bucketNum]
+	if !ol.isPartition {
+		bucket.Lock()
+		defer bucket.Unlock()
+	}
+
 	bucket.nKeys++
+	bucket.initKeys++
 
 	rec := MakeRecord(ol, k, tuple)
 
@@ -1308,6 +1444,7 @@ func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record
 		obe := &OrderLineBucketEntry{
 			before: bucket.tail,
 		}
+		bucket.tail.next = obe
 		bucket.tail = obe
 		cur = bucket.tail.t
 	}
@@ -1462,6 +1599,7 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec) error {
 			obe := &OrderLineBucketEntry{
 				before: bucket.tail,
 			}
+			bucket.tail.next = obe
 			bucket.tail = obe
 			cur = bucket.tail.t
 		}
@@ -1545,4 +1683,27 @@ func (ol *OrderLineTable) BulkLoad(table Table) {
 	}
 
 	clog.Info("OrderLineTable Iteration Takes %.2fs", time.Since(start).Seconds())
+}
+
+func (ol *OrderLineTable) Reset() {
+	for i := 0; i < len(ol.data); i++ {
+		olPart := &ol.data[i]
+		for j := 0; j < len(olPart.buckets); j++ {
+			bucket := &olPart.buckets[j]
+			head := bucket.head
+			initKeys := bucket.initKeys
+			bucket.nKeys = initKeys
+			for {
+				if initKeys > CAP_ORDERLINE_BUCKET_ENTRY {
+					initKeys -= CAP_ORDERLINE_BUCKET_ENTRY
+				} else {
+					head.t = initKeys
+					head.next = nil
+					bucket.tail = head
+					break
+				}
+				head = head.next
+			}
+		}
+	}
 }
