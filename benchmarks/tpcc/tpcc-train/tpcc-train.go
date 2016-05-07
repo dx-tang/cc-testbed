@@ -153,7 +153,7 @@ func main() {
 				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS, *dataDir)
 				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
 				if *prof {
-					f, err := os.Create("smallbank.prof")
+					f, err := os.Create("tpcc.prof")
 					if err != nil {
 						clog.Error(err.Error())
 					}
