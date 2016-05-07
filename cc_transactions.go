@@ -616,9 +616,6 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
-	fv0 := &sbTrnas.fv[0]
-	fv1 := &sbTrnas.fv[1]
-
 	var part0, part1 int
 	if len(sbTrnas.accessParts) == 1 {
 		part0 = sbTrnas.accessParts[0]
@@ -628,74 +625,79 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		part1 = sbTrnas.accessParts[1]
 	}
 
-	acctId0 := sbTrnas.accoutID[0]
-	acctId1 := sbTrnas.accoutID[1]
+	for i := 0; i < SBMAXSUBTRANS; i++ {
+		fv0 := &sbTrnas.fv[i*SBMAXPARTS+0]
+		fv1 := &sbTrnas.fv[i*SBMAXPARTS+1]
 
-	var val Value
-	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
-	}
+		acctId0 := sbTrnas.accoutID[i*SBMAXPARTS+0]
+		acctId1 := sbTrnas.accoutID[i*SBMAXPARTS+1]
 
-	_, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
-	}
-
-	err = exec.MayWrite(SAVINGS, acctId0, part0, req)
-	if err != nil {
-		return nil, err
-	}
-
-	err = exec.MayWrite(CHECKING, acctId1, part1, req)
-	if err != nil {
-		return nil, err
-	}
-
-	val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, SAVING_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	//sum := val.(*FloatValue).floatVal
-	fv0.floatVal = val.(*FloatValue).floatVal
-
-	val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, CHECK_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	//sum += val.(*FloatValue).floatVal
-	fv1.floatVal = val.(*FloatValue).floatVal
-
-	/*val, err = exec.ReadValue(SAVINGS, acctId1, part1, 1)
-	if err != nil {
-		return nil, err
-	}
-	sum = val.(*FloatValue).floatVal - sum*/
-
-	//fv0.floatVal = float64(0)
-	//fv1.floatVal = sum
-
-	/*
-		err = exec.WriteValue(CHECKING, acctId0, part0, fv0, 1)
+		var val Value
+		var err error
+		_, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, req)
 		if err != nil {
 			return nil, err
 		}
 
-		err = exec.WriteValue(SAVINGS, acctId1, part1, fv1, 1)
+		_, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, req)
 		if err != nil {
 			return nil, err
 		}
-	*/
 
-	err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, req, false)
-	if err != nil {
-		return nil, err
-	}
+		err = exec.MayWrite(SAVINGS, acctId0, part0, req)
+		if err != nil {
+			return nil, err
+		}
 
-	err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, req, false)
-	if err != nil {
-		return nil, err
+		err = exec.MayWrite(CHECKING, acctId1, part1, req)
+		if err != nil {
+			return nil, err
+		}
+
+		val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, SAVING_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		//sum := val.(*FloatValue).floatVal
+		fv0.floatVal = val.(*FloatValue).floatVal
+
+		val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, CHECK_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		//sum += val.(*FloatValue).floatVal
+		fv1.floatVal = val.(*FloatValue).floatVal
+
+		/*val, err = exec.ReadValue(SAVINGS, acctId1, part1, 1)
+		if err != nil {
+			return nil, err
+		}
+		sum = val.(*FloatValue).floatVal - sum*/
+
+		//fv0.floatVal = float64(0)
+		//fv1.floatVal = sum
+
+		/*
+			err = exec.WriteValue(CHECKING, acctId0, part0, fv0, 1)
+			if err != nil {
+				return nil, err
+			}
+
+			err = exec.WriteValue(SAVINGS, acctId1, part1, fv1, 1)
+			if err != nil {
+				return nil, err
+			}
+		*/
+
+		err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, req, false)
+		if err != nil {
+			return nil, err
+		}
+
+		err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, req, false)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if exec.Commit(req) == 0 {
@@ -719,10 +721,6 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
-	fv0 := &sbTrnas.fv[0]
-	fv1 := &sbTrnas.fv[1]
-	ammt := &sbTrnas.ammount
-
 	var part0, part1 int
 	if len(sbTrnas.accessParts) == 1 {
 		part0 = sbTrnas.accessParts[0]
@@ -732,58 +730,65 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 		part1 = sbTrnas.accessParts[1]
 	}
 
-	send := sbTrnas.accoutID[0]
-	dest := sbTrnas.accoutID[1]
+	ammt := &sbTrnas.ammount
 
-	var val Value
-	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
-	}
+	for i := 0; i < SBMAXSUBTRANS; i++ {
+		fv0 := &sbTrnas.fv[i*SBMAXPARTS+0]
+		fv1 := &sbTrnas.fv[i*SBMAXPARTS+1]
 
-	_, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
-	}
+		send := sbTrnas.accoutID[i*SBMAXPARTS+0]
+		dest := sbTrnas.accoutID[i*SBMAXPARTS+1]
 
-	err = exec.MayWrite(CHECKING, send, part0, req)
-	if err != nil {
-		return nil, err
-	}
+		var val Value
+		var err error
+		_, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, req)
+		if err != nil {
+			return nil, err
+		}
 
-	err = exec.MayWrite(CHECKING, dest, part1, req)
-	if err != nil {
-		return nil, err
-	}
+		_, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, req)
+		if err != nil {
+			return nil, err
+		}
 
-	val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, CHECK_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	bal := val.(*FloatValue).floatVal
+		err = exec.MayWrite(CHECKING, send, part0, req)
+		if err != nil {
+			return nil, err
+		}
 
-	if bal < ammt.floatVal {
-		exec.Abort(req)
-		return nil, ELACKBALANCE
-	}
+		err = exec.MayWrite(CHECKING, dest, part1, req)
+		if err != nil {
+			return nil, err
+		}
 
-	fv0.floatVal = bal - ammt.floatVal
+		val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, CHECK_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		bal := val.(*FloatValue).floatVal
 
-	val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, CHECK_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	fv1.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
+		if bal < ammt.floatVal {
+			exec.Abort(req)
+			return nil, ELACKBALANCE
+		}
 
-	err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, req, false)
-	if err != nil {
-		return nil, err
-	}
+		fv0.floatVal = bal - ammt.floatVal
 
-	err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, req, false)
-	if err != nil {
-		return nil, err
+		val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, CHECK_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		fv1.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
+
+		err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, req, false)
+		if err != nil {
+			return nil, err
+		}
+
+		err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, req, false)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if exec.Commit(req) == 0 {
@@ -807,27 +812,30 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 
 	ret := &sbTrnas.ret
 	part := sbTrnas.accessParts[0]
-	acct := sbTrnas.accoutID[0]
 
-	var val Value
-	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
+	for i := 0; i < SBMAXSUBTRANS; i++ {
+		acct := sbTrnas.accoutID[i]
+
+		var val Value
+		var err error
+		_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
+		if err != nil {
+			return nil, err
+		}
+
+		val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		ret.floatVal = val.(*FloatValue).floatVal
+
+		val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+
+		ret.floatVal += val.(*FloatValue).floatVal
 	}
-
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	ret.floatVal = val.(*FloatValue).floatVal
-
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-
-	ret.floatVal += val.(*FloatValue).floatVal
 
 	if exec.Commit(req) == 0 {
 		return nil, EABORT
@@ -850,41 +858,44 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 	req := &sbTrnas.req
 
 	part := sbTrnas.accessParts[0]
-	acct := sbTrnas.accoutID[0]
 	ammt := &sbTrnas.ammount
-	fv0 := &sbTrnas.fv[0]
 
-	var val Value
-	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
-	}
+	for i := 0; i < SBMAXSUBTRANS; i++ {
+		acct := sbTrnas.accoutID[i]
+		fv0 := &sbTrnas.fv[i]
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	checkBal := val.(*FloatValue).floatVal
-	sum := checkBal
-
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	sum += val.(*FloatValue).floatVal
-
-	if sum < ammt.floatVal {
-		fv0.floatVal = checkBal - ammt.floatVal + float32(1)
-		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false)
+		var val Value
+		var err error
+		_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		fv0.floatVal = checkBal - ammt.floatVal
-		err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false)
+
+		val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
 		if err != nil {
 			return nil, err
+		}
+		checkBal := val.(*FloatValue).floatVal
+		sum := checkBal
+
+		val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		sum += val.(*FloatValue).floatVal
+
+		if sum < ammt.floatVal {
+			fv0.floatVal = checkBal - ammt.floatVal + float32(1)
+			err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			fv0.floatVal = checkBal - ammt.floatVal
+			err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -907,26 +918,30 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 	req := &sbTrnas.req
 
 	part := sbTrnas.accessParts[0]
-	acct := sbTrnas.accoutID[0]
 	ammt := &sbTrnas.ammount
-	fv0 := &sbTrnas.fv[0]
 
-	var val Value
-	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
-	}
+	for i := 0; i < SBMAXSUBTRANS; i++ {
+		fv0 := &sbTrnas.fv[i]
+		acct := sbTrnas.accoutID[i]
 
-	val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	fv0.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
+		var val Value
+		var err error
+		_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
+		if err != nil {
+			return nil, err
+		}
 
-	err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, req, false)
-	if err != nil {
-		return nil, err
+		val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		fv0.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
+
+		err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, req, false)
+		if err != nil {
+			return nil, err
+		}
+
 	}
 
 	if exec.Commit(req) == 0 {
@@ -951,31 +966,34 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 	req := &sbTrnas.req
 
 	part := sbTrnas.accessParts[0]
-	acct := sbTrnas.accoutID[0]
 	ammt := &sbTrnas.ammount
-	fv0 := &sbTrnas.fv[0]
 
-	var val Value
-	var err error
-	_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
-	if err != nil {
-		return nil, err
-	}
+	for i := 0; i < SBMAXSUBTRANS; i++ {
+		acct := sbTrnas.accoutID[i]
+		fv0 := &sbTrnas.fv[i]
 
-	val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
-	if err != nil {
-		return nil, err
-	}
-	sum := val.(*FloatValue).floatVal + ammt.floatVal
-
-	if sum < 0 {
-		exec.Abort(req)
-		return nil, ENEGSAVINGS
-	} else {
-		fv0.floatVal = sum
-		err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, req, false)
+		var val Value
+		var err error
+		_, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req)
 		if err != nil {
 			return nil, err
+		}
+
+		val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req)
+		if err != nil {
+			return nil, err
+		}
+		sum := val.(*FloatValue).floatVal + ammt.floatVal
+
+		if sum < 0 {
+			exec.Abort(req)
+			return nil, ENEGSAVINGS
+		} else {
+			fv0.floatVal = sum
+			err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, req, false)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

@@ -43,9 +43,11 @@ const (
 )
 
 const (
-	SBTRANSNUM  = 6
-	SBMAXPARTS  = 2
-	SBSTRMAXLEN = 100
+	SBTRANSNUM    = 6
+	SBMAXPARTS    = 2
+	SBMAXSUBTRANS = 5
+	SBMAXKEYS     = SBMAXPARTS * SBMAXSUBTRANS
+	SBSTRMAXLEN   = 100
 )
 
 type AccoutsTuple struct {
@@ -251,19 +253,21 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	case BALANCE: // Get Balance from One Account
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
-		t.accoutID = t.accoutID[:1]
-		t.accoutID[0] = gen.GetKey(CHECKING, pi)
+		t.accoutID = t.accoutID[:SBMAXSUBTRANS]
+		for i := 0; i < SBMAXSUBTRANS; i++ {
+			t.accoutID[i] = gen.GetKey(CHECKING, pi)
+		}
 	case WRITECHECK:
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
-		t.accoutID = t.accoutID[:1]
-		t.accoutID[0] = gen.GetKey(CHECKING, pi)
+		t.accoutID = t.accoutID[:SBMAXSUBTRANS]
+		for i := 0; i < SBMAXSUBTRANS; i++ {
+			t.accoutID[i] = gen.GetKey(CHECKING, pi)
+		}
 		t.ammount.floatVal = AMMT
 	case AMALGAMATE:
 		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			t.accoutID = t.accoutID[:2]
-			//tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
 			for {
 				tmpPi = gen.GenOnePart()
 				if tmpPi != pi {
@@ -273,31 +277,33 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 			if tmpPi > pi {
 				t.accessParts[0] = pi
 				t.accessParts[1] = tmpPi
-				t.accoutID[0] = gen.GetKey(CHECKING, pi)
-				t.accoutID[1] = gen.GetKey(CHECKING, tmpPi)
 			} else {
 				t.accessParts[0] = tmpPi
 				t.accessParts[1] = pi
-				t.accoutID[0] = gen.GetKey(CHECKING, tmpPi)
-				t.accoutID[1] = gen.GetKey(CHECKING, pi)
+			}
+			t.accoutID = t.accoutID[:SBMAXKEYS]
+			for i := 0; i < SBMAXSUBTRANS; i++ {
+				t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, t.accessParts[0])
+				t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
 			}
 		} else {
 			t.accessParts = t.accessParts[:1]
 			t.accessParts[0] = pi
-			t.accoutID = t.accoutID[:2]
-			t.accoutID[0] = gen.GetKey(CHECKING, pi)
-			for {
-				tmpKey := gen.GetKey(CHECKING, pi)
-				if tmpKey != t.accoutID[0] {
-					t.accoutID[1] = tmpKey
-					break
+			t.accoutID = t.accoutID[:SBMAXKEYS]
+			for i := 0; i < SBMAXSUBTRANS; i++ {
+				t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, pi)
+				for {
+					tmpKey := gen.GetKey(CHECKING, pi)
+					if tmpKey != t.accoutID[0] {
+						t.accoutID[i*SBMAXPARTS+1] = tmpKey
+						break
+					}
 				}
 			}
 		}
 	case SENDPAYMENT:
 		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			t.accoutID = t.accoutID[:2]
 			//tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
 			for {
 				tmpPi = gen.GenOnePart()
@@ -308,24 +314,27 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 			if tmpPi > pi {
 				t.accessParts[0] = pi
 				t.accessParts[1] = tmpPi
-				t.accoutID[0] = gen.GetKey(CHECKING, pi)
-				t.accoutID[1] = gen.GetKey(CHECKING, tmpPi)
 			} else {
 				t.accessParts[0] = tmpPi
 				t.accessParts[1] = pi
-				t.accoutID[0] = gen.GetKey(CHECKING, tmpPi)
-				t.accoutID[1] = gen.GetKey(CHECKING, pi)
+			}
+			t.accoutID = t.accoutID[:SBMAXKEYS]
+			for i := 0; i < SBMAXSUBTRANS; i++ {
+				t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, t.accessParts[0])
+				t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
 			}
 		} else {
 			t.accessParts = t.accessParts[:1]
 			t.accessParts[0] = pi
-			t.accoutID = t.accoutID[:2]
-			t.accoutID[0] = gen.GetKey(CHECKING, pi)
-			for {
-				tmpKey := gen.GetKey(CHECKING, pi)
-				if tmpKey != t.accoutID[0] {
-					t.accoutID[1] = tmpKey
-					break
+			t.accoutID = t.accoutID[:SBMAXKEYS]
+			for i := 0; i < SBMAXSUBTRANS; i++ {
+				t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, pi)
+				for {
+					tmpKey := gen.GetKey(CHECKING, pi)
+					if tmpKey != t.accoutID[0] {
+						t.accoutID[i*SBMAXPARTS+1] = tmpKey
+						break
+					}
 				}
 			}
 		}
@@ -333,14 +342,18 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	case DEPOSITCHECKING:
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
-		t.accoutID = t.accoutID[:1]
-		t.accoutID[0] = gen.GetKey(CHECKING, pi)
+		t.accoutID = t.accoutID[:SBMAXSUBTRANS]
+		for i := 0; i < SBMAXSUBTRANS; i++ {
+			t.accoutID[i] = gen.GetKey(CHECKING, pi)
+		}
 		t.ammount.floatVal = AMMT
 	case TRANSACTIONSAVINGS:
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
-		t.accoutID = t.accoutID[:1]
-		t.accoutID[0] = gen.GetKey(SAVINGS, pi)
+		t.accoutID = t.accoutID[:SBMAXSUBTRANS]
+		for i := 0; i < SBMAXSUBTRANS; i++ {
+			t.accoutID[i] = gen.GetKey(SAVINGS, pi)
+		}
 		t.ammount.floatVal = AMMT
 	default:
 		clog.Error("SmallBank does not support transaction %v\n", t.TXN)
@@ -463,9 +476,9 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 		for p := 0; p < QUEUESIZE; p++ {
 			trans := &SBTrans{
 				accessParts: make([]int, 0, SBMAXPARTS+2*PADDINGINT),
-				accoutID:    make([]Key, 0, SBMAXPARTS+2*PADDINGKEY),
+				accoutID:    make([]Key, 0, SBMAXKEYS+2*PADDINGKEY),
 				//ammount:     FloatValue{},
-				fv: make([]FloatValue, SBMAXPARTS),
+				fv: make([]FloatValue, SBMAXKEYS),
 				//ret:         FloatValue{},
 			}
 			trans.req.id = i

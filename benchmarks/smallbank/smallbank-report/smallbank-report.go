@@ -51,6 +51,7 @@ func main() {
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
+	testbed.WLTYPE = testbed.SMALLBANKWL
 
 	nParts := nWorkers
 	isPartition := true

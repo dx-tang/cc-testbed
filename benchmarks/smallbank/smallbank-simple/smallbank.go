@@ -36,6 +36,7 @@ func main() {
 	flag.Parse()
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
+	testbed.WLTYPE = testbed.SMALLBANKWL
 
 	if strings.Compare(*wl, "") == 0 {
 		clog.Error("WorkLoad not specified\n")
@@ -81,7 +82,7 @@ func main() {
 	}
 
 	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps)
-	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, sb.GetIDToKeyRange(), -1, -1, testbed.SMALLBANKWL)
+	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SMALLBANKWL)
 
 	clog.Info("Done with Populating Store\n")
 

@@ -76,6 +76,7 @@ func main() {
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
+	testbed.WLTYPE = testbed.SMALLBANKWL
 
 	if *prof {
 		f, err := os.Create("smallbank.prof")

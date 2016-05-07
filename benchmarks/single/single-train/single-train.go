@@ -81,6 +81,7 @@ func main() {
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
+	testbed.WLTYPE = testbed.SINGLEWL
 
 	if *prof {
 		f, err := os.Create("single.prof")

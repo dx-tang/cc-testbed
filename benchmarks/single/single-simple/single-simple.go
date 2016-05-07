@@ -39,6 +39,7 @@ func main() {
 	flag.Parse()
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
+	testbed.WLTYPE = testbed.SINGLEWL
 
 	if strings.Compare(*wl, "") == 0 {
 		clog.Error("WorkLoad not specified\n")

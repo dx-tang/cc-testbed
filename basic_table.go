@@ -35,8 +35,9 @@ type Table interface {
 type Shard struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
-	rows     map[Key]Record
-	padding2 [PADDING]byte
+	rows        map[Key]Record
+	init_orders map[Key]int
+	padding2    [PADDING]byte
 }
 
 type Partition struct {
@@ -55,6 +56,7 @@ type BasicTable struct {
 	nParts      int
 	shardHash   func(Key) int
 	mode        int
+	tableID     int
 	padding2    [PADDING]byte
 }
 
@@ -68,6 +70,7 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 		isPartition: isPartition,
 		nParts:      nParts,
 		mode:        mode,
+		tableID:     tableID,
 	}
 
 	if isPartition {
@@ -81,18 +84,20 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 		}
 	}
 
-	if tableID == ITEM {
-		bt.shardHash = func(k Key) int {
-			return k[KEY0] % SHARDCOUNT
-		}
-	} else if tableID == STOCK {
-		if isPartition {
+	if WLTYPE == TPCCWL {
+		if tableID == ITEM {
 			bt.shardHash = func(k Key) int {
-				return k[KEY1] % SHARDCOUNT
+				return k[KEY0] % SHARDCOUNT
 			}
-		} else {
-			bt.shardHash = func(k Key) int {
-				return (k[KEY1]*(*NumPart) + k[KEY0]) % SHARDCOUNT
+		} else if tableID == STOCK {
+			if isPartition {
+				bt.shardHash = func(k Key) int {
+					return k[KEY1] % SHARDCOUNT
+				}
+			} else {
+				bt.shardHash = func(k Key) int {
+					return (k[KEY1]*(*NumPart) + k[KEY0]) % SHARDCOUNT
+				}
 			}
 		}
 	}
@@ -117,6 +122,7 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 		bt.data[k].shardedMap = make([]Shard, SHARDCOUNT)
 		for i := 0; i < SHARDCOUNT; i++ {
 			bt.data[k].shardedMap[i].rows = make(map[Key]Record)
+			bt.data[k].shardedMap[i].init_orders = make(map[Key]int)
 		}
 	}
 
@@ -144,6 +150,10 @@ func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, er
 
 	r := MakeRecord(bt, k, tuple)
 	shard.rows[k] = r
+
+	if WLTYPE == TPCCWL && bt.tableID == DISTRICT {
+		shard.init_orders[k] = tuple.(*DistrictTuple).d_next_o_id
+	}
 
 	if !bt.isPartition {
 		shard.Unlock()
@@ -335,7 +345,18 @@ func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc) {
 }
 
 func (bt *BasicTable) Reset() {
+	if WLTYPE == TPCCWL && bt.tableID == DISTRICT {
+		for i, _ := range bt.data {
+			part := &bt.data[i]
+			for j, _ := range part.shardedMap {
+				shard := &part.shardedMap[j]
+				for k, rec := range shard.rows {
+					rec.GetTuple().(*DistrictTuple).d_next_o_id = shard.init_orders[k]
+				}
+			}
 
+		}
+	}
 }
 
 func checkSchema(v []Value, valueSchema []BTYPE) bool {

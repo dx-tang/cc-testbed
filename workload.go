@@ -9,6 +9,10 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+var (
+	WLTYPE int
+)
+
 const (
 	SINGLEWL = iota
 	SMALLBANKWL
