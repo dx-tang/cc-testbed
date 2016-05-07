@@ -173,7 +173,7 @@ func main() {
 				}
 				tpccWL.SetKeyGens(keyGens)
 				tpccWL.SetPartGens(partGens)
-				tpccWL.ResetConf(tmpTP, float64(curCR))
+				tpccWL.ResetConf(tmpTP, float64(curCR), coord)
 			}
 			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, tmpPS, tmpContention, tmpTP)
 

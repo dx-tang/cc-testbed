@@ -773,7 +773,7 @@ func (tpccWL *TPCCWorkload) NewPartGen(ps float64) []KeyGen {
 	return keygens
 }
 
-func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64) {
+func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord *Coordinator) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != TPCCTRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -809,6 +809,13 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64) {
 
 	for _, table := range tpccWL.store.tables {
 		table.Reset()
+	}
+
+	for _, w := range coord.Workers {
+		w.iaAR[ORDER].Reset()
+		w.iaAR[ORDERLINE].Reset()
+		w.iaAR[HISTORY].Reset()
+		w.iaAR[NEWORDER].Reset()
 	}
 
 	debug.SetGCPercent(1)

@@ -73,6 +73,7 @@ func (oa *OrderAllocator) OneAllocate() {
 
 func (oa *OrderAllocator) genOrderRec() Record {
 	if oa.cur == ORDER_PER_ALLOC {
+		clog.Info("Order One Allocate")
 		oa.OneAllocate()
 	}
 	var rec Record
@@ -144,6 +145,7 @@ func (ola *OrderLineAllocator) OneAllocate() {
 
 func (ola *OrderLineAllocator) genOrderLineRec() Record {
 	if ola.cur == ORDERLINE_PER_ALLOC {
+		clog.Info("OrderLine One Allocate")
 		ola.OneAllocate()
 	}
 	var rec Record
@@ -211,6 +213,7 @@ func (ha *HistoryAllocator) OneAllocate() {
 
 func (ha *HistoryAllocator) genHistoryRec() Record {
 	if ha.cur == HISTORY_PER_ALLOC {
+		clog.Info("History One Allocate")
 		ha.OneAllocate()
 	}
 	var rec Record
@@ -260,6 +263,7 @@ func (oia *OrderIndexAlloc) OneAllocate() {
 
 func (oia *OrderIndexAlloc) GetEntry() Value {
 	if oia.bucketCur == ORDER_INDEX_PER_ALLOC {
+		clog.Info("Order Index One Allocate")
 		oia.bucketEntry = make([]OrderBucketEntry, ORDER_INDEX_PER_ALLOC)
 		oia.bucketCur = 0
 	}
@@ -273,6 +277,7 @@ func (oia *OrderIndexAlloc) GetEntry() Value {
 
 func (oia *OrderIndexAlloc) GetSecEntry() Value {
 	if oia.secCur == ORDER_SECINDEX_PER_ALLOC {
+		clog.Info("Order SecIndex One Allocate")
 		oia.secEntry = make([]OrderSecEntry, ORDER_SECINDEX_PER_ALLOC)
 		oia.secCur = 0
 	}
@@ -303,6 +308,7 @@ func (ol *OrderLineIndexAlloc) OneAllocate() {
 
 func (ol *OrderLineIndexAlloc) GetEntry() Value {
 	if ol.bucketCur == ORDERLINE_INDEX_PER_ALLOC {
+		clog.Info("OrderLine Index One Allocate")
 		ol.OneAllocate()
 	}
 	entry := &ol.bucketEntry[ol.bucketCur]
@@ -335,6 +341,7 @@ func (h *HistoryIndexAlloc) OneAllocate() {
 
 func (h *HistoryIndexAlloc) GetEntry() Value {
 	if h.cur == HISTORY_INDEX_PER_ALLOC {
+		clog.Info("History Index One Allocate")
 		h.OneAllocate()
 	}
 	entry := &h.entry[h.cur]
@@ -371,6 +378,7 @@ func (no *NewOrderIndexAlloc) OneAllocate() {
 
 func (no *NewOrderIndexAlloc) GetEntry() Value {
 	if no.cur == NEWORDER_INDEX_PER_ALLOC {
+		clog.Info("NewOrder Index One Allocate")
 		no.OneAllocate()
 	}
 	entry := &no.entry[no.cur]
