@@ -78,15 +78,6 @@ func main() {
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
 
-	if *prof {
-		f, err := os.Create("smallbank.prof")
-		if err != nil {
-			clog.Error(err.Error())
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
 	f, err := os.OpenFile(*trainOut, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		clog.Error("Open File Error %s\n", err.Error())
@@ -160,6 +151,14 @@ func main() {
 			if tpccWL == nil {
 				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS, *dataDir)
 				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
+				if *prof {
+					f, err := os.Create("smallbank.prof")
+					if err != nil {
+						clog.Error(err.Error())
+					}
+					pprof.StartCPUProfile(f)
+					defer pprof.StopCPUProfile()
+				}
 			} else {
 				keyGens, ok := keyGenPool[tmpContention]
 				if !ok {

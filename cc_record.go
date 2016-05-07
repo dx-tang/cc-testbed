@@ -337,12 +337,11 @@ func (dr *DRecord) Upgrade(req *LockReq) bool {
 }
 
 func (dr *DRecord) GetTuple() Tuple {
-	clog.Error("Dummy mode does not support GetTuple Operation")
-	return nil
+	return dr.tuple
 }
 
 func (dr *DRecord) SetTuple(t Tuple) {
-	clog.Error("Dummy mode does not support SetTuple Operation")
+	dr.tuple = t
 }
 
 func (dr *DRecord) DeltaValue(val Value, col int) {

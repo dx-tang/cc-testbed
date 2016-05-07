@@ -8,8 +8,15 @@ import (
 )
 
 const (
-	CAP_NEWORDER_ENTRY = 1000
 	DIST_COUNT         = 10
+	CAP_NEWORDER_ENTRY = 1000
+	CAP_HISTORY_ENTRY  = 1000
+	CAP_CUSTOMER_ENTRY = 5
+
+	CAP_BUCKET_COUNT           = 2000
+	CAP_ORDER_SEC_ENTRY        = 5
+	CAP_ORDER_BUCKET_ENTRY     = 5
+	CAP_ORDERLINE_BUCKET_ENTRY = 50
 )
 
 type NoEntry struct {
@@ -279,12 +286,6 @@ func (no *NewOrderTable) Reset() {
 		}
 	}
 }
-
-const (
-	CAP_ORDER_SEC_ENTRY    = 5
-	CAP_ORDER_BUCKET_ENTRY = 5
-	CAP_BUCKET_COUNT       = 2000
-)
 
 var orderbucketcount int
 
@@ -824,10 +825,6 @@ func (o *OrderTable) Reset() {
 	}
 }
 
-const (
-	CAP_CUSTOMER_ENTRY = 5
-)
-
 type CustomerPart struct {
 	padding1 [PADDING]byte
 	spinlock.Spinlock
@@ -1156,10 +1153,6 @@ func (c *CustomerTable) Reset() {
 
 }
 
-const (
-	CAP_HISTORY_ENTRY = 1000
-)
-
 type HistoryEntry struct {
 	padding1 [PADDING]byte
 	data     [CAP_HISTORY_ENTRY]Record
@@ -1328,10 +1321,6 @@ func (h *HistoryTable) Reset() {
 }
 
 var olbucketcount int
-
-const (
-	CAP_ORDERLINE_BUCKET_ENTRY = 50
-)
 
 type OrderLinePart struct {
 	padding1 [PADDING]byte
