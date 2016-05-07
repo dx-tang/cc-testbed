@@ -182,7 +182,7 @@ func (no *NewOrderTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
+func (no *NewOrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 	for i, _ := range recs {
 		iRec := &recs[i]
 		k := iRec.k
@@ -200,16 +200,10 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec) error {
 		entry.o_id_array[entry.t] = iRec.rec.GetTuple().(*NewOrderTuple).no_o_id
 		entry.t++
 		if entry.t == CAP_NEWORDER_ENTRY {
-			// New a Entry
-			dRec := &DRecord{}
-			dRec.tuple = &NewOrderTuple{
-				no_w_id: k[KEY0],
-				no_d_id: k[KEY1],
-			}
-			newEntry := &NoEntry{}
-			newEntry.rec = dRec
-			newEntry.h = 0
-			newEntry.t = 0
+			newEntry := ia.GetEntry().(*NoEntry)
+			tuple := newEntry.rec.GetTuple().(*NewOrderTuple)
+			tuple.no_w_id = k[KEY0]
+			tuple.no_d_id = k[KEY1]
 			entry.next = newEntry
 			no.tail[index] = newEntry
 		}
@@ -245,7 +239,7 @@ func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum 
 	return nil
 }
 
-func (no *NewOrderTable) BulkLoad(table Table) {
+func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc) {
 	var compKey Key
 	tuple := &NewOrderTuple{}
 	rec := MakeRecord(no, compKey, tuple)
@@ -261,7 +255,7 @@ func (no *NewOrderTable) BulkLoad(table Table) {
 		for entry != nil {
 			for _, k := range entry.o_id_array {
 				tuple.no_o_id = k
-				table.InsertRecord(iRecs)
+				table.InsertRecord(iRecs, ia)
 			}
 			entry = entry.next
 		}
@@ -609,7 +603,7 @@ func (o *OrderTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (o *OrderTable) InsertRecord(recs []InsertRec) error {
+func (o *OrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 	o.nKeys += len(recs)
 
 	for i, _ := range recs {
@@ -639,9 +633,9 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 
 		cur := bucket.tail.t
 		if cur == CAP_ORDER_BUCKET_ENTRY {
-			obe := &OrderBucketEntry{
-				before: bucket.tail,
-			}
+			obe := ia.GetEntry().(*OrderBucketEntry)
+			obe.before = bucket.tail
+			bucket.tail.next = obe
 			bucket.tail = obe
 			cur = bucket.tail.t
 		}
@@ -667,10 +661,7 @@ func (o *OrderTable) InsertRecord(recs []InsertRec) error {
 			oEntry.t++
 		} else {
 			if oEntry.t == CAP_ORDER_SEC_ENTRY {
-				nextEntry := &OrderSecEntry{
-					before: nil,
-					t:      0,
-				}
+				nextEntry := ia.GetSecEntry().(*OrderSecEntry)
 				nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
 				nextEntry.t++
 				oEntry.next = nextEntry
@@ -759,7 +750,7 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 	return ENOKEY
 }
 
-func (o *OrderTable) BulkLoad(table Table) {
+func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range o.data {
@@ -772,7 +763,7 @@ func (o *OrderTable) BulkLoad(table Table) {
 				for p := tail.t - 1; p >= 0; p-- {
 					iRecs[0].k = tail.keys[p]
 					iRecs[0].rec = tail.oRecs[p]
-					table.InsertRecord(iRecs)
+					table.InsertRecord(iRecs, ia)
 				}
 				tail = tail.before
 			}
@@ -1040,7 +1031,7 @@ func (c *CustomerTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (c *CustomerTable) InsertRecord(recs []InsertRec) error {
+func (c *CustomerTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 	for i, _ := range recs {
 		rec := recs[i].rec
 		k := recs[i].k
@@ -1143,7 +1134,7 @@ func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum i
 	return nil
 }
 
-func (c *CustomerTable) BulkLoad(table Table) {
+func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range c.data {
@@ -1154,7 +1145,7 @@ func (c *CustomerTable) BulkLoad(table Table) {
 			for k, v := range shard.rows {
 				iRecs[0].k = k
 				iRecs[0].rec = v
-				table.InsertRecord(iRecs)
+				table.InsertRecord(iRecs, ia)
 			}
 		}
 	}
@@ -1277,7 +1268,7 @@ func (h *HistoryTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (h *HistoryTable) InsertRecord(recs []InsertRec) error {
+func (h *HistoryTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 	for i, _ := range recs {
 		k := recs[i].k
 		rec := recs[i].rec
@@ -1286,10 +1277,7 @@ func (h *HistoryTable) InsertRecord(recs []InsertRec) error {
 		shard.latch.Lock()
 		cur := shard.tail
 		if cur.index == CAP_HISTORY_ENTRY {
-			he := &HistoryEntry{
-				index: 0,
-				next:  nil,
-			}
+			he := ia.GetEntry().(*HistoryEntry)
 			cur.next = he
 			shard.tail = he
 			cur = he
@@ -1316,7 +1304,7 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 	return nil
 }
 
-func (h *HistoryTable) BulkLoad(table Table) {
+func (h *HistoryTable) BulkLoad(table Table, ia IndexAlloc) {
 
 }
 
@@ -1574,7 +1562,7 @@ func (ol *OrderLineTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (ol *OrderLineTable) InsertRecord(recs []InsertRec) error {
+func (ol *OrderLineTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 	ol.nKeys += len(recs)
 
 	partNum := recs[0].partNum
@@ -1596,9 +1584,8 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec) error {
 
 		cur := bucket.tail.t
 		if cur == CAP_ORDERLINE_BUCKET_ENTRY {
-			obe := &OrderLineBucketEntry{
-				before: bucket.tail,
-			}
+			obe := ia.GetEntry().(*OrderLineBucketEntry)
+			obe.before = bucket.tail
 			bucket.tail.next = obe
 			bucket.tail = obe
 			cur = bucket.tail.t
@@ -1662,7 +1649,7 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 	return ENOKEY
 }
 
-func (ol *OrderLineTable) BulkLoad(table Table) {
+func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range ol.data {
@@ -1675,7 +1662,7 @@ func (ol *OrderLineTable) BulkLoad(table Table) {
 				for p := tail.t - 1; p >= 0; p-- {
 					iRecs[0].k = tail.keys[p]
 					iRecs[0].rec = tail.oRecs[p]
-					table.InsertRecord(iRecs)
+					table.InsertRecord(iRecs, ia)
 				}
 				tail = tail.before
 			}

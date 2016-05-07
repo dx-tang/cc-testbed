@@ -285,6 +285,7 @@ func (p *PTransaction) Abort(req *LockReq) TID {
 
 func (p *PTransaction) Commit(req *LockReq) TID {
 	s := p.Store()
+	w := p.w
 	for i := 0; i < len(p.tt); i++ {
 		t := &p.tt[i]
 		for j := 0; j < len(t.wRecs); j++ {
@@ -304,7 +305,7 @@ func (p *PTransaction) Commit(req *LockReq) TID {
 		t.wRecs = t.wRecs[0:0]
 
 		if len(t.iRecs) != 0 {
-			s.InsertRecord(i, t.iRecs)
+			s.InsertRecord(i, t.iRecs, w.iaAR[i])
 		}
 		t.iRecs = t.iRecs[0:0]
 
@@ -794,6 +795,7 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 
 	// Phase 3: Apply all writes
 	s := o.s
+	w := o.w
 	for p := 0; p < len(o.tt); p++ {
 		t := &o.tt[p]
 
@@ -802,7 +804,7 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 		}
 
 		if len(t.iRecs) != 0 {
-			s.InsertRecord(p, t.iRecs)
+			s.InsertRecord(p, t.iRecs, w.iaAR[p])
 		}
 	}
 
@@ -1310,7 +1312,7 @@ func (l *LTransaction) Abort(req *LockReq) TID {
 }
 
 func (l *LTransaction) Commit(req *LockReq) TID {
-	//w := l.w
+	w := l.w
 	s := l.s
 
 	for i := 0; i < len(l.rt); i++ {
@@ -1325,7 +1327,7 @@ func (l *LTransaction) Commit(req *LockReq) TID {
 		//	s.InsertRecord(i, t.iRecs[j].k, t.iRecs[j].partNum, t.iRecs[j].rec)
 		//}
 		if len(t.iRecs) != 0 {
-			s.InsertRecord(i, t.iRecs)
+			s.InsertRecord(i, t.iRecs, w.iaAR[i])
 		}
 
 		t.iRecs = t.iRecs[:0]

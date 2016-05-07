@@ -226,3 +226,164 @@ func (ha *HistoryAllocator) genHistoryRec() Record {
 func (ha *HistoryAllocator) Reset() {
 	ha.cur = 0
 }
+
+const (
+	ORDER_INDEX_PER_ALLOC     = 30000
+	ORDER_SECINDEX_PER_ALLOC  = 30000
+	ORDERLINE_INDEX_PER_ALLOC = 300000
+	HISTORY_INDEX_PER_ALLOC   = 10000
+	NEWORDER_INDEX_PER_ALLOC  = 30000
+)
+
+type IndexAlloc interface {
+	OneAllocate()
+	GetEntry() Value
+	GetSecEntry() Value
+	Reset()
+}
+
+type OrderIndexAlloc struct {
+	padding1    [PADDING]byte
+	bucketEntry []OrderBucketEntry
+	secEntry    []OrderSecEntry
+	bucketCur   int
+	secCur      int
+	padding2    [PADDING]byte
+}
+
+func (oia *OrderIndexAlloc) OneAllocate() {
+	oia.bucketEntry = make([]OrderBucketEntry, ORDER_INDEX_PER_ALLOC)
+	oia.secEntry = make([]OrderSecEntry, ORDER_SECINDEX_PER_ALLOC)
+	oia.secCur = 0
+	oia.bucketCur = 0
+}
+
+func (oia *OrderIndexAlloc) GetEntry() Value {
+	if oia.bucketCur == ORDER_INDEX_PER_ALLOC {
+		oia.bucketEntry = make([]OrderBucketEntry, ORDER_INDEX_PER_ALLOC)
+		oia.bucketCur = 0
+	}
+	entry := &oia.bucketEntry[oia.bucketCur]
+	entry.next = nil
+	entry.before = nil
+	entry.t = 0
+	oia.bucketCur++
+	return entry
+}
+
+func (oia *OrderIndexAlloc) GetSecEntry() Value {
+	if oia.secCur == ORDER_SECINDEX_PER_ALLOC {
+		oia.secEntry = make([]OrderSecEntry, ORDER_SECINDEX_PER_ALLOC)
+		oia.secCur = 0
+	}
+	entry := &oia.secEntry[oia.secCur]
+	entry.next = nil
+	entry.before = nil
+	entry.t = 0
+	oia.secCur++
+	return entry
+}
+
+func (oia *OrderIndexAlloc) Reset() {
+	oia.bucketCur = 0
+	oia.secCur = 0
+}
+
+type OrderLineIndexAlloc struct {
+	padding1    [PADDING]byte
+	bucketEntry []OrderLineBucketEntry
+	bucketCur   int
+	padding2    [PADDING]byte
+}
+
+func (ol *OrderLineIndexAlloc) OneAllocate() {
+	ol.bucketEntry = make([]OrderLineBucketEntry, ORDERLINE_INDEX_PER_ALLOC)
+	ol.bucketCur = 0
+}
+
+func (ol *OrderLineIndexAlloc) GetEntry() Value {
+	if ol.bucketCur == ORDERLINE_INDEX_PER_ALLOC {
+		ol.OneAllocate()
+	}
+	entry := &ol.bucketEntry[ol.bucketCur]
+	entry.t = 0
+	entry.before = nil
+	entry.next = nil
+	ol.bucketCur++
+	return entry
+}
+
+func (ol *OrderLineIndexAlloc) GetSecEntry() Value {
+	return nil
+}
+
+func (ol *OrderLineIndexAlloc) Reset() {
+	ol.bucketCur = 0
+}
+
+type HistoryIndexAlloc struct {
+	padding1 [PADDING]byte
+	entry    []HistoryEntry
+	cur      int
+	padding2 [PADDING]byte
+}
+
+func (h *HistoryIndexAlloc) OneAllocate() {
+	h.entry = make([]HistoryEntry, HISTORY_INDEX_PER_ALLOC)
+	h.cur = 0
+}
+
+func (h *HistoryIndexAlloc) GetEntry() Value {
+	if h.cur == HISTORY_INDEX_PER_ALLOC {
+		h.OneAllocate()
+	}
+	entry := &h.entry[h.cur]
+	entry.index = 0
+	entry.next = nil
+	h.cur++
+	return entry
+}
+
+func (h *HistoryIndexAlloc) GetSecEntry() Value {
+	return nil
+}
+
+func (h *HistoryIndexAlloc) Reset() {
+	h.cur = 0
+}
+
+type NewOrderIndexAlloc struct {
+	padding1 [PADDING]byte
+	entry    []NoEntry
+	cur      int
+	padding2 [PADDING]byte
+}
+
+func (no *NewOrderIndexAlloc) OneAllocate() {
+	no.entry = make([]NoEntry, NEWORDER_INDEX_PER_ALLOC)
+	for i := 0; i < NEWORDER_INDEX_PER_ALLOC; i++ {
+		dRec := &DRecord{}
+		dRec.tuple = &NewOrderTuple{}
+		no.entry[i].rec = dRec
+	}
+	no.cur = 0
+}
+
+func (no *NewOrderIndexAlloc) GetEntry() Value {
+	if no.cur == NEWORDER_INDEX_PER_ALLOC {
+		no.OneAllocate()
+	}
+	entry := &no.entry[no.cur]
+	entry.t = 0
+	entry.h = 0
+	entry.next = nil
+	return entry
+}
+
+func (no *NewOrderIndexAlloc) GetSecEntry() Value {
+	return nil
+}
+
+func (no *NewOrderIndexAlloc) Reset() {
+	no.cur = 0
+}

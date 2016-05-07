@@ -24,11 +24,11 @@ type Table interface {
 	DeleteRecord(k Key, partNum int) error
 	ReleaseDelete(k Key, partNum int)
 	PrepareInsert(k Key, partNum int) error
-	InsertRecord(recs []InsertRec) error
+	InsertRecord(recs []InsertRec, ia IndexAlloc) error
 	ReleaseInsert(k Key, partNum int)
 	GetValueBySec(k Key, partNum int, val Value) error
 	SetMode(mode int)
-	BulkLoad(table Table)
+	BulkLoad(table Table, ia IndexAlloc)
 	Reset()
 }
 
@@ -254,7 +254,7 @@ func (bt *BasicTable) PrepareInsert(k Key, partNum int) error {
 	return nil
 }
 
-func (bt *BasicTable) InsertRecord(recs []InsertRec) error {
+func (bt *BasicTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 	for i, _ := range recs {
 		iRec := &recs[i]
 		partNum := iRec.partNum
@@ -316,7 +316,7 @@ func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int
 	r.DeltaValue(value, colNum)
 	return nil
 }
-func (bt *BasicTable) BulkLoad(table Table) {
+func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc) {
 	recs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range bt.data {
@@ -327,7 +327,7 @@ func (bt *BasicTable) BulkLoad(table Table) {
 			for k, v := range shard.rows {
 				recs[0].k = k
 				recs[0].rec = v
-				table.InsertRecord(recs)
+				table.InsertRecord(recs, ia)
 			}
 		}
 	}

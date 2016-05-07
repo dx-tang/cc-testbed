@@ -58,6 +58,7 @@ type Worker struct {
 	riMaster     *ReportInfo
 	riReplica    *ReportInfo
 	st           *SampleTool
+	iaAR         []IndexAlloc
 	padding2     [PADDING]byte
 }
 
@@ -65,7 +66,7 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 	w.txns[fn] = transaction
 }
 
-func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int) *Worker {
+func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int, workload int) *Worker {
 	w := &Worker{
 		ID:         id,
 		store:      s,
@@ -97,6 +98,18 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.E = w.ExecPool[mode]
 	} else {
 		clog.Error("System Type %v Not Supported Yet\n", *SysType)
+	}
+
+	if workload == TPCCWL {
+		w.iaAR = make([]IndexAlloc, tableCount)
+		w.iaAR[NEWORDER] = &NewOrderIndexAlloc{}
+		w.iaAR[NEWORDER].OneAllocate()
+		w.iaAR[ORDER] = &OrderIndexAlloc{}
+		w.iaAR[ORDER].OneAllocate()
+		w.iaAR[HISTORY] = &HistoryIndexAlloc{}
+		w.iaAR[HISTORY].OneAllocate()
+		w.iaAR[ORDERLINE] = &OrderLineIndexAlloc{}
+		w.iaAR[ORDERLINE].OneAllocate()
 	}
 
 	// SmallBank Workload

@@ -295,9 +295,9 @@ func (s *Store) PrepareInsert(tableID int, k Key, partNum int) error {
 	return table.PrepareInsert(k, partNum)
 }
 
-func (s *Store) InsertRecord(tableID int, recs []InsertRec) error {
+func (s *Store) InsertRecord(tableID int, recs []InsertRec, ia IndexAlloc) error {
 	table := s.tables[tableID]
-	return table.InsertRecord(recs)
+	return table.InsertRecord(recs, ia)
 }
 
 func (s *Store) ReleaseInsert(tableID int, k Key, partNum int) {

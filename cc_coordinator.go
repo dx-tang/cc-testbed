@@ -89,7 +89,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 	}
 
 	for i := range coordinator.Workers {
-		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate)
+		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate, workload)
 		coordinator.reports[i] = make(chan *ReportInfo, 1)
 		coordinator.changeACK[i] = make(chan bool, 1)
 	}
