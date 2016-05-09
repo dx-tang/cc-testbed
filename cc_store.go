@@ -319,3 +319,7 @@ func (s *Store) DeltaValueByID(tableID int, k Key, partNum int, value Value, col
 	table := s.tables[tableID]
 	return table.DeltaValueByID(k, partNum, value, colNum)
 }
+
+func (s *Store) GetTables() []Table {
+	return s.tables
+}

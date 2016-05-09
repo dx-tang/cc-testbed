@@ -1,6 +1,7 @@
 package testbed
 
 import (
+	"sync"
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
@@ -43,6 +44,50 @@ type NewOrderTable struct {
 	padding2    [PADDING]byte
 }
 
+func MakeNewOrderTablePara(warehouse int, isPartition bool, mode int, workers int) *NewOrderTable {
+	noTable := &NewOrderTable{
+		initKeys:    make([]int, warehouse*DIST_COUNT+2*PADDINGINT),
+		nKeys:       0,
+		isPartition: isPartition,
+		mode:        mode,
+		delLock:     make([]SpinLockPad, warehouse*DIST_COUNT),
+		insertLock:  make([]RWSpinLockPad, warehouse*DIST_COUNT),
+	}
+
+	noTable.initKeys = noTable.initKeys[PADDINGINT : PADDINGINT+warehouse*DIST_COUNT]
+
+	noTable.head = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
+	noTable.head = noTable.head[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
+	noTable.tail = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
+	noTable.tail = noTable.tail[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
+
+	perPart := warehouse * DIST_COUNT / workers
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			startPart := n * perPart
+			for p := startPart; p < startPart+perPart && p < warehouse*DIST_COUNT; p++ {
+				x := p / DIST_COUNT
+				y := p % DIST_COUNT
+				dRec := &DRecord{}
+				dRec.tuple = &NewOrderTuple{}
+				entry := &NoEntry{}
+				entry.rec = dRec
+				entry.h = 0
+				entry.t = 0
+
+				noTable.head[x*DIST_COUNT+y] = entry
+				noTable.tail[x*DIST_COUNT+y] = entry
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	return noTable
+}
+
 func MakeNewOrderTable(warehouse int, isPartition bool, mode int) *NewOrderTable {
 	noTable := &NewOrderTable{
 		initKeys:    make([]int, warehouse*DIST_COUNT+2*PADDINGINT),
@@ -62,15 +107,7 @@ func MakeNewOrderTable(warehouse int, isPartition bool, mode int) *NewOrderTable
 
 	for i := 0; i < warehouse; i++ {
 		for j := 0; j < DIST_COUNT; j++ {
-			dRec := &DRecord{}
-			dRec.tuple = &NewOrderTuple{}
-			entry := &NoEntry{}
-			entry.rec = dRec
-			entry.h = 0
-			entry.t = 0
 
-			noTable.head[i*DIST_COUNT+j] = entry
-			noTable.tail[i*DIST_COUNT+j] = entry
 		}
 	}
 
@@ -343,6 +380,69 @@ type OrderTable struct {
 	bucketHash  func(k Key) int
 	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
+}
+
+func MakeOrderTablePara(nParts int, warehouse int, isPartition bool, mode int, workers int) *OrderTable {
+	if !isPartition {
+		clog.Error("Parall Loading Execute in Partition Mode")
+	}
+	oTable := &OrderTable{
+		data:        make([]OrderPart, nParts),
+		secIndex:    make([]OrderSecPart, warehouse*DIST_COUNT),
+		nKeys:       0,
+		nParts:      nParts,
+		isPartition: isPartition,
+		mode:        mode,
+	}
+
+	orderbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+
+	perWorker := nParts / workers
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			var cKey Key
+			for k := n * perWorker; k < nParts && k < n*perWorker+perWorker; k++ {
+				oTable.data[k].buckets = make([]OrderBucket, orderbucketcount)
+				for j := 0; j < orderbucketcount; j++ {
+					oTable.data[k].buckets[j].tail = &OrderBucketEntry{
+						before: nil,
+						next:   nil,
+					}
+					oTable.data[k].buckets[j].head = oTable.data[k].buckets[j].tail
+				}
+
+				cKey[KEY0] = k
+				for p := 0; p < DIST_COUNT; p++ {
+					q := p + k*DIST_COUNT
+					cKey[KEY1] = q % DIST_COUNT
+					oTable.secIndex[q].o_id_map = make(map[Key]*OrderSecEntry)
+					oTable.secIndex[q].initKey_map = make(map[Key]int)
+					oTable.secIndex[q].o_id_head_map = make(map[Key]*OrderSecEntry)
+					for j := 0; j < 3000; j++ {
+						cKey[KEY2] = j
+						entry := &OrderSecEntry{
+							before: nil,
+							next:   nil,
+						}
+						oTable.secIndex[q].o_id_map[cKey] = entry
+						oTable.secIndex[q].o_id_head_map[cKey] = entry
+						oTable.secIndex[q].initKey_map[cKey] = 0
+					}
+				}
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	oTable.bucketHash = func(k Key) int {
+		oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
+		return int(oid % int64(orderbucketcount))
+	}
+
+	return oTable
 }
 
 func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *OrderTable {
@@ -854,6 +954,46 @@ type CustomerTable struct {
 	padding2    [PADDING]byte
 }
 
+func MakeCustomerTablePara(nParts int, warehouse int, isPartition bool, mode int, workers int) *CustomerTable {
+	if !isPartition {
+		clog.Error("Parall Loading Execute in Partition Mode")
+	}
+	cTable := &CustomerTable{
+		nKeys:       0,
+		isPartition: isPartition,
+		nParts:      nParts,
+		mode:        mode,
+	}
+
+	cTable.data = make([]Partition, nParts)
+	cTable.secIndex = make([]CustomerPart, nParts)
+
+	perWorker := nParts / workers
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			for k := n * perWorker; k < nParts && k < n*perWorker+perWorker; k++ {
+				cTable.secIndex[k].c_id_map = make(map[Key]*CustomerEntry)
+
+				cTable.data[k].shardedMap = make([]Shard, SHARDCOUNT)
+				for j := 0; j < SHARDCOUNT; j++ {
+					cTable.data[k].shardedMap[j].rows = make(map[Key]Record)
+				}
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	cTable.shardHash = func(k Key) int {
+		hash := int64(k[KEY2]*DIST_COUNT) + int64(k[KEY1])
+		return int(hash % SHARDCOUNT)
+	}
+
+	return cTable
+}
+
 func MakeCustomerTable(nParts int, warehouse int, isPartition bool, mode int) *CustomerTable {
 	cTable := &CustomerTable{
 		nKeys:       0,
@@ -1358,6 +1498,45 @@ type OrderLineTable struct {
 	bucketHash  func(k Key) int
 	iLock       spinlock.Spinlock
 	padding2    [PADDING]byte
+}
+
+func MakeOrderLineTablePara(nParts int, warehouse int, isPartition bool, mode int, workers int) *OrderLineTable {
+	olTable := &OrderLineTable{
+		data:        make([]OrderLinePart, nParts),
+		nKeys:       0,
+		nParts:      nParts,
+		isPartition: isPartition,
+		mode:        mode,
+	}
+
+	olbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+
+	perWorker := nParts / workers
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			for k := n * perWorker; k < nParts && k < n*perWorker+perWorker; k++ {
+				olTable.data[k].buckets = make([]OrderLineBucket, olbucketcount)
+				for j := 0; j < olbucketcount; j++ {
+					olTable.data[k].buckets[j].tail = &OrderLineBucketEntry{
+						next:   nil,
+						before: nil,
+					}
+					olTable.data[k].buckets[j].head = olTable.data[k].buckets[j].tail
+				}
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	olTable.bucketHash = func(k Key) int {
+		oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
+		return int(oid % int64(orderbucketcount))
+	}
+
+	return olTable
 }
 
 func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *OrderLineTable {

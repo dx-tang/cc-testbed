@@ -3,6 +3,7 @@ package testbed
 import (
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
+	"sync"
 	"time"
 )
 
@@ -60,13 +61,72 @@ type BasicTable struct {
 	padding2    [PADDING]byte
 }
 
+func NewBasicTablePara(schemaStrs []string, nParts int, isPartition bool, mode int, tableID int, workers int) *BasicTable {
+	if !isPartition {
+		clog.Error("Parallel Loading Executes in Partition Mode")
+	}
+	// We allocate more space to make the array algined to cache line
+	bt := &BasicTable{
+		//valueSchema: make([]BTYPE, len(schemaStrs)-1),
+		nKeys: 0,
+		//name:        schemaStrs[0],
+		isPartition: isPartition,
+		nParts:      nParts,
+		mode:        mode,
+		tableID:     tableID,
+	}
+
+	bt.shardHash = func(k Key) int {
+		return k[KEY1] % SHARDCOUNT
+	}
+
+	if WLTYPE == TPCCWL {
+		if tableID == ITEM {
+			bt.shardHash = func(k Key) int {
+				return k[KEY0] % SHARDCOUNT
+			}
+		} else if tableID == STOCK {
+			if isPartition {
+				bt.shardHash = func(k Key) int {
+					return k[KEY1] % SHARDCOUNT
+				}
+			} else {
+				bt.shardHash = func(k Key) int {
+					return (k[KEY1]*(*NumPart) + k[KEY0]) % SHARDCOUNT
+				}
+			}
+		}
+	}
+
+	bt.data = make([]Partition, nParts)
+
+	perWorker := nParts / workers
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			for k := n * perWorker; k < nParts && k < n*perWorker+perWorker; k++ {
+				bt.data[k].shardedMap = make([]Shard, SHARDCOUNT)
+				for j := 0; j < SHARDCOUNT; j++ {
+					bt.data[k].shardedMap[j].rows = make(map[Key]Record)
+					bt.data[k].shardedMap[j].init_orders = make(map[Key]int)
+				}
+			}
+			wg.Done()
+		}(i)
+	}
+
+	return bt
+
+}
+
 func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, tableID int) *BasicTable {
 
 	// We allocate more space to make the array algined to cache line
 	bt := &BasicTable{
-		valueSchema: make([]BTYPE, len(schemaStrs)-1),
-		nKeys:       0,
-		name:        schemaStrs[0],
+		//valueSchema: make([]BTYPE, len(schemaStrs)-1),
+		nKeys: 0,
+		//name:        schemaStrs[0],
 		isPartition: isPartition,
 		nParts:      nParts,
 		mode:        mode,
@@ -102,21 +162,22 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 		}
 	}
 
-	for j := 0; j < len(schemaStrs)-1; j++ {
-		switch schemaStrs[j+1] {
-		case "int":
-			bt.valueSchema[j] = INTEGER
-		case "string":
-			bt.valueSchema[j] = STRING
-		case "float":
-			bt.valueSchema[j] = FLOAT
-		case "date":
-			bt.valueSchema[j] = DATE
-		default:
-			clog.Error("Wrong Value Type %s", schemaStrs[j+1])
+	/*
+		for j := 0; j < len(schemaStrs)-1; j++ {
+			switch schemaStrs[j+1] {
+			case "int":
+				bt.valueSchema[j] = INTEGER
+			case "string":
+				bt.valueSchema[j] = STRING
+			case "float":
+				bt.valueSchema[j] = FLOAT
+			case "date":
+				bt.valueSchema[j] = DATE
+			default:
+				clog.Error("Wrong Value Type %s", schemaStrs[j+1])
+			}
 		}
-	}
-
+	*/
 	bt.data = make([]Partition, nParts)
 	for k := 0; k < nParts; k++ {
 		bt.data[k].shardedMap = make([]Shard, SHARDCOUNT)
