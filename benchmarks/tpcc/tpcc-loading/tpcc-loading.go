@@ -22,6 +22,7 @@ func main() {
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
 	testbed.WLTYPE = testbed.TPCCWL
+	*testbed.SysType = testbed.OCC
 
 	nParts := nWorkers
 
@@ -44,7 +45,8 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	mode := testbed.OCC
+	*testbed.SysType = testbed.PARTITION
+	mode := testbed.PARTITION
 
 	start = time.Now()
 
@@ -86,15 +88,23 @@ func main() {
 
 	perLoader := nParts / nLoaders
 	residue := nParts % nLoaders
-	ia := make([][]testbed.IndexAlloc, nLoaders)
-	for i := 0; i < nLoaders; i++ {
-		ia[i] = make([]testbed.IndexAlloc, len(tables))
-		ia[i][testbed.NEWORDER] = &testbed.NewOrderIndexAlloc{}
-		ia[i][testbed.NEWORDER].OneAllocate()
-		ia[i][testbed.ORDER] = &testbed.OrderIndexAlloc{}
-		ia[i][testbed.ORDER].OneAllocate()
-		ia[i][testbed.ORDERLINE] = &testbed.OrderLineIndexAlloc{}
-		ia[i][testbed.ORDERLINE].OneAllocate()
+	ia := make([][]testbed.IndexAlloc, len(tables))
+	ia[testbed.NEWORDER] = make([]testbed.IndexAlloc, nWorkers)
+	for i := 0; i < nWorkers; i++ {
+		ia[testbed.NEWORDER][i] = &testbed.NewOrderIndexAlloc{}
+		ia[testbed.NEWORDER][i].OneAllocate()
+	}
+
+	ia[testbed.ORDER] = make([]testbed.IndexAlloc, nWorkers)
+	for i := 0; i < nWorkers; i++ {
+		ia[testbed.ORDER][i] = &testbed.OrderIndexAlloc{}
+		ia[testbed.ORDER][i].OneAllocate()
+	}
+
+	ia[testbed.ORDERLINE] = make([]testbed.IndexAlloc, nWorkers)
+	for i := 0; i < nWorkers; i++ {
+		ia[testbed.ORDERLINE][i] = &testbed.OrderLineIndexAlloc{}
+		ia[testbed.ORDERLINE][i].OneAllocate()
 	}
 
 	start = time.Now()
@@ -103,7 +113,6 @@ func main() {
 	for i := 0; i < nLoaders; i++ {
 		wg.Add(1)
 		go func(n int) {
-			iaAR := ia[n]
 			begin := n * perLoader
 			if n < residue {
 				begin += n
@@ -117,7 +126,7 @@ func main() {
 			clog.Info("Loading start from %v to %v", begin, end)
 			for j := 0; j < len(tables); j++ {
 				if j != testbed.ITEM && j != testbed.HISTORY {
-					tables[j].BulkLoad(newTables[j], iaAR[j], begin, end)
+					tables[j].BulkLoad(newTables[j], ia[j], begin, end)
 				}
 			}
 			wg.Done()
