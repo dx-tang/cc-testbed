@@ -867,7 +867,6 @@ func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 	start := time.Now()
 	for i, _ := range o.data {
 		part := &o.data[i]
-		iRecs[0].partNum = i
 		for j, _ := range part.buckets {
 			bucket := &part.buckets[j]
 			tail := bucket.tail
@@ -878,6 +877,7 @@ func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 					}
 					iRecs[0].k = tail.keys[p]
 					iRecs[0].rec = tail.oRecs[p]
+					iRecs[0].partNum = iRecs[0].k[0]
 					table.InsertRecord(iRecs, ia)
 				}
 				tail = tail.before
@@ -1290,7 +1290,6 @@ func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int)
 	start := time.Now()
 	for i, _ := range c.data {
 		part := &c.data[i]
-		iRecs[0].partNum = i
 		for j, _ := range part.shardedMap {
 			shard := &part.shardedMap[j]
 			for k, v := range shard.rows {
@@ -1299,6 +1298,7 @@ func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int)
 				}
 				iRecs[0].k = k
 				iRecs[0].rec = v
+				iRecs[0].partNum = k[0]
 				table.InsertRecord(iRecs, ia)
 			}
 		}
@@ -1839,7 +1839,6 @@ func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end in
 	start := time.Now()
 	for i, _ := range ol.data {
 		part := &ol.data[i]
-		iRecs[0].partNum = i
 		for j, _ := range part.buckets {
 			bucket := &part.buckets[j]
 			tail := bucket.tail
@@ -1850,6 +1849,7 @@ func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end in
 					}
 					iRecs[0].k = tail.keys[p]
 					iRecs[0].rec = tail.oRecs[p]
+					iRecs[0].partNum = iRecs[0].k[0]
 					table.InsertRecord(iRecs, ia)
 				}
 				tail = tail.before

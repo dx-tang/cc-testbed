@@ -392,7 +392,6 @@ func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 	start := time.Now()
 	for i, _ := range bt.data {
 		part := &bt.data[i]
-		recs[0].partNum = i
 		for j, _ := range part.shardedMap {
 			shard := &part.shardedMap[j]
 			for k, v := range shard.rows {
@@ -401,6 +400,7 @@ func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 				}
 				recs[0].k = k
 				recs[0].rec = v
+				recs[0].partNum = k[0]
 				table.InsertRecord(recs, ia)
 			}
 		}
