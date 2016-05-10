@@ -291,7 +291,7 @@ func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum 
 	return nil
 }
 
-func (no *NewOrderTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end int) {
+func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 	var compKey Key
 	tuple := &NewOrderTuple{}
 	rec := MakeRecord(no, compKey, tuple)
@@ -310,7 +310,7 @@ func (no *NewOrderTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end i
 		for entry != nil {
 			for _, k := range entry.o_id_array {
 				tuple.no_o_id = k
-				table.InsertRecord(iRecs, ia[iRecs[0].partNum])
+				table.InsertRecord(iRecs, ia)
 			}
 			entry = entry.next
 		}
@@ -716,7 +716,7 @@ func (o *OrderTable) PrepareInsert(k Key, partNum int) error {
 }
 
 func (o *OrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
-	o.nKeys += len(recs)
+	//o.nKeys += len(recs)
 
 	for i, _ := range recs {
 		iRec := &recs[i]
@@ -862,7 +862,7 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 	return ENOKEY
 }
 
-func (o *OrderTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end int) {
+func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range o.data {
@@ -878,7 +878,7 @@ func (o *OrderTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end int) 
 					iRecs[0].k = tail.keys[p]
 					iRecs[0].rec = tail.oRecs[p]
 					iRecs[0].partNum = iRecs[0].k[0]
-					table.InsertRecord(iRecs, ia[iRecs[0].partNum])
+					table.InsertRecord(iRecs, ia)
 				}
 				tail = tail.before
 			}
@@ -1189,7 +1189,7 @@ func (c *CustomerTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		partNum := recs[i].partNum
 		tuple := rec.GetTuple()
 
-		c.nKeys++
+		//c.nKeys++
 
 		if !c.isPartition {
 			partNum = 0
@@ -1285,7 +1285,7 @@ func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum i
 	return nil
 }
 
-func (c *CustomerTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end int) {
+func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range c.data {
@@ -1299,7 +1299,7 @@ func (c *CustomerTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end in
 				iRecs[0].k = k
 				iRecs[0].rec = v
 				iRecs[0].partNum = k[0]
-				table.InsertRecord(iRecs, ia[iRecs[0].partNum])
+				table.InsertRecord(iRecs, ia)
 			}
 		}
 	}
@@ -1454,7 +1454,7 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 	return nil
 }
 
-func (h *HistoryTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end int) {
+func (h *HistoryTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 
 }
 
@@ -1748,7 +1748,7 @@ func (ol *OrderLineTable) PrepareInsert(k Key, partNum int) error {
 }
 
 func (ol *OrderLineTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
-	ol.nKeys += len(recs)
+	//ol.nKeys += len(recs)
 
 	partNum := recs[0].partNum
 	if !ol.isPartition {
@@ -1834,7 +1834,7 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 	return ENOKEY
 }
 
-func (ol *OrderLineTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end int) {
+func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range ol.data {
@@ -1850,7 +1850,7 @@ func (ol *OrderLineTable) BulkLoad(table Table, ia []IndexAlloc, begin int, end 
 					iRecs[0].k = tail.keys[p]
 					iRecs[0].rec = tail.oRecs[p]
 					iRecs[0].partNum = iRecs[0].k[0]
-					table.InsertRecord(iRecs, ia[iRecs[0].partNum])
+					table.InsertRecord(iRecs, ia)
 				}
 				tail = tail.before
 			}
