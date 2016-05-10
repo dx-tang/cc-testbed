@@ -89,19 +89,20 @@ func main() {
 	perLoader := nParts / nLoaders
 	residue := nParts % nLoaders
 	ia := make([][]testbed.IndexAlloc, len(tables))
-	ia[testbed.NEWORDER] = make([]testbed.IndexAlloc, nWorkers)
+	for i := 0; i < len(tables); i++ {
+		ia[i] = make([]testbed.IndexAlloc, nWorkers)
+	}
+
 	for i := 0; i < nWorkers; i++ {
 		ia[testbed.NEWORDER][i] = &testbed.NewOrderIndexAlloc{}
 		ia[testbed.NEWORDER][i].OneAllocate()
 	}
 
-	ia[testbed.ORDER] = make([]testbed.IndexAlloc, nWorkers)
 	for i := 0; i < nWorkers; i++ {
 		ia[testbed.ORDER][i] = &testbed.OrderIndexAlloc{}
 		ia[testbed.ORDER][i].OneAllocate()
 	}
 
-	ia[testbed.ORDERLINE] = make([]testbed.IndexAlloc, nWorkers)
 	for i := 0; i < nWorkers; i++ {
 		ia[testbed.ORDERLINE][i] = &testbed.OrderLineIndexAlloc{}
 		ia[testbed.ORDERLINE][i].OneAllocate()
