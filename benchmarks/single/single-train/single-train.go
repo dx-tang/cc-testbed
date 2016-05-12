@@ -83,6 +83,8 @@ func main() {
 	nWorkers := *testbed.NumPart
 	testbed.WLTYPE = testbed.SINGLEWL
 
+	testbed.InitGlobalBuffer()
+
 	if *prof {
 		f, err := os.Create("single.prof")
 		if err != nil {
@@ -188,7 +190,7 @@ func main() {
 
 		for {
 			if single == nil {
-				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, tmpPS)
+				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, tmpPS, testbed.PARTITION)
 				coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SINGLEWL)
 			} else {
 				basic := single.GetBasicWL()

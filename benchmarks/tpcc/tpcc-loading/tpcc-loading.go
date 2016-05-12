@@ -30,7 +30,7 @@ func main() {
 	clog.Info("Number of Loaders %v \n", nLoaders)
 
 	start := time.Now()
-	tpccWL := testbed.NewTPCCWL(*wl, nParts, false, nWorkers, 1, "100:0:0:0:0:0", 0, 0, *dataDir)
+	tpccWL := testbed.NewTPCCWL(*wl, nParts, false, nWorkers, 1, "100:0:0:0:0:0", 0, 0, *dataDir, testbed.OCC)
 	store := tpccWL.GetStore()
 	clog.Info("Making Store %3.fs", time.Since(start).Seconds())
 

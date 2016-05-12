@@ -78,6 +78,8 @@ func main() {
 	nWorkers := *testbed.NumPart
 	testbed.WLTYPE = testbed.SMALLBANKWL
 
+	testbed.InitGlobalBuffer()
+
 	if *prof {
 		f, err := os.Create("smallbank.prof")
 		if err != nil {
@@ -158,7 +160,7 @@ func main() {
 			}
 
 			if sb == nil {
-				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS)
+				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS, testbed.PARTITION)
 				coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SMALLBANKWL)
 			} else {
 				basic := sb.GetBasicWL()

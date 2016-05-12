@@ -386,7 +386,7 @@ type SingelWorkload struct {
 	transGen        []*SingleTransGen
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -410,7 +410,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps)
+	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
 
 	// Populating the Store
 	hp := singleWL.basic.generators[0]

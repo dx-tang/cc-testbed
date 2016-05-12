@@ -83,9 +83,10 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
-	//sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr)
-	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps)
-	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, single.GetIDToKeyRange(), -1, -1, testbed.SINGLEWL)
+	testbed.InitGlobalBuffer()
+
+	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps, testbed.PARTITION)
+	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SINGLEWL)
 
 	clog.Info("Done with Populating Store\n")
 

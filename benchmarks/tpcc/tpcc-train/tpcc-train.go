@@ -79,6 +79,8 @@ func main() {
 	nWorkers := *testbed.NumPart
 	testbed.WLTYPE = testbed.TPCCWL
 
+	testbed.InitGlobalBuffer()
+
 	f, err := os.OpenFile(*trainOut, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		clog.Error("Open File Error %s\n", err.Error())
@@ -150,7 +152,7 @@ func main() {
 			}
 
 			if tpccWL == nil {
-				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS, *dataDir)
+				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS, *dataDir, testbed.PARTITION)
 				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
 				if *prof {
 					f, err := os.Create("tpcc.prof")
@@ -174,7 +176,7 @@ func main() {
 				}
 				tpccWL.SetKeyGens(keyGens)
 				tpccWL.SetPartGens(partGens)
-				tpccWL.ResetConf(tmpTP, float64(curCR), coord)
+				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true)
 			}
 			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, tmpPS, tmpContention, tmpTP)
 

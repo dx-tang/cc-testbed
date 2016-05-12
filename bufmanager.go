@@ -126,6 +126,11 @@ func releaseElem(id int, e *ReqEntry) {
 	globalBuf[id].ReleaseReqEntry(e)
 }
 
+func InitGlobalBuffer() {
+	// Initilize GlobleBuf
+	globalBuf = make([]LockReqBuffer, *NumPart)
+}
+
 func InitLockReqBuffer(partIndex int) {
 	globalBuf[partIndex].head = 0
 	globalBuf[partIndex].tail = -1

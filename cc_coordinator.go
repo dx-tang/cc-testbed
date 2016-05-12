@@ -10,6 +10,10 @@ import (
 )
 
 const (
+	NLOADERS = 1
+)
+
+const (
 	CLASSIFERPATH   = "/home/totemtang/ACC/workspace/src/github.com/totemtang/cc-testbed/classifier"
 	SINGLEPARTTRAIN = "single-part-train.out"
 	SINGLEOCCTRAIN  = "single-occ-train.out"
@@ -20,28 +24,34 @@ const (
 )
 
 type Coordinator struct {
-	padding0     [PADDING]byte
-	Workers      []*Worker
-	store        *Store
-	NStats       []int64
-	NGen         time.Duration
-	NExecute     time.Duration
-	NWait        time.Duration
-	NLockAcquire int64
-	stat         *os.File
-	mode         int
-	feature      *Feature
-	padding2     [PADDING]byte
-	reports      []chan *ReportInfo
-	changeACK    []chan bool
-	summary      *ReportInfo
-	perTest      int
-	TxnAR        []float64
-	ModeAR       []int
-	rc           int
-	clf          classifier.Classifier
-	workload     int
-	padding1     [PADDING]byte
+	padding0       [PADDING]byte
+	Workers        []*Worker
+	store          *Store
+	NStats         []int64
+	NGen           time.Duration
+	NExecute       time.Duration
+	NWait          time.Duration
+	NLockAcquire   int64
+	stat           *os.File
+	mode           int
+	feature        *Feature
+	padding2       [PADDING]byte
+	reports        []chan *ReportInfo
+	changeACK      []chan bool
+	indexStartACK  []chan bool
+	indexActionACK []chan bool
+	indexDoneACK   []chan bool
+	indexActions   []*IndexAction
+	startLoader    int
+	summary        *ReportInfo
+	perTest        int
+	TxnAR          []float64
+	ModeAR         []int
+	rc             int
+	clf            classifier.Classifier
+	workload       int
+	indexpart      bool
+	padding1       [PADDING]byte
 }
 
 const (
@@ -52,14 +62,20 @@ const (
 
 func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, tests int, nsecs int, workload int) *Coordinator {
 	coordinator := &Coordinator{
-		Workers:   make([]*Worker, nWorkers),
-		store:     store,
-		NStats:    make([]int64, LAST_STAT),
-		mode:      mode,
-		feature:   &Feature{},
-		reports:   make([]chan *ReportInfo, nWorkers),
-		changeACK: make([]chan bool, nWorkers),
-		summary:   NewReportInfo(store.nParts, tableCount),
+		Workers:        make([]*Worker, nWorkers),
+		store:          store,
+		NStats:         make([]int64, LAST_STAT),
+		mode:           mode,
+		feature:        &Feature{},
+		reports:        make([]chan *ReportInfo, nWorkers),
+		changeACK:      make([]chan bool, nWorkers),
+		indexStartACK:  make([]chan bool, nWorkers),
+		indexActionACK: make([]chan bool, nWorkers),
+		indexDoneACK:   make([]chan bool, nWorkers),
+		indexActions:   make([]*IndexAction, nWorkers),
+		startLoader:    nWorkers - NLOADERS,
+		summary:        NewReportInfo(store.nParts, tableCount),
+		indexpart:      false,
 	}
 
 	if *Report {
@@ -86,12 +102,20 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		} else {
 			clog.Error("Workload %v Not Supported", workload)
 		}
+
+		for i := range coordinator.Workers {
+			coordinator.reports[i] = make(chan *ReportInfo, 1)
+			coordinator.changeACK[i] = make(chan bool, 1)
+			coordinator.indexStartACK[i] = make(chan bool, 1)
+			coordinator.indexActionACK[i] = make(chan bool, 1)
+			coordinator.indexDoneACK[i] = make(chan bool, 1)
+			coordinator.indexActions[i] = &IndexAction{}
+		}
+
 	}
 
 	for i := range coordinator.Workers {
 		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate, workload)
-		coordinator.reports[i] = make(chan *ReportInfo, 1)
-		coordinator.changeACK[i] = make(chan bool, 1)
 	}
 
 	return coordinator
@@ -109,66 +133,12 @@ func (coord *Coordinator) process() {
 			summary.aborts = ri.aborts
 
 			if *SysType == ADAPTIVE {
-				summary.txnSample = ri.txnSample
-
-				for i, ps := range ri.partStat {
-					summary.partStat[i] = ps
-				}
-
-				//summary.partTotal = ri.partTotal
-
-				//summary.partLenStat = ri.partLenStat
-
-				for i, rs := range ri.recStat {
-					summary.recStat[i] = rs
-				}
-
-				summary.readCount = ri.readCount
-				summary.writeCount = ri.writeCount
-				//summary.hits = ri.hits
-
-				summary.accessCount = ri.accessCount
-				summary.conflicts = ri.conflicts
-
-				summary.latency = ri.latency
-
-				summary.partAccess = ri.partAccess
-				summary.partSuccess = ri.partSuccess
+				setReport(ri, summary)
 			}
 
 			for i := 1; i < len(coord.reports); i++ {
 				ri = <-coord.reports[i]
-				summary.execTime += ri.execTime
-				summary.txn += ri.txn
-				summary.aborts += ri.aborts
-
-				if *SysType == ADAPTIVE {
-					summary.txnSample += ri.txnSample
-
-					for i, ps := range ri.partStat {
-						summary.partStat[i] += ps
-					}
-
-					//summary.partTotal += ri.partTotal
-
-					//summary.partLenStat += ri.partLenStat
-
-					for i, rs := range ri.recStat {
-						summary.recStat[i] += rs
-					}
-
-					summary.readCount += ri.readCount
-					summary.writeCount += ri.writeCount
-					//summary.hits += ri.hits
-
-					summary.accessCount += ri.accessCount
-					summary.conflicts += ri.conflicts
-
-					summary.latency += ri.latency
-
-					summary.partAccess += ri.partAccess
-					summary.partSuccess += ri.partSuccess
-				}
+				collectReport(ri, summary)
 			}
 
 			// Record Throughput and Mode
@@ -180,69 +150,51 @@ func (coord *Coordinator) process() {
 
 			coord.rc++
 
+			if !coord.indexpart {
+				coord.indexpart = true
+				store := coord.store
+				// Begin Index Partitioning
+				for i := 0; i < len(coord.Workers); i++ {
+					coord.Workers[i].indexStart <- true
+				}
+				for i := 0; i < len(coord.indexStartACK); i++ {
+					<-coord.indexStartACK[i]
+				}
+				// Get All ACK; All workers stop; Change State and switch pri/sec tables
+				store.state = INDEX_CHANGING
+				tmpTables := store.priTables
+				store.priTables = store.secTables
+				store.secTables = tmpTables
+
+				perLoader := *NumPart / NLOADERS
+				residue := *NumPart % NLOADERS
+				for i := 0; i < len(coord.Workers); i++ {
+					action := coord.indexActions[i]
+					if i < coord.startLoader {
+						action.actionType = INDEX_ACTION_NONE
+					} else {
+						iLoader := (i - NLOADERS)
+						action.actionType = INDEX_ACTION_PARTITION
+						begin := iLoader * perLoader
+						if iLoader < residue {
+							begin += iLoader
+						} else {
+							begin += residue
+						}
+						end := begin + perLoader
+						if iLoader < residue {
+							end++
+						}
+						action.start = begin
+						action.end = end
+					}
+					coord.Workers[i].indexAction <- action
+				}
+			}
+
 			// Switch
 			if *SysType == ADAPTIVE {
-				//for _, ps := range summary.partStat {
-				//	clog.Info("%v ", ps)
-				//}
-				// Compute Features
-				txn := summary.txnSample
-
-				var sum int64
-				var sumpow int64
-				for _, p := range summary.partStat {
-					sum += p
-					sumpow += p * p
-				}
-
-				//partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
-				partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
-				//partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
-				partConf := float64(summary.partAccess) / float64(summary.partSuccess)
-
-				var recAvg float64
-				sum = 0
-				for _, rs := range summary.recStat {
-					sum += rs
-				}
-				recAvg = float64(sum) / float64(txn)
-
-				rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
-				//hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
-				latency := float64(summary.latency) / float64(summary.accessCount)
-				var confRate float64
-				if summary.conflicts != 0 {
-					confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
-				}
-
-				//clog.Info("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
-
-				// Use Classifier to Predict Features
-				//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
-				mode := coord.clf.Predict(partConf, partVar, recAvg, latency, rr, confRate)
-				var change bool = false
-				if mode != coord.mode {
-					if !(mode == 3 && coord.mode != 0) {
-						change = true
-						if mode == 3 {
-							// Prefer 2PL
-							coord.mode = 2
-						} else {
-							coord.mode = mode
-						}
-					}
-				}
-				if change {
-					for i := 0; i < len(coord.Workers); i++ {
-						coord.Workers[i].modeChange <- true
-					}
-					for i := 0; i < len(coord.Workers); i++ {
-						<-coord.changeACK[i]
-					}
-					for i := 0; i < len(coord.Workers); i++ {
-						coord.Workers[i].modeChan <- coord.mode
-					}
-				}
+				coord.predict(summary)
 			}
 
 			// Done
@@ -253,8 +205,153 @@ func (coord *Coordinator) process() {
 				}
 				return
 			}
+		case <-coord.indexActionACK[coord.startLoader]:
+			for i := coord.startLoader + 1; i < len(coord.indexActionACK); i++ {
+				<-coord.indexActionACK[i]
+			}
+			// Now All Loaders done; Confirm this to all workers
+			for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[i].indexDone <- true
+			}
+			for i := 0; i < len(coord.indexDoneACK); i++ {
+				<-coord.indexDoneACK[i]
+			}
+
+			coord.store.state = INDEX_NONE
+
+			clog.Info("Done with Index Partitioning")
+
+			for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[i].indexConfirm <- true
+			}
 
 		}
+	}
+}
+
+func (coord *Coordinator) predict(summary *ReportInfo) {
+	//for _, ps := range summary.partStat {
+	//	clog.Info("%v ", ps)
+	//}
+	// Compute Features
+	txn := summary.txnSample
+
+	var sum int64
+	var sumpow int64
+	for _, p := range summary.partStat {
+		sum += p
+		sumpow += p * p
+	}
+
+	//partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
+	partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
+	//partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
+	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
+
+	var recAvg float64
+	sum = 0
+	for _, rs := range summary.recStat {
+		sum += rs
+	}
+	recAvg = float64(sum) / float64(txn)
+
+	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
+	//hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
+	latency := float64(summary.latency) / float64(summary.accessCount)
+	var confRate float64
+	if summary.conflicts != 0 {
+		confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
+	}
+
+	//clog.Info("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
+
+	// Use Classifier to Predict Features
+	//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
+	mode := coord.clf.Predict(partConf, partVar, recAvg, latency, rr, confRate)
+	var change bool = false
+	if mode != coord.mode {
+		if !(mode == 3 && coord.mode != 0) {
+			change = true
+			if mode == 3 {
+				// Prefer 2PL
+				coord.mode = 2
+			} else {
+				coord.mode = mode
+			}
+		}
+	}
+	if change {
+		for i := 0; i < len(coord.Workers); i++ {
+			coord.Workers[i].modeChange <- true
+		}
+		for i := 0; i < len(coord.Workers); i++ {
+			<-coord.changeACK[i]
+		}
+		for i := 0; i < len(coord.Workers); i++ {
+			coord.Workers[i].modeChan <- coord.mode
+		}
+	}
+}
+
+func setReport(ri *ReportInfo, summary *ReportInfo) {
+	summary.txnSample = ri.txnSample
+
+	for i, ps := range ri.partStat {
+		summary.partStat[i] = ps
+	}
+
+	//summary.partTotal = ri.partTotal
+
+	//summary.partLenStat = ri.partLenStat
+
+	for i, rs := range ri.recStat {
+		summary.recStat[i] = rs
+	}
+
+	summary.readCount = ri.readCount
+	summary.writeCount = ri.writeCount
+	//summary.hits = ri.hits
+
+	summary.accessCount = ri.accessCount
+	summary.conflicts = ri.conflicts
+
+	summary.latency = ri.latency
+
+	summary.partAccess = ri.partAccess
+	summary.partSuccess = ri.partSuccess
+}
+
+func collectReport(ri *ReportInfo, summary *ReportInfo) {
+	summary.execTime += ri.execTime
+	summary.txn += ri.txn
+	summary.aborts += ri.aborts
+
+	if *SysType == ADAPTIVE {
+		summary.txnSample += ri.txnSample
+
+		for i, ps := range ri.partStat {
+			summary.partStat[i] += ps
+		}
+
+		//summary.partTotal += ri.partTotal
+
+		//summary.partLenStat += ri.partLenStat
+
+		for i, rs := range ri.recStat {
+			summary.recStat[i] += rs
+		}
+
+		summary.readCount += ri.readCount
+		summary.writeCount += ri.writeCount
+		//summary.hits += ri.hits
+
+		summary.accessCount += ri.accessCount
+		summary.conflicts += ri.conflicts
+
+		summary.latency += ri.latency
+
+		summary.partAccess += ri.partAccess
+		summary.partSuccess += ri.partSuccess
 	}
 }
 

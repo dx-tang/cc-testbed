@@ -57,9 +57,9 @@ type BasicWorkload struct {
 	generators    []*Generator // index by worker ID
 }
 
-func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers int, s float64, ps float64) *BasicWorkload {
+func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers int, s float64, ps float64, initMode int) *BasicWorkload {
 	basic := &BasicWorkload{
-		store:       NewStore(workload, nParts, isPartition),
+		store:       NewStore(workload, nParts, isPartition, initMode),
 		nParts:      nParts,
 		isPartition: isPartition,
 		nWorkers:    nWorkers,

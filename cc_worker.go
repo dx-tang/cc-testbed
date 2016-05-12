@@ -31,6 +31,21 @@ var (
 
 type TransactionFunc func(Trans, ETransaction) (Value, error)
 
+// INDEX CHANGE ACTION
+const (
+	INDEX_ACTION_MERGE = iota
+	INDEX_ACTION_PARTITION
+	INDEX_ACTION_NONE
+)
+
+type IndexAction struct {
+	padding1   [PADDING]byte
+	actionType int
+	start      int
+	end        int
+	padding2   [PADDING]byte
+}
+
 type Worker struct {
 	padding [PADDING]byte
 	spinlock.RWSpinlock
@@ -55,6 +70,11 @@ type Worker struct {
 	done         chan bool
 	modeChange   chan bool
 	modeChan     chan int
+	indexStart   chan bool
+	indexAction  chan *IndexAction
+	indexDone    chan bool
+	indexConfirm chan bool
+	actionTrans  chan *IndexAction
 	riMaster     *ReportInfo
 	riReplica    *ReportInfo
 	st           *SampleTool
@@ -68,16 +88,21 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 
 func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int, workload int) *Worker {
 	w := &Worker{
-		ID:         id,
-		store:      s,
-		coord:      c,
-		txns:       make([]TransactionFunc, LAST_TXN),
-		NStats:     make([]int64, LAST_STAT),
-		finished:   false,
-		mode:       mode,
-		done:       make(chan bool, 1),
-		modeChange: make(chan bool, 1),
-		modeChan:   make(chan int, 1),
+		ID:           id,
+		store:        s,
+		coord:        c,
+		txns:         make([]TransactionFunc, LAST_TXN),
+		NStats:       make([]int64, LAST_STAT),
+		finished:     false,
+		mode:         mode,
+		done:         make(chan bool, 1),
+		modeChange:   make(chan bool, 1),
+		modeChan:     make(chan int, 1),
+		indexStart:   make(chan bool, 1),
+		indexAction:  make(chan *IndexAction, 1),
+		indexDone:    make(chan bool, 1),
+		indexConfirm: make(chan bool, 1),
+		actionTrans:  make(chan *IndexAction, 1),
 	}
 
 	w.st = NewSampleTool(s.nParts, sampleRate, s)
@@ -178,6 +203,22 @@ func (w *Worker) run() {
 			}
 			w.riMaster.Reset()
 			w.Unlock()
+		case <-w.indexStart:
+			w.Lock()
+			coord.indexStartACK[w.ID] <- true
+			action := <-w.indexAction
+			w.Unlock()
+			if action.actionType == INDEX_ACTION_MERGE {
+				clog.Error("Merging Index Not Support Yet")
+			} else if action.actionType == INDEX_ACTION_PARTITION {
+				// Notify the worker to do IndexPartition
+				w.actionTrans <- action
+			}
+		case <-w.indexDone:
+			w.Lock()
+			coord.indexDoneACK[w.ID] <- true
+			<-w.indexConfirm
+			w.Unlock()
 		}
 	}
 }
@@ -233,6 +274,16 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 func (w *Worker) One(t Trans) (Value, error) {
 	w.start = time.Now()
 	var ap []int
+
+	select {
+	case action := <-w.actionTrans:
+		clog.Info("Begin Index Partitioning from %v to %v", action.start, action.end)
+		s := w.coord.store
+		s.IndexPartition(w.iaAR, action.start, action.end)
+		w.coord.indexActionACK[w.ID] <- true
+		clog.Info("End Index Partitioning")
+	default:
+	}
 
 	w.Lock()
 

@@ -17,6 +17,11 @@ import (
 )
 
 const (
+	INDEX_NONE = iota
+	INDEX_CHANGING
+)
+
+const (
 	CHUNKS = 256
 )
 
@@ -105,20 +110,20 @@ type NoWaitLockPad struct {
 
 type Store struct {
 	padding1     [PADDING]byte
-	tables       []Table
+	priTables    []Table
+	secTables    []Table
+	state        int
 	spinLock     []SpinLockPad
 	wfLock       []WFMuTexPad
 	confLock     []NoWaitLockPad
 	mutexLock    []RWMutexPad
 	tableToIndex map[string]int
 	nParts       int
+	mode         int
 	padding2     [PADDING]byte
 }
 
-func NewStore(schema string, nParts int, isPartition bool) *Store {
-
-	// Initilize GlobleBuf
-	globalBuf = make([]LockReqBuffer, *NumPart)
+func NewStore(schema string, nParts int, isPartition bool, mode int) *Store {
 
 	if nParts == 1 {
 		isPartition = false
@@ -154,13 +159,15 @@ func NewStore(schema string, nParts int, isPartition bool) *Store {
 	}
 
 	s := &Store{
-		tables:       make([]Table, tableCount),
+		priTables:    make([]Table, tableCount),
+		secTables:    make([]Table, tableCount),
 		tableToIndex: make(map[string]int),
 		wfLock:       make([]WFMuTexPad, nParts),
 		confLock:     make([]NoWaitLockPad, nParts),
 		mutexLock:    make([]RWMutexPad, nParts),
 		spinLock:     make([]SpinLockPad, nParts),
 		nParts:       nParts,
+		mode:         mode,
 	}
 
 	var line []byte
@@ -177,38 +184,40 @@ func NewStore(schema string, nParts int, isPartition bool) *Store {
 		// The first element is table name;
 		s.tableToIndex[schemaStrs[0]] = i
 
-		mode := *SysType
-		if mode == ADAPTIVE {
-			mode = PARTITION
-		}
-
 		if strings.Compare(schemaStrs[0], "NEWORDER") == 0 {
 			start := time.Now()
-			s.tables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
+			s.priTables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
+			s.secTables[i] = MakeNewOrderTable(*NumPart, !isPartition, mode)
 			clog.Info("Making NewOrder %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDER") == 0 {
 			start := time.Now()
-			s.tables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
+			s.secTables[i] = MakeOrderTable(*NumPart, *NumPart, !isPartition, mode)
 			clog.Info("Making Order %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "CUSTOMER") == 0 {
 			start := time.Now()
-			s.tables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
+			s.secTables[i] = MakeCustomerTable(*NumPart, *NumPart, !isPartition, mode)
 			clog.Info("Making Customer %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
 			start := time.Now()
-			s.tables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
+			s.secTables[i] = s.priTables[i]
 			clog.Info("Making History %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDERLINE") == 0 {
 			start := time.Now()
-			s.tables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
+			s.secTables[i] = MakeOrderLineTable(*NumPart, *NumPart, !isPartition, mode)
 			clog.Info("Making OrderLine %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ITEM") == 0 {
 			start := time.Now()
-			s.tables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
+			s.priTables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
+			s.secTables[i] = s.priTables[i]
 			clog.Info("Making ITEM %.2f", time.Since(start).Seconds())
 		} else {
 			start := time.Now()
-			s.tables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)
+			s.priTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)
+			s.secTables[i] = NewBasicTable(schemaStrs, *NumPart, !isPartition, mode, i)
 			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		}
 
@@ -230,13 +239,22 @@ func (s *Store) CreateRecByName(tableName string, k Key, partNum int, tuple Tupl
 }
 
 func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Record, error) {
-	table := s.tables[tableID]
+	table := s.priTables[tableID]
 	return table.CreateRecByID(k, partNum, tuple)
 }
 
 func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, error) {
-	table := s.tables[tableID]
-	return table.GetRecByID(k, partNum)
+	if s.state == INDEX_NONE {
+		table := s.priTables[tableID]
+		return table.GetRecByID(k, partNum)
+	} else { // INDEX_CHANGING
+		table := s.secTables[tableID]
+		rec, err := table.GetRecByID(k, partNum)
+		if err == ENOKEY {
+			return s.priTables[tableID].GetRecByID(k, partNum)
+		}
+		return rec, err
+	}
 }
 
 func (s *Store) GetValueByName(tableName string, k Key, partNum int, val Value, colNum int) error {
@@ -253,8 +271,17 @@ func (s *Store) GetValueByName(tableName string, k Key, partNum int, val Value, 
 }
 
 func (s *Store) GetValueByID(tableID int, k Key, partNum int, val Value, colNum int) error {
-	table := s.tables[tableID]
-	return table.GetValueByID(k, partNum, val, colNum)
+	if s.state == INDEX_NONE {
+		table := s.priTables[tableID]
+		return table.GetValueByID(k, partNum, val, colNum)
+	} else { // INDEX_CHANGING
+		table := s.secTables[tableID]
+		err := table.GetValueByID(k, partNum, val, colNum)
+		if err == ENOKEY {
+			return s.priTables[tableID].GetValueByID(k, partNum, val, colNum)
+		}
+		return err
+	}
 }
 
 func (s *Store) SetValueByName(tableName string, k Key, partNum int, value Value, colNum int) error {
@@ -271,55 +298,100 @@ func (s *Store) SetValueByName(tableName string, k Key, partNum int, value Value
 }
 
 func (s *Store) SetValueByID(tableID int, k Key, partNum int, value Value, colNum int) error {
-	table := s.tables[tableID]
-	return table.SetValueByID(k, partNum, value, colNum)
+	//table := s.tables[tableID]
+	//return table.SetValueByID(k, partNum, value, colNum)
+	if s.state == INDEX_NONE {
+		table := s.priTables[tableID]
+		return table.SetValueByID(k, partNum, value, colNum)
+	} else { // INDEX_CHANGING
+		table := s.secTables[tableID]
+		err := table.SetValueByID(k, partNum, value, colNum)
+		if err == ENOKEY {
+			return s.priTables[tableID].SetValueByID(k, partNum, value, colNum)
+		}
+		return err
+	}
 }
 
+// Delete Not Supported
 func (s *Store) PrepareDelete(tableID int, k Key, partNum int) (Record, error) {
-	table := s.tables[tableID]
-	return table.PrepareDelete(k, partNum)
+	//table := s.priTables[tableID]
+	//return table.PrepareDelete(k, partNum)
+	clog.Error("Delete Not Support Yet")
+	return nil, nil
 }
 
 func (s *Store) DeleteRecord(tableID int, k Key, partNum int) error {
-	table := s.tables[tableID]
-	return table.DeleteRecord(k, partNum)
+	//table := s.priTables[tableID]
+	//return table.DeleteRecord(k, partNum)
+	clog.Error("Delete Not Support Yet")
+	return nil
 }
 
 func (s *Store) ReleaseDelete(tableID int, k Key, partNum int) {
-	table := s.tables[tableID]
-	table.ReleaseDelete(k, partNum)
+	//table := s.priTables[tableID]
+	//table.ReleaseDelete(k, partNum)
+	clog.Error("Delete Not Support Yet")
 }
 
 func (s *Store) PrepareInsert(tableID int, k Key, partNum int) error {
-	table := s.tables[tableID]
+	table := s.priTables[tableID]
 	return table.PrepareInsert(k, partNum)
 }
 
 func (s *Store) InsertRecord(tableID int, recs []InsertRec, ia IndexAlloc) error {
-	table := s.tables[tableID]
+	table := s.priTables[tableID]
 	return table.InsertRecord(recs, ia)
 }
 
 func (s *Store) ReleaseInsert(tableID int, k Key, partNum int) {
-	table := s.tables[tableID]
+	table := s.priTables[tableID]
 	table.ReleaseInsert(k, partNum)
 }
 
 func (s *Store) GetValueBySec(tableID int, k Key, partNum int, val Value) error {
-	return s.tables[tableID].GetValueBySec(k, partNum, val)
+	if s.state == INDEX_NONE {
+		table := s.priTables[tableID]
+		return table.GetValueBySec(k, partNum, val)
+	} else { // INDEX_CHANGING
+		table := s.secTables[tableID]
+		err := table.GetValueBySec(k, partNum, val)
+		if err == ENOKEY {
+			return s.priTables[tableID].GetValueBySec(k, partNum, val)
+		}
+		return err
+	}
 }
 
 func (s *Store) SetMode(mode int) {
-	for _, t := range s.tables {
+	s.mode = mode
+	for _, t := range s.priTables {
 		t.SetMode(mode)
 	}
 }
 
 func (s *Store) DeltaValueByID(tableID int, k Key, partNum int, value Value, colNum int) error {
-	table := s.tables[tableID]
-	return table.DeltaValueByID(k, partNum, value, colNum)
+	if s.state == INDEX_NONE {
+		table := s.priTables[tableID]
+		return table.DeltaValueByID(k, partNum, value, colNum)
+	} else { // INDEX_CHANGING
+		table := s.secTables[tableID]
+		err := table.DeltaValueByID(k, partNum, value, colNum)
+		if err == ENOKEY {
+			return s.priTables[tableID].DeltaValueByID(k, partNum, value, colNum)
+		}
+		return err
+	}
 }
 
 func (s *Store) GetTables() []Table {
-	return s.tables
+	return s.priTables
+}
+
+func (s *Store) IndexPartition(iaAR []IndexAlloc, begin int, end int) {
+	for j := 0; j < len(s.priTables); j++ {
+		if j != ITEM && j != HISTORY {
+			s.secTables[j].BulkLoad(s.priTables[j], iaAR[j], begin, end)
+		}
+	}
 }

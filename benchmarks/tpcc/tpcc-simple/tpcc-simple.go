@@ -73,7 +73,9 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
-	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps, *dataDir)
+	testbed.InitGlobalBuffer()
+
+	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps, *dataDir, *testbed.SysType)
 
 	coord := testbed.NewCoordinator(nWorkers, tpcc.GetStore(), tpcc.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
 

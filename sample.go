@@ -110,7 +110,7 @@ type SampleTool struct {
 func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 	st := &SampleTool{
 		nParts:     nParts,
-		tableCount: len(s.tables),
+		tableCount: len(s.priTables),
 		sampleRate: sampleRate,
 		//lruAr:        make([]*LRU, len(IDToKeyRange)),
 	}

@@ -55,6 +55,8 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	testbed.InitGlobalBuffer()
+
 	nParts := nWorkers
 	isPartition := true
 	lockInit := false
@@ -81,7 +83,7 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
-	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps)
+	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps, testbed.PARTITION)
 	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SMALLBANKWL)
 
 	clog.Info("Done with Populating Store\n")

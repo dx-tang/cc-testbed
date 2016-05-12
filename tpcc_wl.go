@@ -477,7 +477,7 @@ type TPCCWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64, dataDir string) *TPCCWorkload {
+func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64, dataDir string, initMode int) *TPCCWorkload {
 	tpccWL := &TPCCWorkload{}
 
 	tp := strings.Split(transPercentage, ":")
@@ -502,7 +502,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	}
 
 	start := time.Now()
-	tpccWL.store = NewStore(workload, nParts, isPartition)
+	tpccWL.store = NewStore(workload, nParts, isPartition, initMode)
 	clog.Info("Building Store %.2fs \n", time.Since(start).Seconds())
 
 	tpccWL.nWorkers = nWorkers
@@ -530,7 +530,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			clog.Error("Reading File %s Error", ITEM_FILE)
+			clog.Error("Reading File %s Error", dataDir+"/"+ITEM_FILE)
 			df.Close()
 			return nil
 		}
@@ -584,7 +584,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 						iRecs[0].rec = rec
 						store.tables[i].InsertRecord(iRecs)
 					}*/
-					store.tables[i].CreateRecByID(k, partNum, tuple)
+					store.priTables[i].CreateRecByID(k, partNum, tuple)
 				}
 				df.Close()
 			}
@@ -710,7 +710,7 @@ func (tpccWL *TPCCWorkload) GetStore() *Store {
 }
 
 func (tpccWL *TPCCWorkload) GetTableCount() int {
-	return len(tpccWL.store.tables)
+	return len(tpccWL.store.priTables)
 }
 
 func (tpccWL *TPCCWorkload) GetTransGen(partIndex int) TransGen {
@@ -773,7 +773,7 @@ func (tpccWL *TPCCWorkload) NewPartGen(ps float64) []KeyGen {
 	return keygens
 }
 
-func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord *Coordinator) {
+func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord *Coordinator, isTrain bool) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != TPCCTRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -794,6 +794,10 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
+	if !isTrain {
+		return
+	}
+
 	for i := 0; i < len(tpccWL.transGen); i++ {
 		tg := &tpccWL.transGen[i]
 		tg.transPercentage = tpccWL.transPercentage
@@ -807,7 +811,7 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		tg.ha.Reset()
 	}
 
-	for _, table := range tpccWL.store.tables {
+	for _, table := range tpccWL.store.priTables {
 		table.Reset()
 	}
 

@@ -18,32 +18,28 @@ import (
 )
 
 const (
-	CROSSRATE    = "CROSSRATE"
-	MAXPARTITION = "MAXPARTITION"
-	PARTSKEW     = "PARTSKEW"
-	CONTENTION   = "CONTENTION"
-	TRANLEN      = "TRANLEN"
-	READRATE     = "READRATE"
-	PERFDIFF     = 0.03
+	CROSSRATE  = "CROSSRATE"
+	PARTSKEW   = "PARTSKEW"
+	CONTENTION = "CONTENTION"
+	TRANSPER   = "TRANSPER"
+	PERFDIFF   = 0.03
 )
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
-var wl = flag.String("wl", "../single.txt", "workload to be used")
-var tp = flag.String("tp", "50:50", "Percetage of Each Transaction")
+var wl = flag.String("wl", "../tpcc.txt", "workload to be used")
 var out = flag.String("out", "data.out", "output file path")
 var ro = flag.String("ro", "report.out", "report out")
 var tc = flag.String("tc", "test.conf", "Test Configuration")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var rc = flag.String("rc", "report.conf", "configuration for reporting")
-var isPart = flag.Bool("p", true, "Whether index partition")
+var isPart = flag.Bool("p", true, "Whether partition index")
+var dataDir = flag.String("dd", "../data", "TPCC Data Dir")
 
 var cr []float64
-var mp []int
 var ps []float64
 var contention []float64
-var tlen []int
-var rr []int
+var transper []string
 var tests []int
 
 const (
@@ -56,7 +52,7 @@ func main() {
 
 	runtime.GOMAXPROCS(*testbed.NumPart)
 	nWorkers := *testbed.NumPart
-	testbed.WLTYPE = testbed.SINGLEWL
+	testbed.WLTYPE = testbed.TPCCWL
 
 	nParts := nWorkers
 	isPartition := true
@@ -89,6 +85,10 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
+	if strings.Compare(*dataDir, "") == 0 {
+		clog.Error("Datadir not specified\n")
+	}
+
 	if strings.Compare(*wl, "") == 0 {
 		clog.Error("WorkLoad not specified\n")
 	}
@@ -111,34 +111,20 @@ func main() {
 
 	testbed.InitGlobalBuffer()
 
-	if *prof {
-		f, err := os.Create("single.prof")
-		if err != nil {
-			clog.Error(err.Error())
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
 	clog.Info("Number of workers %v \n", nWorkers)
 
-	ParseReportConf(*rc)
 	ParseTestConf(*tc)
+	ParseReportConf(*rc)
 	keyGenPool := make(map[float64][][]testbed.KeyGen)
-	partGenPool := make(map[float64][]testbed.PartGen)
-	var single *testbed.SingelWorkload = nil
+	partGenPool := make(map[float64][]testbed.KeyGen)
+	var tpccWL *testbed.TPCCWorkload = nil
 	var coord *testbed.Coordinator = nil
 
 	for k := 0; k < len(tests); k++ {
 		d := tests[k]
 		r := d % len(cr)
-
 		tmpCR := cr[r]
 		d = d / len(cr)
-
-		r = d % len(mp)
-		tmpMP := mp[r]
-		d = d / len(mp)
 
 		r = d % len(ps)
 		tmpPS := ps[r]
@@ -148,25 +134,19 @@ func main() {
 		tmpContention := contention[r]
 		d = d / len(contention)
 
-		r = d % len(tlen)
-		tmpTlen := tlen[r]
-		d = d / len(tlen)
+		tmpTP := transper[d]
 
-		tmpRR := rr[d]
-
-		if single == nil {
-			// Initialize
+		if tpccWL == nil {
 			clog.Info("Populating Whole Store\n")
-			single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, tmpCR, tmpTlen, tmpRR, tmpMP, tmpPS, testbed.PARTITION)
-			coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, len(tests), *nsecs, testbed.SINGLEWL)
+			tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, tmpCR, tmpPS, *dataDir, testbed.PARTITION)
+			coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, len(tests), *nsecs, testbed.TPCCWL)
 
 			// Populate Key Gen and Part Gen
 			clog.Info("Populating Key Generators and Part Generators\n")
-			basic := single.GetBasicWL()
 			for _, ct := range contention {
 				keyGens, ok := keyGenPool[ct]
 				if !ok {
-					keyGens = basic.NewKeyGen(ct)
+					keyGens = tpccWL.NewKeyGen(ct)
 					keyGenPool[ct] = keyGens
 				}
 			}
@@ -174,13 +154,20 @@ func main() {
 			for _, skew := range ps {
 				partGens, ok := partGenPool[skew]
 				if !ok {
-					partGens = basic.NewPartGen(skew)
+					partGens = tpccWL.NewPartGen(skew)
 					partGenPool[skew] = partGens
 				}
 			}
 
+			if *prof {
+				f, err := os.Create("tpcc.prof")
+				if err != nil {
+					clog.Error(err.Error())
+				}
+				pprof.StartCPUProfile(f)
+				defer pprof.StopCPUProfile()
+			}
 		} else {
-			basic := single.GetBasicWL()
 			keyGens, ok := keyGenPool[tmpContention]
 			if !ok {
 				clog.Error("Lacking Key Gen With %v\n", tmpContention)
@@ -190,12 +177,12 @@ func main() {
 			if !ok1 {
 				clog.Error("Lacking Part Gen With %v\n", tmpPS)
 			}
-			basic.SetKeyGen(keyGens)
-			basic.SetPartGen(partGens)
-			single.ResetConf(*tp, tmpCR, tmpMP, tmpTlen, tmpRR)
+			tpccWL.SetKeyGens(keyGens)
+			tpccWL.SetPartGens(partGens)
+			tpccWL.ResetConf(tmpTP, float64(tmpCR), coord, false)
 		}
 
-		clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tmpCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
+		clog.Info("CR %v PS %v Contention %v TransPer %v \n", tmpCR, tmpPS, tmpContention, tmpTP)
 
 		ts := testbed.TID(0)
 		var wg sync.WaitGroup
@@ -209,7 +196,7 @@ func main() {
 				}
 				var t testbed.Trans
 				w := coord.Workers[n]
-				gen := single.GetTransGen(n)
+				gen := tpccWL.GetTransGen(n)
 				tq := testbed.NewTransQueue(BUFSIZE)
 				w.Start()
 				for {
@@ -259,9 +246,9 @@ func main() {
 		if !lockInit {
 			lockInit = true
 		}
+
 	}
 
-	// Output Throughput Statistics
 	f, err := os.OpenFile(*ro, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		clog.Error("Open File Error %s\n", err.Error())
@@ -325,22 +312,6 @@ func ParseReportConf(rc string) {
 		}
 	}
 
-	// Read MAXPARTITION
-	head, _, err = reader.ReadLine()
-	if strings.Compare(string(head), MAXPARTITION) != 0 {
-		clog.Error("Header %v Not Right\n", string(head))
-	}
-
-	data, _, err = reader.ReadLine()
-	splits = strings.Split(string(data), ":")
-	mp = make([]int, len(splits))
-	for i, str := range splits {
-		mp[i], err = strconv.Atoi(str)
-		if err != nil {
-			clog.Error("ParseError %v\n", err.Error())
-		}
-	}
-
 	// Read PARTSKEW
 	head, _, err = reader.ReadLine()
 	if strings.Compare(string(head), PARTSKEW) != 0 {
@@ -373,35 +344,52 @@ func ParseReportConf(rc string) {
 		}
 	}
 
-	// Read TRANLEN
+	// Read TRANSPER
 	head, _, err = reader.ReadLine()
-	if strings.Compare(string(head), TRANLEN) != 0 {
+	if strings.Compare(string(head), TRANSPER) != 0 {
 		clog.Error("Header %v Not Right\n", string(head))
 	}
 
+	var count int
 	data, _, err = reader.ReadLine()
-	splits = strings.Split(string(data), ":")
-	tlen = make([]int, len(splits))
-	for i, str := range splits {
-		tlen[i], err = strconv.Atoi(str)
-		if err != nil {
-			clog.Error("ParseError %v\n", err.Error())
-		}
+	if err != nil {
+		clog.Error("Read String Error: %v \n", err.Error())
+	}
+	count, err = strconv.Atoi(string(data))
+	if err != nil {
+		clog.Error("Parse String Error: %v %s \n", err.Error())
 	}
 
-	// Read READRATE
-	head, _, err = reader.ReadLine()
-	if strings.Compare(string(head), READRATE) != 0 {
-		clog.Error("Header %v Not Right\n", string(head))
+	transper = make([]string, count)
+	tmpPer := make([]int, testbed.TPCCTRANSNUM)
+	for i := 0; i < count; i++ {
+		data, _, err = reader.ReadLine()
+		if err != nil {
+			clog.Error("Read String Error: %v \n", err.Error())
+		}
+
+		tp := strings.Split(string(data), ":")
+		if len(tp) != testbed.TPCCTRANSNUM {
+			clog.Error("Wrong format of transaction percentage string %s\n", string(data))
+		}
+
+		for i, str := range tp {
+			per, err := strconv.Atoi(str)
+			if err != nil {
+				clog.Error("TransPercentage Format Error %s\n", str)
+			}
+			if i != 0 {
+				tmpPer[i] = tmpPer[i-1] + per
+			} else {
+				tmpPer[i] = per
+			}
+		}
+
+		if tmpPer[testbed.TPCCTRANSNUM-1] != 100 {
+			clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", string(data))
+		}
+
+		transper[i] = string(data)
 	}
 
-	data, _, err = reader.ReadLine()
-	splits = strings.Split(string(data), ":")
-	rr = make([]int, len(splits))
-	for i, str := range splits {
-		rr[i], err = strconv.Atoi(str)
-		if err != nil {
-			clog.Error("ParseError %v\n", err.Error())
-		}
-	}
 }
