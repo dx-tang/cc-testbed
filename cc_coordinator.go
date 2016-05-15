@@ -1,8 +1,11 @@
 package testbed
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/totemtang/cc-testbed/classifier"
@@ -22,6 +25,132 @@ const (
 	TPCCPARTTRAIN   = "tpcc-part-train.out"
 	TPCCOCCTRAIN    = "tpcc-occ-train.out"
 )
+
+type TestCase struct {
+	padding1     [PADDING]byte
+	CR           float64
+	MP           int
+	PS           float64
+	Contention   float64
+	Tlen         int
+	RR           int
+	SBTransper   [SBTRANSNUM]int
+	TPCCTransPer [TPCCTRANSNUM]int
+	padding2     [PADDING]byte
+}
+
+func parseTestFile(f string, workload int) ([]float64, []float64, []float64, []int, []int, []int, []string) {
+	tf, err := os.OpenFile(f, os.O_RDONLY, 0600)
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	defer tf.Close()
+
+	reader := bufio.NewReader(tf)
+
+	var data []byte
+	var splits []string
+
+	_, _, err = reader.ReadLine()
+	if err != nil {
+		clog.Error("Read Header Error %v", err.Error())
+	}
+
+	data, _, err = reader.ReadLine()
+	if err != nil {
+		clog.Error("Read Couter Error %v", err.Error())
+	}
+
+	count, _ := strconv.Atoi(string(data))
+	cr := make([]float64, count)
+	ps := make([]float64, count)
+	contention := make([]float64, count)
+	mp := make([]int, count)
+	tlen := make([]int, count)
+	rr := make([]int, count)
+	transper := make([]string, count)
+
+	for i := 0; i < count; i++ {
+		data, _, err = reader.ReadLine()
+		if err != nil {
+			clog.Error("Read Line %v Error %v", i, err.Error())
+		}
+		splits = strings.Split(string(data), "\t")
+		cr[i], _ = strconv.ParseFloat(splits[0], 64)
+		ps[i], _ = strconv.ParseFloat(splits[1], 64)
+		contention[i], _ = strconv.ParseFloat(splits[2], 64)
+		if workload == SINGLEWL {
+			mp[i], _ = strconv.Atoi(splits[3])
+			tlen[i], _ = strconv.Atoi(splits[4])
+			rr[i], _ = strconv.Atoi(splits[5])
+		} else {
+			transper[i] = splits[3]
+		}
+	}
+
+	return cr, ps, contention, mp, tlen, rr, transper
+
+}
+
+func BuildTestCases(f string, workload int) []TestCase {
+	cr, ps, contention, mp, tlen, rr, transper := parseTestFile(f, workload)
+	testCases := make([]TestCase, len(cr))
+	for i, _ := range testCases {
+		tc := &testCases[i]
+		tc.CR = cr[i]
+		tc.Contention = contention[i]
+		tc.PS = ps[i]
+		if workload == SINGLEWL {
+			tc.MP = mp[i]
+			tc.Tlen = tlen[i]
+			tc.RR = rr[i]
+		} else if workload == SMALLBANKWL {
+			tp := strings.Split(transper[i], ":")
+			if len(tp) != SBTRANSNUM {
+				clog.Error("Wrong format of transaction percentage string %s\n", transper[i])
+			}
+			for i, str := range tp {
+				per, err := strconv.Atoi(str)
+				if err != nil {
+					clog.Error("TransPercentage Format Error %s\n", str)
+				}
+				if i != 0 {
+					tc.SBTransper[i] = tc.SBTransper[i-1] + per
+				} else {
+					tc.SBTransper[i] = per
+				}
+			}
+
+			if tc.SBTransper[SBTRANSNUM-1] != 100 {
+				clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transper[i])
+			}
+		} else if workload == TPCCWL {
+			tp := strings.Split(transper[i], ":")
+			if len(tp) != TPCCTRANSNUM {
+				clog.Error("Wrong format of transaction percentage string %s\n", transper[i])
+			}
+			for i, str := range tp {
+				per, err := strconv.Atoi(str)
+				if err != nil {
+					clog.Error("TransPercentage Format Error %s\n", str)
+				}
+				if i != 0 {
+					tc.TPCCTransPer[i] = tc.TPCCTransPer[i-1] + per
+				} else {
+					tc.TPCCTransPer[i] = per
+				}
+			}
+
+			if tc.TPCCTransPer[TPCCTRANSNUM-1] != 100 {
+				clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transper[i])
+			}
+		} else {
+			clog.Error("Workload type %v Not Support", workload)
+		}
+	}
+
+	return testCases
+}
 
 type Coordinator struct {
 	padding0       [PADDING]byte
@@ -47,10 +176,19 @@ type Coordinator struct {
 	perTest        int
 	TxnAR          []float64
 	ModeAR         []int
+	reportCount    int
 	rc             int
+	curTest        int
 	clf            classifier.Classifier
 	workload       int
 	indexpart      bool
+	testCases      []TestCase
+	tpccWL         *TPCCWorkload
+	singleWL       *SingelWorkload
+	sbWL           *SBWorkload
+	keyGenPool     map[float64][][]KeyGen
+	partGenPool    map[float64][]PartGen
+	tpccPartPool   map[float64][]KeyGen
 	padding1       [PADDING]byte
 }
 
@@ -60,7 +198,7 @@ const (
 	REPORTPERIOD = 2000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, tests int, nsecs int, workload int) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, testCases []TestCase, nsecs int, workload int, wl interface{}) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:        make([]*Worker, nWorkers),
 		store:          store,
@@ -76,29 +214,86 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		startLoader:    nWorkers - NLOADERS,
 		summary:        NewReportInfo(store.nParts, tableCount),
 		indexpart:      false,
+		testCases:      testCases,
+		curTest:        0,
 	}
 
 	if *Report {
 		coordinator.perTest = nsecs * PERMINISEC / REPORTPERIOD
-		reportCount := tests * coordinator.perTest
+		reportCount := len(testCases) * coordinator.perTest
+		coordinator.reportCount = reportCount
 		coordinator.TxnAR = make([]float64, reportCount+2*PADDINGINT64)
 		coordinator.TxnAR = coordinator.TxnAR[PADDINGINT64 : reportCount+PADDINGINT64]
 		coordinator.ModeAR = make([]int, reportCount+2*PADDINGINT)
 		coordinator.ModeAR = coordinator.ModeAR[PADDINGINT : reportCount+PADDINGINT]
 
+		coordinator.keyGenPool = make(map[float64][][]KeyGen)
+		coordinator.partGenPool = make(map[float64][]PartGen)
+		coordinator.tpccPartPool = make(map[float64][]KeyGen)
 		coordinator.workload = workload
 		if workload == SINGLEWL {
-			partTS := CLASSIFERPATH + "/" + SINGLEPARTTRAIN
-			occTS := CLASSIFERPATH + "/" + SINGLEOCCTRAIN
-			coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partTS, occTS)
+			if *SysType == ADAPTIVE {
+				partTS := CLASSIFERPATH + "/" + SINGLEPARTTRAIN
+				occTS := CLASSIFERPATH + "/" + SINGLEOCCTRAIN
+				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partTS, occTS)
+			}
+			coordinator.singleWL = wl.(*SingelWorkload)
+			single := coordinator.singleWL
+			basic := single.GetBasicWL()
+			for i, _ := range testCases {
+				tc := &testCases[i]
+				keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
+				if !ok1 {
+					keyGens = basic.NewKeyGen(tc.Contention)
+					coordinator.keyGenPool[tc.Contention] = keyGens
+				}
+				partGens, ok2 := coordinator.partGenPool[tc.PS]
+				if !ok2 {
+					partGens = basic.NewPartGen(tc.PS)
+					coordinator.partGenPool[tc.PS] = partGens
+				}
+			}
 		} else if workload == SMALLBANKWL {
-			partTS := CLASSIFERPATH + "/" + SBPARTTRAIN
-			occTS := CLASSIFERPATH + "/" + SBOCCTRAIN
-			coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
+			if *SysType == ADAPTIVE {
+				partTS := CLASSIFERPATH + "/" + SBPARTTRAIN
+				occTS := CLASSIFERPATH + "/" + SBOCCTRAIN
+				coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
+			}
+			coordinator.sbWL = wl.(*SBWorkload)
+			sb := coordinator.sbWL
+			basic := sb.GetBasicWL()
+			for i, _ := range testCases {
+				tc := &testCases[i]
+				keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
+				if !ok1 {
+					keyGens = basic.NewKeyGen(tc.Contention)
+					coordinator.keyGenPool[tc.Contention] = keyGens
+				}
+				partGens, ok2 := coordinator.partGenPool[tc.PS]
+				if !ok2 {
+					partGens = basic.NewPartGen(tc.PS)
+					coordinator.partGenPool[tc.PS] = partGens
+				}
+			}
 		} else if workload == TPCCWL {
 			//partTS := CLASSIFERPATH + "/" + TPCCPARTTRAIN
 			//occTS := CLASSIFERPATH + "/" + TPCCOCCTRAIN
 			//coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
+			coordinator.tpccWL = wl.(*TPCCWorkload)
+			tpccWL := coordinator.tpccWL
+			for i, _ := range testCases {
+				tc := &testCases[i]
+				keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
+				if !ok1 {
+					keyGens = tpccWL.NewKeyGen(tc.Contention)
+					coordinator.keyGenPool[tc.Contention] = keyGens
+				}
+				partGens, ok2 := coordinator.tpccPartPool[tc.PS]
+				if !ok2 {
+					partGens = tpccWL.NewPartGen(tc.PS)
+					coordinator.tpccPartPool[tc.PS] = partGens
+				}
+			}
 		} else {
 			clog.Error("Workload %v Not Supported", workload)
 		}
@@ -146,7 +341,7 @@ func (coord *Coordinator) process() {
 			//clog.Info("Summary %v; Exec Secs: %v", summary.txn, summary.execTime.Seconds())
 			coord.ModeAR[coord.rc] = coord.mode
 
-			clog.Info("Mode %v; Txn %.4f; Abort %.4f", coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn))
+			clog.Info("Test %v Mode %v; Txn %.4f; Abort %.4f", coord.rc, coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn))
 
 			coord.rc++
 
@@ -173,7 +368,7 @@ func (coord *Coordinator) process() {
 					if i < coord.startLoader {
 						action.actionType = INDEX_ACTION_NONE
 					} else {
-						iLoader := (i - NLOADERS)
+						iLoader := (i - coord.startLoader)
 						action.actionType = INDEX_ACTION_PARTITION
 						begin := iLoader * perLoader
 						if iLoader < residue {
@@ -198,12 +393,34 @@ func (coord *Coordinator) process() {
 			}
 
 			// Done
-			if coord.rc%coord.perTest == 0 {
+			if coord.rc == coord.reportCount {
 				// Done with tests
 				for i := 0; i < len(coord.Workers); i++ {
 					coord.Workers[i].done <- true
 				}
 				return
+			} else if coord.rc%coord.perTest == 0 {
+				coord.curTest++
+				tc := &coord.testCases[coord.curTest]
+				if coord.workload == SINGLEWL {
+					single := coord.singleWL
+					keyGens := coord.keyGenPool[tc.Contention]
+					partGens := coord.partGenPool[tc.PS]
+					single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR)
+					clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tc.CR, tc.MP, tc.PS, tc.Contention, tc.Tlen, tc.RR)
+				} else if coord.workload == SMALLBANKWL {
+					sb := coord.sbWL
+					keygens := coord.keyGenPool[tc.Contention]
+					partGens := coord.partGenPool[tc.PS]
+					sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper)
+					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.SBTransper)
+				} else { // TPCCWL
+					tpccWL := coord.tpccWL
+					keygens := coord.keyGenPool[tc.Contention]
+					partGens := coord.tpccPartPool[tc.PS]
+					tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer)
+					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.TPCCTransPer)
+				}
 			}
 		case <-coord.indexActionACK[coord.startLoader]:
 			for i := coord.startLoader + 1; i < len(coord.indexActionACK); i++ {
@@ -220,6 +437,17 @@ func (coord *Coordinator) process() {
 			coord.store.state = INDEX_NONE
 
 			clog.Info("Done with Index Partitioning")
+
+			if coord.workload == SINGLEWL {
+				single := coord.singleWL
+				single.ResetPart(*NumPart, true)
+			} else if coord.workload == SMALLBANKWL {
+				sb := coord.sbWL
+				sb.ResetPart(*NumPart, true)
+			} else { // TPCCWL
+				tpccWL := coord.tpccWL
+				tpccWL.ResetPart(*NumPart, true)
+			}
 
 			for i := 0; i < len(coord.Workers); i++ {
 				coord.Workers[i].indexConfirm <- true

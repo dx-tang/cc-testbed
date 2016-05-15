@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/spinlock"
 )
 
 const (
@@ -254,6 +255,8 @@ func (s *SingleTrans) DecTrial() {
 }
 
 type SingleTransGen struct {
+	padding1 [PADDING]byte
+	spinlock.Spinlock
 	rnd             *rand.Rand
 	transPercentage [SINGLETRANSNUM]int
 	gen             *Generator
@@ -267,9 +270,12 @@ type SingleTransGen struct {
 	tlen            int
 	rr              int
 	mp              int
+	padding2        [PADDING]byte
 }
 
 func (s *SingleTransGen) GenOneTrans(mode int) Trans {
+	s.Lock()
+	defer s.Unlock()
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
 
@@ -283,7 +289,6 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 		} else {
 			pi = rnd.Intn(s.nParts)
 		}*/
-	pi = s.partIndex
 	nParts := s.nParts
 	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1 && s.mp > 1
 	tlen := s.tlen
@@ -299,7 +304,13 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 
 	t.TXN = txn + SINGLEBASE
 
-	if isPart && rnd.Intn(100) < cr {
+	if isPart {
+		pi = s.partIndex
+	} else {
+		pi = gen.GenOnePart()
+	}
+
+	if rnd.Intn(100) < cr {
 		ap := nParts
 		if ap > mp {
 			ap = mp
@@ -389,6 +400,10 @@ type SingelWorkload struct {
 func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
+	if nParts == 1 {
+		isPartition = false
+	}
+
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != SINGLETRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -460,11 +475,9 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			rr:              rr,
 			mp:              mp,
 		}
-		if isPartition {
-			tg.partIndex = i
-		} else {
-			tg.partIndex = 0
-		}
+
+		tg.partIndex = i
+
 		tg.transBuf = make([]*SingleTrans, QUEUESIZE+2*PADDINGINT64)
 		tg.transBuf = tg.transBuf[PADDINGINT64 : PADDINGINT64+QUEUESIZE]
 		for p := 0; p < QUEUESIZE; p++ {
@@ -585,6 +598,24 @@ func (singleWL *SingelWorkload) GetBasicWL() *BasicWorkload {
 	return singleWL.basic
 }
 
+func (singleWL *SingelWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr float64, mp int, tlen int, rr int) {
+	for i := 0; i < len(singleWL.transGen); i++ {
+		tg := singleWL.transGen[i]
+		tg.Lock()
+		tg.gen.keyGens = keygens[i]
+		tg.gen.partGen = partGens[i]
+		tg.cr = cr
+		tg.tlen = tlen
+		tg.rr = rr
+		tg.mp = mp
+		tg.Unlock()
+	}
+}
+
+func (singleWL *SingelWorkload) GetPartitioner(partIndex int) []Partitioner {
+	return singleWL.basic.generators[partIndex].partitioner
+}
+
 func (s *SingelWorkload) PrintSum() {
 	var total int
 	nKeys := s.basic.nKeys[SINGLE]
@@ -622,12 +653,7 @@ func (s *SingelWorkload) PrintSum() {
 
 func (singleWL *SingelWorkload) ResetPart(nParts int, isPartition bool) {
 	singleWL.basic.ResetPart(nParts, isPartition)
-	for i, tranGen := range singleWL.transGen {
-		if isPartition {
-			tranGen.partIndex = i
-		} else {
-			tranGen.partIndex = 0
-		}
+	for _, tranGen := range singleWL.transGen {
 		tranGen.isPartition = isPartition
 		tranGen.nParts = nParts
 	}

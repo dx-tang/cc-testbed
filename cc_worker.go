@@ -79,6 +79,7 @@ type Worker struct {
 	riReplica    *ReportInfo
 	st           *SampleTool
 	iaAR         []IndexAlloc
+	partitioner  []Partitioner
 	padding2     [PADDING]byte
 }
 
@@ -135,6 +136,10 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.iaAR[HISTORY].OneAllocate()
 		w.iaAR[ORDERLINE] = &OrderLineIndexAlloc{}
 		w.iaAR[ORDERLINE].OneAllocate()
+	} else if workload == SINGLEWL {
+		w.partitioner = c.singleWL.GetPartitioner(w.ID)
+	} else {
+		w.partitioner = c.sbWL.GetPartitioner(w.ID)
 	}
 
 	// SmallBank Workload
@@ -279,7 +284,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 	case action := <-w.actionTrans:
 		clog.Info("Begin Index Partitioning from %v to %v", action.start, action.end)
 		s := w.coord.store
-		s.IndexPartition(w.iaAR, action.start, action.end)
+		s.IndexPartition(w.iaAR, action.start, action.end, w.partitioner)
 		w.coord.indexActionACK[w.ID] <- true
 		clog.Info("End Index Partitioning")
 	default:

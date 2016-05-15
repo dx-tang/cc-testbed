@@ -385,6 +385,7 @@ func (no *NewOrderIndexAlloc) GetEntry() Value {
 	entry.t = 0
 	entry.h = 0
 	entry.next = nil
+	no.cur++
 	return entry
 }
 

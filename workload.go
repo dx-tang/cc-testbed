@@ -25,7 +25,7 @@ const (
 
 type Generator struct {
 	keyGens     []KeyGen
-	partitioner []Partitioner
+	partitioner []Partitioner // Index by Table
 	partGen     PartGen
 	partIndex   int
 	tableCount  int
@@ -175,14 +175,10 @@ func (basic *BasicWorkload) NewGenerators(s float64, ps float64) []*Generator {
 			partitioner: make([]Partitioner, tableCount),
 		}
 
-		if basic.isPartition {
-			gen.partIndex = i
-		} else {
-			gen.partIndex = 0
-		}
+		gen.partIndex = i
 
 		for j := 0; j < tableCount; j++ {
-			p := NewHashPartitioner(basic.nParts, basic.IDToKeyRange[j])
+			p := NewHashPartitioner(*NumPart, basic.IDToKeyRange[j])
 			gen.partitioner[j] = p
 		}
 
@@ -211,13 +207,13 @@ func (basic *BasicWorkload) NewKeyGen(s float64) [][]KeyGen {
 			p := basic.generators[i].partitioner[j]
 			var kg KeyGen
 			if s == 1 {
-				kg = NewUniformRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), basic.isPartition)
+				kg = NewUniformRand(i, basic.nKeys[j], *NumPart, p.GetKeyArray(), basic.isPartition)
 			} else if s > 1 {
-				kg = NewZipfRandLarge(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), s, basic.isPartition)
+				kg = NewZipfRandLarge(i, basic.nKeys[j], *NumPart, p.GetKeyArray(), s, basic.isPartition)
 			} else if s < 0 {
-				kg = NewHotColdRand(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), -s, basic.isPartition)
+				kg = NewHotColdRand(i, basic.nKeys[j], *NumPart, p.GetKeyArray(), -s, basic.isPartition)
 			} else { // s >=0 && s < 1
-				kg = NewZipfRandSmall(i, basic.nKeys[j], basic.nParts, p.GetKeyArray(), s, basic.isPartition)
+				kg = NewZipfRandSmall(i, basic.nKeys[j], *NumPart, p.GetKeyArray(), s, basic.isPartition)
 			}
 			keyGen[i][j] = kg
 		}
@@ -231,11 +227,11 @@ func (basic *BasicWorkload) NewPartGen(ps float64) []PartGen {
 
 	for i := 0; i < basic.nWorkers; i++ {
 		if ps == 1 {
-			partGen[i] = NewUniformRandPart(ps, i, basic.nParts)
+			partGen[i] = NewUniformRandPart(ps, i, *NumPart)
 		} else if ps > 1 {
-			partGen[i] = NewZipfRandLargePart(ps, i, basic.nParts)
+			partGen[i] = NewZipfRandLargePart(ps, i, *NumPart)
 		} else if ps >= 0 {
-			partGen[i] = NewZipfRandSmallPart(ps, i, basic.nParts)
+			partGen[i] = NewZipfRandSmallPart(ps, i, *NumPart)
 		} else {
 			clog.Error("Part Access Generation: Skew Factor Should Not Be Negative\n")
 		}
@@ -247,7 +243,7 @@ func (basic *BasicWorkload) NewPartGen(ps float64) []PartGen {
 func (basic *BasicWorkload) ResetPart(nParts int, isPartition bool) {
 	basic.nParts = nParts
 	basic.isPartition = isPartition
-	for i, gen := range basic.generators {
+	/*for i, gen := range basic.generators {
 		if isPartition {
 			gen.partIndex = i
 		} else {
@@ -258,5 +254,5 @@ func (basic *BasicWorkload) ResetPart(nParts int, isPartition bool) {
 			gen.partitioner[i].ResetPart(nParts)
 		}
 	}
-	basic.store.nParts = nParts
+	basic.store.nParts = nParts*/
 }

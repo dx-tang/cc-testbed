@@ -29,7 +29,7 @@ type Table interface {
 	ReleaseInsert(k Key, partNum int)
 	GetValueBySec(k Key, partNum int, val Value) error
 	SetMode(mode int)
-	BulkLoad(table Table, ia IndexAlloc, begin int, end int)
+	BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	Reset()
 }
 
@@ -387,7 +387,7 @@ func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int
 	r.DeltaValue(value, colNum)
 	return nil
 }
-func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
+func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	recs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range bt.data {
@@ -395,13 +395,24 @@ func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
 		for j, _ := range part.shardedMap {
 			shard := &part.shardedMap[j]
 			for k, v := range shard.rows {
-				if k[0] < begin || k[0] >= end {
-					continue
+				if WLTYPE == TPCCWL {
+					if k[0] < begin || k[0] >= end {
+						continue
+					}
+					recs[0].k = k
+					recs[0].rec = v
+					recs[0].partNum = k[0]
+					table.InsertRecord(recs, ia)
+				} else {
+					partNum := partitioner.GetPart(k)
+					if partNum < begin || partNum >= end {
+						continue
+					}
+					recs[0].k = k
+					recs[0].rec = v
+					recs[0].partNum = partNum
+					table.InsertRecord(recs, ia)
 				}
-				recs[0].k = k
-				recs[0].rec = v
-				recs[0].partNum = k[0]
-				table.InsertRecord(recs, ia)
 			}
 		}
 	}

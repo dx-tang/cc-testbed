@@ -134,6 +134,19 @@ func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record,
 		entry.o_id_array[entry.t] = noTuple.no_o_id
 		entry.t++
 		retRec = entry.rec
+		if entry.t == CAP_NEWORDER_ENTRY {
+			dRec := &DRecord{}
+			dRec.tuple = &NewOrderTuple{
+				no_w_id: w_id,
+				no_d_id: d_id,
+			}
+			newEntry := &NoEntry{}
+			newEntry.rec = dRec
+			newEntry.h = 0
+			newEntry.t = 0
+			entry.next = newEntry
+			no.tail[index] = newEntry
+		}
 	} else {
 		// New a Entry
 		dRec := &DRecord{}
@@ -240,15 +253,16 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		k := iRec.k
 
 		index := k[KEY0]*DIST_COUNT + k[KEY1]
-		//if !no.isPartition {
+		//if no.mode != PARTITION {
 		//	no.delLock[index].Lock()
 		//}
 
-		if !no.isPartition {
+		if no.mode != PARTITION {
 			no.insertLock[index].Lock()
 		}
 
 		entry := no.tail[index]
+
 		entry.o_id_array[entry.t] = iRec.rec.GetTuple().(*NewOrderTuple).no_o_id
 		entry.t++
 		if entry.t == CAP_NEWORDER_ENTRY {
@@ -260,7 +274,8 @@ func (no *NewOrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 			no.tail[index] = newEntry
 		}
 
-		if !no.isPartition {
+		//if !no.isPartition {
+		if no.mode != PARTITION {
 			//entry.rec.WUnlock(nil)
 			no.insertLock[index].Unlock()
 		}
@@ -291,7 +306,7 @@ func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum 
 	return nil
 }
 
-func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
+func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	var compKey Key
 	tuple := &NewOrderTuple{}
 	rec := MakeRecord(no, compKey, tuple)
@@ -334,8 +349,6 @@ func (no *NewOrderTable) Reset() {
 		}
 	}
 }
-
-var orderbucketcount int
 
 type OrderSecPart struct {
 	padding1 [PADDING]byte
@@ -381,16 +394,17 @@ type OrderBucketEntry struct {
 }
 
 type OrderTable struct {
-	padding1    [PADDING]byte
-	data        []OrderPart
-	secIndex    []OrderSecPart
-	nKeys       int
-	nParts      int
-	isPartition bool
-	mode        int
-	bucketHash  func(k Key) int
-	iLock       spinlock.Spinlock
-	padding2    [PADDING]byte
+	padding1         [PADDING]byte
+	data             []OrderPart
+	secIndex         []OrderSecPart
+	nKeys            int
+	nParts           int
+	isPartition      bool
+	mode             int
+	bucketHash       func(k Key, orderbucketcount int) int
+	iLock            spinlock.Spinlock
+	orderbucketcount int
+	padding2         [PADDING]byte
 }
 
 func MakeOrderTablePara(nParts int, warehouse int, isPartition bool, mode int, workers int) *OrderTable {
@@ -406,7 +420,7 @@ func MakeOrderTablePara(nParts int, warehouse int, isPartition bool, mode int, w
 		mode:        mode,
 	}
 
-	orderbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+	oTable.orderbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
 
 	perWorker := nParts / workers
 	var wg sync.WaitGroup
@@ -415,8 +429,8 @@ func MakeOrderTablePara(nParts int, warehouse int, isPartition bool, mode int, w
 		go func(n int) {
 			var cKey Key
 			for k := n * perWorker; k < nParts && k < n*perWorker+perWorker; k++ {
-				oTable.data[k].buckets = make([]OrderBucket, orderbucketcount)
-				for j := 0; j < orderbucketcount; j++ {
+				oTable.data[k].buckets = make([]OrderBucket, oTable.orderbucketcount)
+				for j := 0; j < oTable.orderbucketcount; j++ {
 					oTable.data[k].buckets[j].tail = &OrderBucketEntry{
 						before: nil,
 						next:   nil,
@@ -448,7 +462,7 @@ func MakeOrderTablePara(nParts int, warehouse int, isPartition bool, mode int, w
 	}
 	wg.Wait()
 
-	oTable.bucketHash = func(k Key) int {
+	oTable.bucketHash = func(k Key, orderbucketcount int) int {
 		oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
 		return int(oid % int64(orderbucketcount))
 	}
@@ -466,11 +480,11 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 		mode:        mode,
 	}
 
-	orderbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+	oTable.orderbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
 
 	for k := 0; k < nParts; k++ {
-		oTable.data[k].buckets = make([]OrderBucket, orderbucketcount)
-		for i := 0; i < orderbucketcount; i++ {
+		oTable.data[k].buckets = make([]OrderBucket, oTable.orderbucketcount)
+		for i := 0; i < oTable.orderbucketcount; i++ {
 			oTable.data[k].buckets[i].tail = &OrderBucketEntry{
 				before: nil,
 				next:   nil,
@@ -499,12 +513,12 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, mode int) *Orde
 	}
 
 	if isPartition {
-		oTable.bucketHash = func(k Key) int {
+		oTable.bucketHash = func(k Key, orderbucketcount int) int {
 			oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
 			return int(oid % int64(orderbucketcount))
 		}
 	} else {
-		oTable.bucketHash = func(k Key) int {
+		oTable.bucketHash = func(k Key, orderbucketcount int) int {
 			oid := int64(k[KEY2]*(*NumPart))*DIST_COUNT + int64(k[KEY0]*DIST_COUNT+k[KEY1])
 			return int(oid % int64(orderbucketcount))
 		}
@@ -521,7 +535,8 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	}
 
 	// Insert Order
-	bucketNum := o.bucketHash(k)
+	bucketNum := o.bucketHash(k, o.orderbucketcount)
+
 	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if !o.isPartition {
@@ -602,7 +617,7 @@ func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, error) {
 		partNum = 0
 	}
 
-	bucketNum := o.bucketHash(k)
+	bucketNum := o.bucketHash(k, o.orderbucketcount)
 	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
@@ -636,7 +651,7 @@ func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) e
 		partNum = 0
 	}
 
-	bucketNum := o.bucketHash(k)
+	bucketNum := o.bucketHash(k, o.orderbucketcount)
 	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
@@ -669,7 +684,7 @@ func (o *OrderTable) GetValueByID(k Key, partNum int, value Value, colNum int) e
 		partNum = 0
 	}
 
-	bucketNum := o.bucketHash(k)
+	bucketNum := o.bucketHash(k, o.orderbucketcount)
 	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
@@ -729,7 +744,7 @@ func (o *OrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		}
 
 		// Insert Order
-		bucketNum := o.bucketHash(k)
+		bucketNum := o.bucketHash(k, o.orderbucketcount)
 		bucket := &o.data[partNum].buckets[bucketNum]
 
 		index := k[KEY0]*DIST_COUNT + k[KEY1]
@@ -834,7 +849,7 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 		partNum = 0
 	}
 
-	bucketNum := o.bucketHash(k)
+	bucketNum := o.bucketHash(k, o.orderbucketcount)
 	bucket := &o.data[partNum].buckets[bucketNum]
 
 	if o.mode != PARTITION {
@@ -862,7 +877,7 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 	return ENOKEY
 }
 
-func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
+func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range o.data {
@@ -1285,7 +1300,7 @@ func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum i
 	return nil
 }
 
-func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
+func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range c.data {
@@ -1454,7 +1469,7 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 	return nil
 }
 
-func (h *HistoryTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
+func (h *HistoryTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 
 }
 
@@ -1476,8 +1491,6 @@ func (h *HistoryTable) Reset() {
 		}
 	}
 }
-
-var olbucketcount int
 
 type OrderLinePart struct {
 	padding1 [PADDING]byte
@@ -1506,15 +1519,16 @@ type OrderLineBucketEntry struct {
 }
 
 type OrderLineTable struct {
-	padding1    [PADDING]byte
-	data        []OrderLinePart
-	nKeys       int
-	nParts      int
-	isPartition bool
-	mode        int
-	bucketHash  func(k Key) int
-	iLock       spinlock.Spinlock
-	padding2    [PADDING]byte
+	padding1      [PADDING]byte
+	data          []OrderLinePart
+	nKeys         int
+	nParts        int
+	isPartition   bool
+	mode          int
+	bucketHash    func(k Key, orderbucketcount int) int
+	iLock         spinlock.Spinlock
+	olbucketcount int
+	padding2      [PADDING]byte
 }
 
 func MakeOrderLineTablePara(nParts int, warehouse int, isPartition bool, mode int, workers int) *OrderLineTable {
@@ -1526,7 +1540,7 @@ func MakeOrderLineTablePara(nParts int, warehouse int, isPartition bool, mode in
 		mode:        mode,
 	}
 
-	olbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+	olTable.olbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
 
 	perWorker := nParts / workers
 	var wg sync.WaitGroup
@@ -1534,8 +1548,8 @@ func MakeOrderLineTablePara(nParts int, warehouse int, isPartition bool, mode in
 		wg.Add(1)
 		go func(n int) {
 			for k := n * perWorker; k < nParts && k < n*perWorker+perWorker; k++ {
-				olTable.data[k].buckets = make([]OrderLineBucket, olbucketcount)
-				for j := 0; j < olbucketcount; j++ {
+				olTable.data[k].buckets = make([]OrderLineBucket, olTable.olbucketcount)
+				for j := 0; j < olTable.olbucketcount; j++ {
 					olTable.data[k].buckets[j].tail = &OrderLineBucketEntry{
 						next:   nil,
 						before: nil,
@@ -1548,9 +1562,9 @@ func MakeOrderLineTablePara(nParts int, warehouse int, isPartition bool, mode in
 	}
 	wg.Wait()
 
-	olTable.bucketHash = func(k Key) int {
+	olTable.bucketHash = func(k Key, olbucketcount int) int {
 		oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
-		return int(oid % int64(orderbucketcount))
+		return int(oid % int64(olbucketcount))
 	}
 
 	return olTable
@@ -1565,11 +1579,11 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 		mode:        mode,
 	}
 
-	olbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
+	olTable.olbucketcount = CAP_BUCKET_COUNT * DIST_COUNT * warehouse / nParts
 
 	for k := 0; k < nParts; k++ {
-		olTable.data[k].buckets = make([]OrderLineBucket, olbucketcount)
-		for i := 0; i < olbucketcount; i++ {
+		olTable.data[k].buckets = make([]OrderLineBucket, olTable.olbucketcount)
+		for i := 0; i < olTable.olbucketcount; i++ {
 			olTable.data[k].buckets[i].tail = &OrderLineBucketEntry{
 				next:   nil,
 				before: nil,
@@ -1579,14 +1593,14 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, mode int) *
 	}
 
 	if isPartition {
-		olTable.bucketHash = func(k Key) int {
+		olTable.bucketHash = func(k Key, olbucketcount int) int {
 			oid := int64(k[KEY2])*DIST_COUNT + int64(k[KEY1])
-			return int(oid % int64(orderbucketcount))
+			return int(oid % int64(olbucketcount))
 		}
 	} else {
-		olTable.bucketHash = func(k Key) int {
+		olTable.bucketHash = func(k Key, olbucketcount int) int {
 			oid := int64(k[KEY2]*(*NumPart))*DIST_COUNT + int64(k[KEY0]*DIST_COUNT+k[KEY1])
-			return int(oid % int64(orderbucketcount))
+			return int(oid % int64(olbucketcount))
 		}
 	}
 
@@ -1600,7 +1614,7 @@ func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record
 	}
 
 	// Insert Order
-	bucketNum := ol.bucketHash(k)
+	bucketNum := ol.bucketHash(k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 	if !ol.isPartition {
 		bucket.Lock()
@@ -1634,7 +1648,7 @@ func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, error) {
 		partNum = 0
 	}
 
-	bucketNum := ol.bucketHash(k)
+	bucketNum := ol.bucketHash(k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 
 	if ol.mode != PARTITION {
@@ -1668,7 +1682,7 @@ func (ol *OrderLineTable) SetValueByID(k Key, partNum int, value Value, colNum i
 		partNum = 0
 	}
 
-	bucketNum := ol.bucketHash(k)
+	bucketNum := ol.bucketHash(k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 
 	if ol.mode != PARTITION {
@@ -1701,7 +1715,7 @@ func (ol *OrderLineTable) GetValueByID(k Key, partNum int, value Value, colNum i
 		partNum = 0
 	}
 
-	bucketNum := ol.bucketHash(k)
+	bucketNum := ol.bucketHash(k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 
 	if ol.mode != PARTITION {
@@ -1755,7 +1769,7 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		partNum = 0
 	}
 
-	bucketNum := ol.bucketHash(recs[0].k)
+	bucketNum := ol.bucketHash(recs[0].k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 
 	if ol.mode != PARTITION {
@@ -1806,7 +1820,7 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 		partNum = 0
 	}
 
-	bucketNum := ol.bucketHash(k)
+	bucketNum := ol.bucketHash(k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 
 	if ol.mode != PARTITION {
@@ -1834,7 +1848,7 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 	return ENOKEY
 }
 
-func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int) {
+func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range ol.data {

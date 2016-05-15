@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/spinlock"
 )
 
 // Transaction Parameters
@@ -211,6 +212,8 @@ func (s *SBTrans) DecTrial() {
 }
 
 type SBTransGen struct {
+	padding1 [PADDING]byte
+	spinlock.Spinlock
 	rnd             *rand.Rand
 	transPercentage [SBTRANSNUM]int
 	gen             *Generator
@@ -221,9 +224,12 @@ type SBTransGen struct {
 	partIndex       int
 	nParts          int
 	isPartition     bool
+	padding2        [PADDING]byte
 }
 
 func (s *SBTransGen) GenOneTrans(mode int) Trans {
+	s.Lock()
+	defer s.Unlock()
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
 	rnd := s.rnd
@@ -235,8 +241,13 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	} else {
 		pi = rnd.Intn(s.nParts)
 	}*/
-	pi = s.partIndex
 	isPart := s.isPartition
+
+	if isPart {
+		pi = s.partIndex
+	} else {
+		pi = gen.GenOnePart()
+	}
 
 	txn := rnd.Intn(100)
 	for i, v := range s.transPercentage {
@@ -266,7 +277,7 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 		}
 		t.ammount.floatVal = AMMT
 	case AMALGAMATE:
-		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
+		if rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
 			for {
 				tmpPi = gen.GenOnePart()
@@ -302,7 +313,7 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 			}
 		}
 	case SENDPAYMENT:
-		if isPart && rnd.Intn(100) < cr { // cross-partition transaction
+		if rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
 			//tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
 			for {
@@ -373,29 +384,14 @@ type SBWorkload struct {
 	transGen        []*SBTransGen
 }
 
-func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64, initMode int) *SBWorkload {
+func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [SBTRANSNUM]int, cr float64, ps float64, initMode int) *SBWorkload {
 	sbWorkload := &SBWorkload{}
 
-	tp := strings.Split(transPercentage, ":")
-	if len(tp) != SBTRANSNUM {
-		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
+	if nParts == 1 {
+		isPartition = false
 	}
 
-	for i, str := range tp {
-		per, err := strconv.Atoi(str)
-		if err != nil {
-			clog.Error("TransPercentage Format Error %s\n", str)
-		}
-		if i != 0 {
-			sbWorkload.transPercentage[i] = sbWorkload.transPercentage[i-1] + per
-		} else {
-			sbWorkload.transPercentage[i] = per
-		}
-	}
-
-	if sbWorkload.transPercentage[SBTRANSNUM-1] != 100 {
-		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
-	}
+	sbWorkload.transPercentage = transPercentage
 
 	sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
 
@@ -466,11 +462,9 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 			nParts:          nParts,
 			isPartition:     isPartition,
 		}
-		if isPartition {
-			tg.partIndex = i
-		} else {
-			tg.partIndex = 0
-		}
+
+		tg.partIndex = i
+
 		tg.transBuf = make([]*SBTrans, QUEUESIZE+2*PADDINGINT64)
 		tg.transBuf = tg.transBuf[PADDINGINT64 : QUEUESIZE+PADDINGINT64]
 		for p := 0; p < QUEUESIZE; p++ {
@@ -539,12 +533,7 @@ func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
 
 func (sb *SBWorkload) ResetPart(nParts int, isPartition bool) {
 	sb.basic.ResetPart(nParts, isPartition)
-	for i, tranGen := range sb.transGen {
-		if isPartition {
-			tranGen.partIndex = i
-		} else {
-			tranGen.partIndex = 0
-		}
+	for _, tranGen := range sb.transGen {
 		tranGen.isPartition = isPartition
 		tranGen.nParts = nParts
 	}
@@ -560,6 +549,10 @@ func (s *SBWorkload) GetIDToKeyRange() [][]int {
 
 func (s *SBWorkload) GetTableCount() int {
 	return s.basic.tableCount
+}
+
+func (s *SBWorkload) GetPartitioner(partIndex int) []Partitioner {
+	return s.basic.generators[partIndex].partitioner
 }
 
 func (s *SBWorkload) PrintChecking() {
@@ -627,5 +620,17 @@ func (s *SBWorkload) ResetData() {
 			key[k]++
 			k = 0
 		}
+	}
+}
+
+func (sb *SBWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr float64, transper [SBTRANSNUM]int) {
+	for i := 0; i < len(sb.transGen); i++ {
+		tg := sb.transGen[i]
+		tg.Lock()
+		tg.gen.keyGens = keygens[i]
+		tg.gen.partGen = partGens[i]
+		tg.cr = cr
+		tg.transPercentage = transper
+		tg.Unlock()
 	}
 }

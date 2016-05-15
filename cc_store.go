@@ -192,12 +192,20 @@ func NewStore(schema string, nParts int, isPartition bool, mode int) *Store {
 		} else if strings.Compare(schemaStrs[0], "ORDER") == 0 {
 			start := time.Now()
 			s.priTables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
-			s.secTables[i] = MakeOrderTable(*NumPart, *NumPart, !isPartition, mode)
+			if isPartition {
+				s.secTables[i] = MakeOrderTable(1, *NumPart, !isPartition, mode)
+			} else {
+				s.secTables[i] = MakeOrderTable(*NumPart, *NumPart, !isPartition, mode)
+			}
 			clog.Info("Making Order %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "CUSTOMER") == 0 {
 			start := time.Now()
 			s.priTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
-			s.secTables[i] = MakeCustomerTable(*NumPart, *NumPart, !isPartition, mode)
+			if isPartition {
+				s.secTables[i] = MakeCustomerTable(1, *NumPart, !isPartition, mode)
+			} else {
+				s.secTables[i] = MakeCustomerTable(*NumPart, *NumPart, !isPartition, mode)
+			}
 			clog.Info("Making Customer %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
 			start := time.Now()
@@ -207,7 +215,11 @@ func NewStore(schema string, nParts int, isPartition bool, mode int) *Store {
 		} else if strings.Compare(schemaStrs[0], "ORDERLINE") == 0 {
 			start := time.Now()
 			s.priTables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
-			s.secTables[i] = MakeOrderLineTable(*NumPart, *NumPart, !isPartition, mode)
+			if isPartition {
+				s.secTables[i] = MakeOrderLineTable(1, *NumPart, !isPartition, mode)
+			} else {
+				s.secTables[i] = MakeOrderLineTable(*NumPart, *NumPart, !isPartition, mode)
+			}
 			clog.Info("Making OrderLine %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ITEM") == 0 {
 			start := time.Now()
@@ -217,7 +229,11 @@ func NewStore(schema string, nParts int, isPartition bool, mode int) *Store {
 		} else {
 			start := time.Now()
 			s.priTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)
-			s.secTables[i] = NewBasicTable(schemaStrs, *NumPart, !isPartition, mode, i)
+			if isPartition {
+				s.secTables[i] = NewBasicTable(schemaStrs, 1, !isPartition, mode, i)
+			} else {
+				s.secTables[i] = NewBasicTable(schemaStrs, *NumPart, !isPartition, mode, i)
+			}
 			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		}
 
@@ -388,10 +404,12 @@ func (s *Store) GetTables() []Table {
 	return s.priTables
 }
 
-func (s *Store) IndexPartition(iaAR []IndexAlloc, begin int, end int) {
+func (s *Store) IndexPartition(iaAR []IndexAlloc, begin int, end int, partitioner []Partitioner) {
 	for j := 0; j < len(s.priTables); j++ {
-		if j != ITEM && j != HISTORY {
-			s.secTables[j].BulkLoad(s.priTables[j], iaAR[j], begin, end)
+		if WLTYPE == TPCCWL && j != ITEM && j != HISTORY {
+			s.secTables[j].BulkLoad(s.priTables[j], iaAR[j], begin, end, nil)
+		} else {
+			s.secTables[j].BulkLoad(s.priTables[j], nil, begin, end, partitioner[j])
 		}
 	}
 }

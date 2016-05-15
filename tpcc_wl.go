@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/spinlock"
 )
 
 const (
@@ -158,7 +159,8 @@ type StockLevelTrans struct {
 }
 
 type TPCCTransGen struct {
-	padding1        [PADDING]byte
+	padding1 [PADDING]byte
+	spinlock.Spinlock
 	i_id_gen        KeyGen
 	w_id_gen        KeyGen
 	c_id_gen        KeyGen
@@ -179,6 +181,8 @@ type TPCCTransGen struct {
 }
 
 func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
+	tg.Lock()
+	defer tg.Unlock()
 	var t Trans
 	rnd := &tg.rnd
 
@@ -235,33 +239,31 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 	oa := &tg.oa
 	ola := &tg.ola
 
-	t.w_id = pi
 	var tmpPi int
 	if isPart {
-		if rnd.Intn(100) < cr {
-			t.accessParts = t.accessParts[:2]
-			for {
-				tmpPi = int(w_id_gen.GetWholeRank())
-				if tmpPi != pi {
-					break
-				}
-			}
-			if tmpPi > pi {
-				t.accessParts[0] = pi
-				t.accessParts[1] = tmpPi
-			} else {
-				t.accessParts[0] = tmpPi
-				t.accessParts[1] = pi
-			}
-		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = pi
-		}
+		t.w_id = pi
+	} else {
+		t.w_id = w_id_gen.GetWholeRank()
+	}
 
+	if rnd.Intn(100) < cr {
+		t.accessParts = t.accessParts[:2]
+		for {
+			tmpPi = int(w_id_gen.GetWholeRank())
+			if tmpPi != t.w_id {
+				break
+			}
+		}
+		if tmpPi > t.w_id {
+			t.accessParts[0] = t.w_id
+			t.accessParts[1] = tmpPi
+		} else {
+			t.accessParts[0] = tmpPi
+			t.accessParts[1] = t.w_id
+		}
 	} else {
 		t.accessParts = t.accessParts[:1]
-		t.accessParts[0] = w_id_gen.GetWholeRank()
-		t.w_id = t.accessParts[0]
+		t.accessParts[0] = t.w_id
 	}
 
 	t.TXN = txn
@@ -299,33 +301,34 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	isPart := tg.isPartition
 	cr := int(tg.cr)
 
-	var tmpPi int = pi
 	if isPart {
-		if rnd.Intn(100) < cr {
-			t.accessParts = t.accessParts[:2]
-			for {
-				tmpPi = w_id_gen.GetWholeRank()
-				if tmpPi != pi {
-					break
-				}
-			}
-			if tmpPi > pi {
-				t.accessParts[0] = pi
-				t.accessParts[1] = tmpPi
-			} else {
-				t.accessParts[0] = tmpPi
-				t.accessParts[1] = pi
-			}
-		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = pi
-		}
 		t.w_id = pi
-		t.c_w_id = tmpPi
 	} else {
 		t.w_id = w_id_gen.GetWholeRank()
-		t.c_w_id = w_id_gen.GetWholeRank()
 	}
+
+	tmpPi := t.w_id
+
+	if rnd.Intn(100) < cr {
+		t.accessParts = t.accessParts[:2]
+		for {
+			tmpPi = w_id_gen.GetWholeRank()
+			if tmpPi != t.w_id {
+				break
+			}
+		}
+		if tmpPi > t.w_id {
+			t.accessParts[0] = t.w_id
+			t.accessParts[1] = tmpPi
+		} else {
+			t.accessParts[0] = tmpPi
+			t.accessParts[1] = t.w_id
+		}
+	} else {
+		t.accessParts = t.accessParts[:1]
+		t.accessParts[0] = t.w_id
+	}
+	t.c_w_id = tmpPi
 
 	t.TXN = txn
 	t.isLast = isLast
@@ -477,29 +480,14 @@ type TPCCWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, ps float64, dataDir string, initMode int) *TPCCWorkload {
+func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int) *TPCCWorkload {
 	tpccWL := &TPCCWorkload{}
 
-	tp := strings.Split(transPercentage, ":")
-	if len(tp) != TPCCTRANSNUM {
-		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
+	if nParts == 1 {
+		isPartition = false
 	}
 
-	for i, str := range tp {
-		per, err := strconv.Atoi(str)
-		if err != nil {
-			clog.Error("TransPercentage Format Error %s\n", str)
-		}
-		if i != 0 {
-			tpccWL.transPercentage[i] = tpccWL.transPercentage[i-1] + per
-		} else {
-			tpccWL.transPercentage[i] = per
-		}
-	}
-
-	if tpccWL.transPercentage[TPCCTRANSNUM-1] != 100 {
-		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
-	}
+	tpccWL.transPercentage = transPercentage
 
 	start := time.Now()
 	tpccWL.store = NewStore(workload, nParts, isPartition, initMode)
@@ -612,15 +600,15 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	tpccWL.c_id_range = DIST_COUNT * C_ID_PER_DIST
 	tpccWL.c_last_range = DIST_COUNT * C_LAST_PER_DIST
 
-	kr_i_id := make([]int, nParts+PADDINGINT*2)
-	kr_i_id = kr_i_id[PADDINGINT : PADDINGINT+nParts]
-	kr_w_id := make([]int, nParts+PADDINGINT*2)
-	kr_w_id = kr_w_id[PADDINGINT : PADDINGINT+nParts]
-	kr_c_id := make([]int, nParts+PADDINGINT*2)
-	kr_c_id = kr_c_id[PADDINGINT : PADDINGINT+nParts]
-	kr_c_last := make([]int, nParts+PADDINGINT*2)
-	kr_c_last = kr_c_last[PADDINGINT : PADDINGINT+nParts]
-	for i := 0; i < nParts; i++ {
+	kr_i_id := make([]int, *NumPart+PADDINGINT*2)
+	kr_i_id = kr_i_id[PADDINGINT : PADDINGINT+*NumPart]
+	kr_w_id := make([]int, *NumPart+PADDINGINT*2)
+	kr_w_id = kr_w_id[PADDINGINT : PADDINGINT+*NumPart]
+	kr_c_id := make([]int, *NumPart+PADDINGINT*2)
+	kr_c_id = kr_c_id[PADDINGINT : PADDINGINT+*NumPart]
+	kr_c_last := make([]int, *NumPart+PADDINGINT*2)
+	kr_c_last = kr_c_last[PADDINGINT : PADDINGINT+*NumPart]
+	for i := 0; i < *NumPart; i++ {
 		kr_i_id[i] = tpccWL.i_id_range
 		kr_w_id[i] = tpccWL.w_id_range
 		kr_c_id[i] = tpccWL.c_id_range
@@ -679,10 +667,10 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		tg.nParts = nParts
 		tg.isPartition = isPartition
 
-		tg.i_id_gen = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, nParts, kr_i_id, isPartition)
-		tg.c_id_gen = tpcc_NewKeyGen(s, i, tpccWL.c_id_range, nParts, kr_c_id, isPartition)
-		tg.c_last_gen = tpcc_NewKeyGen(s, i, tpccWL.c_last_range, nParts, kr_c_last, isPartition)
-		tg.w_id_gen = tpcc_NewKeyGen(ps, i, tpccWL.w_id_range, nParts, kr_w_id, isPartition)
+		tg.i_id_gen = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, kr_i_id, isPartition)
+		tg.c_id_gen = tpcc_NewKeyGen(s, i, tpccWL.c_id_range, kr_c_id, isPartition)
+		tg.c_last_gen = tpcc_NewKeyGen(s, i, tpccWL.c_last_range, kr_c_last, isPartition)
+		tg.w_id_gen = tpcc_NewKeyGen(ps, i, tpccWL.w_id_range, kr_w_id, isPartition)
 
 		tg.oa.OneAllocate()
 		tg.ola.OneAllocate()
@@ -743,9 +731,9 @@ func (tpccWL *TPCCWorkload) NewKeyGen(s float64) [][]KeyGen {
 	keygens := make([][]KeyGen, tpccWL.nWorkers)
 	for i := 0; i < tpccWL.nWorkers; i++ {
 		keygens[i] = make([]KeyGen, 3)
-		keygens[i][0] = tpcc_NewKeyGen(s, i, tpccWL.c_id_range, tpccWL.nParts, tpccWL.kr_c_id, tpccWL.isPartition)
-		keygens[i][1] = tpcc_NewKeyGen(s, i, tpccWL.c_last_range, tpccWL.nParts, tpccWL.kr_c_last, tpccWL.isPartition)
-		keygens[i][2] = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, tpccWL.nParts, tpccWL.kr_i_id, tpccWL.isPartition)
+		keygens[i][0] = tpcc_NewKeyGen(s, i, tpccWL.c_id_range, tpccWL.kr_c_id, tpccWL.isPartition)
+		keygens[i][1] = tpcc_NewKeyGen(s, i, tpccWL.c_last_range, tpccWL.kr_c_last, tpccWL.isPartition)
+		keygens[i][2] = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, tpccWL.kr_i_id, tpccWL.isPartition)
 	}
 
 	return keygens
@@ -768,7 +756,7 @@ func (tpccWL *TPCCWorkload) SetPartGens(keygens []KeyGen) {
 func (tpccWL *TPCCWorkload) NewPartGen(ps float64) []KeyGen {
 	keygens := make([]KeyGen, tpccWL.nWorkers)
 	for i := 0; i < tpccWL.nWorkers; i++ {
-		keygens[i] = tpcc_NewKeyGen(ps, i, tpccWL.w_id_range, tpccWL.nParts, tpccWL.kr_w_id, tpccWL.isPartition)
+		keygens[i] = tpcc_NewKeyGen(ps, i, tpccWL.w_id_range, tpccWL.kr_w_id, tpccWL.isPartition)
 	}
 	return keygens
 }
@@ -826,6 +814,29 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 	debug.FreeOSMemory()
 	debug.SetGCPercent(-1)
 
+}
+
+func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, cr float64, transper [TPCCTRANSNUM]int) {
+	tpccWL.transPercentage = transper
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		tg := &tpccWL.transGen[i]
+		tg.Lock()
+		tg.c_id_gen = keygens[i][0]
+		tg.c_last_gen = keygens[i][1]
+		tg.i_id_gen = keygens[i][2]
+		tg.w_id_gen = partGens[i]
+		tg.cr = cr
+		tg.transPercentage = transper
+		tg.Unlock()
+	}
+}
+
+func (tpccWL *TPCCWorkload) ResetPart(nParts int, isPartition bool) {
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		tg := &tpccWL.transGen[i]
+		tg.nParts = nParts
+		tg.isPartition = isPartition
+	}
 }
 
 func makeNewOrderTrans(rnd rand.Rand, id int, rec Record) *NewOrderTrans {
@@ -897,16 +908,16 @@ func makeStockLevelTrans(rnd rand.Rand, id int) *StockLevelTrans {
 	return trans
 }
 
-func tpcc_NewKeyGen(s float64, partIndex int, keyRange int, nParts int, keyArray []int, isPartition bool) KeyGen {
+func tpcc_NewKeyGen(s float64, partIndex int, keyRange int, keyArray []int, isPartition bool) KeyGen {
 	var kg KeyGen
 	if s == 1 {
-		kg = NewUniformRand(partIndex, keyRange, nParts, keyArray, isPartition)
+		kg = NewUniformRand(partIndex, keyRange, *NumPart, keyArray, isPartition)
 	} else if s > 1 {
-		kg = NewZipfRandLarge(partIndex, keyRange, nParts, keyArray, s, isPartition)
+		kg = NewZipfRandLarge(partIndex, keyRange, *NumPart, keyArray, s, isPartition)
 	} else if s < 0 {
-		kg = NewHotColdRand(partIndex, keyRange, nParts, keyArray, -s, isPartition)
+		kg = NewHotColdRand(partIndex, keyRange, *NumPart, keyArray, -s, isPartition)
 	} else { // s >=0 && s < 1
-		kg = NewZipfRandSmall(partIndex, keyRange, nParts, keyArray, s, isPartition)
+		kg = NewZipfRandSmall(partIndex, keyRange, *NumPart, keyArray, s, isPartition)
 	}
 	return kg
 }
