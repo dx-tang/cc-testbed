@@ -323,25 +323,21 @@ func (coord *Coordinator) process() {
 		select {
 		case ri = <-coord.reports[0]:
 
-			summary.execTime = ri.execTime
-			summary.txn = ri.txn
-			summary.aborts = ri.aborts
-
-			if *SysType == ADAPTIVE {
-				setReport(ri, summary)
-			}
+			setReport(ri, summary)
 
 			for i := 1; i < len(coord.reports); i++ {
 				ri = <-coord.reports[i]
 				collectReport(ri, summary)
 			}
 
+			execTime := float64(*NumPart*REPORTPERIOD/PERMINISEC) - summary.genTime.Seconds()
+
 			// Record Throughput and Mode
-			coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / summary.execTime.Seconds()
+			coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / execTime
 			//clog.Info("Summary %v; Exec Secs: %v", summary.txn, summary.execTime.Seconds())
 			coord.ModeAR[coord.rc] = coord.mode
 
-			clog.Info("Test %v Mode %v; Txn %.4f; Abort %.4f", coord.rc, coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn))
+			clog.Info("Test %v Mode %v; Txn %.4f; Abort %.4f; Total %v; ExecTime %.4f", coord.rc, coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn), summary.txn, execTime)
 
 			coord.rc++
 
@@ -522,37 +518,45 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 }
 
 func setReport(ri *ReportInfo, summary *ReportInfo) {
-	summary.txnSample = ri.txnSample
+	summary.execTime = ri.execTime
+	summary.txn = ri.txn
+	summary.aborts = ri.aborts
+	summary.genTime = ri.genTime
 
-	for i, ps := range ri.partStat {
-		summary.partStat[i] = ps
+	if *SysType == ADAPTIVE {
+		summary.txnSample = ri.txnSample
+
+		for i, ps := range ri.partStat {
+			summary.partStat[i] = ps
+		}
+
+		//summary.partTotal = ri.partTotal
+
+		//summary.partLenStat = ri.partLenStat
+
+		for i, rs := range ri.recStat {
+			summary.recStat[i] = rs
+		}
+
+		summary.readCount = ri.readCount
+		summary.writeCount = ri.writeCount
+		//summary.hits = ri.hits
+
+		summary.accessCount = ri.accessCount
+		summary.conflicts = ri.conflicts
+
+		summary.latency = ri.latency
+
+		summary.partAccess = ri.partAccess
+		summary.partSuccess = ri.partSuccess
 	}
-
-	//summary.partTotal = ri.partTotal
-
-	//summary.partLenStat = ri.partLenStat
-
-	for i, rs := range ri.recStat {
-		summary.recStat[i] = rs
-	}
-
-	summary.readCount = ri.readCount
-	summary.writeCount = ri.writeCount
-	//summary.hits = ri.hits
-
-	summary.accessCount = ri.accessCount
-	summary.conflicts = ri.conflicts
-
-	summary.latency = ri.latency
-
-	summary.partAccess = ri.partAccess
-	summary.partSuccess = ri.partSuccess
 }
 
 func collectReport(ri *ReportInfo, summary *ReportInfo) {
 	summary.execTime += ri.execTime
 	summary.txn += ri.txn
 	summary.aborts += ri.aborts
+	summary.genTime += ri.genTime
 
 	if *SysType == ADAPTIVE {
 		summary.txnSample += ri.txnSample

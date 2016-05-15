@@ -187,6 +187,7 @@ func (w *Worker) run() {
 			w.riReplica = replica
 			if *SysType == ADAPTIVE {
 				replica.execTime = w.NExecute - w.riMaster.prevExec
+				replica.genTime = w.NGen - w.riMaster.prevGen
 				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
 				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
@@ -197,6 +198,7 @@ func (w *Worker) run() {
 				w.coord.reports[w.ID] <- replica
 			} else {
 				replica.execTime = w.NExecute - w.riMaster.prevExec
+				replica.genTime = w.NGen - w.riMaster.prevGen
 				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
 				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 

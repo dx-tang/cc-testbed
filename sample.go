@@ -23,6 +23,8 @@ type ReportInfo struct {
 	padding0    [PADDING]byte
 	execTime    time.Duration
 	prevExec    time.Duration
+	genTime     time.Duration
+	prevGen     time.Duration
 	txn         int64
 	aborts      int64
 	prevTxn     int64
@@ -46,6 +48,8 @@ type ReportInfo struct {
 func (ri *ReportInfo) Reset() {
 	ri.execTime = 0
 	ri.prevExec = 0
+	ri.genTime = 0
+	ri.prevGen = 0
 	ri.txn = 0
 	ri.aborts = 0
 	ri.prevTxn = 0
