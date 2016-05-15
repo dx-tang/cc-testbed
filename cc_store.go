@@ -406,8 +406,10 @@ func (s *Store) GetTables() []Table {
 
 func (s *Store) IndexPartition(iaAR []IndexAlloc, begin int, end int, partitioner []Partitioner) {
 	for j := 0; j < len(s.priTables); j++ {
-		if WLTYPE == TPCCWL && j != ITEM && j != HISTORY {
-			s.secTables[j].BulkLoad(s.priTables[j], iaAR[j], begin, end, nil)
+		if WLTYPE == TPCCWL {
+			if j != ITEM && j != HISTORY {
+				s.secTables[j].BulkLoad(s.priTables[j], iaAR[j], begin, end, nil)
+			}
 		} else {
 			s.secTables[j].BulkLoad(s.priTables[j], nil, begin, end, partitioner[j])
 		}
