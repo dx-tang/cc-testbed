@@ -319,6 +319,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 func (coord *Coordinator) process() {
 	summary := coord.summary
 	var ri *ReportInfo
+	var indexPartStart time.Time
 	for {
 		select {
 		case ri = <-coord.reports[0]:
@@ -342,6 +343,8 @@ func (coord *Coordinator) process() {
 			coord.rc++
 
 			if !coord.indexpart {
+				clog.Info("Starting Index Partitioning")
+				indexPartStart = time.Now()
 				coord.indexpart = true
 				store := coord.store
 				// Begin Index Partitioning
@@ -432,7 +435,7 @@ func (coord *Coordinator) process() {
 
 			coord.store.state = INDEX_NONE
 
-			clog.Info("Done with Index Partitioning")
+			clog.Info("Done with Index Partitioning: %.3f", time.Since(indexPartStart).Seconds())
 
 			if coord.workload == SINGLEWL {
 				single := coord.singleWL

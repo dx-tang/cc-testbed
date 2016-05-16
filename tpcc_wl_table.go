@@ -2,7 +2,7 @@ package testbed
 
 import (
 	"sync"
-	"time"
+	//"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
@@ -312,7 +312,7 @@ func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int
 	rec := MakeRecord(no, compKey, tuple)
 	iRecs := make([]InsertRec, 1)
 	iRecs[0].rec = rec
-	start := time.Now()
+	//start := time.Now()
 	for i, entry := range no.head {
 		if i/DIST_COUNT < begin || i/DIST_COUNT >= end {
 			continue
@@ -330,7 +330,7 @@ func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int
 			entry = entry.next
 		}
 	}
-	clog.Info("NewOrder Iteration Take %.2fs", time.Since(start).Seconds())
+	//clog.Info("NewOrder Iteration Take %.2fs", time.Since(start).Seconds())
 }
 
 func (no *NewOrderTable) Reset() {
@@ -879,7 +879,7 @@ func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int)
 
 func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
-	start := time.Now()
+	//start := time.Now()
 	for i, _ := range o.data {
 		part := &o.data[i]
 		for j, _ := range part.buckets {
@@ -910,7 +910,7 @@ func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, pa
 			}
 		}
 	*/
-	clog.Info("OrderTable Bulkload Takes %.2fs", time.Since(start).Seconds())
+	//clog.Info("OrderTable Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
 func (o *OrderTable) Reset() {
@@ -1302,7 +1302,7 @@ func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum i
 
 func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
-	start := time.Now()
+	//start := time.Now()
 	for i, _ := range c.data {
 		part := &c.data[i]
 		for j, _ := range part.shardedMap {
@@ -1318,7 +1318,7 @@ func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int,
 			}
 		}
 	}
-	clog.Info("CustomerTable Bulkload Takes %.2fs", time.Since(start).Seconds())
+	//clog.Info("CustomerTable Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
 func (c *CustomerTable) Reset() {
@@ -1850,7 +1850,7 @@ func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum
 
 func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
-	start := time.Now()
+	//start := time.Now()
 	for i, _ := range ol.data {
 		part := &ol.data[i]
 		for j, _ := range part.buckets {
@@ -1871,7 +1871,7 @@ func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end in
 		}
 	}
 
-	clog.Info("OrderLineTable Iteration Takes %.2fs", time.Since(start).Seconds())
+	//clog.Info("OrderLineTable Iteration Takes %.2fs", time.Since(start).Seconds())
 }
 
 func (ol *OrderLineTable) Reset() {

@@ -192,6 +192,7 @@ func (w *Worker) run() {
 				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
 				replica.prevExec = w.NExecute
+				replica.prevGen = w.NGen
 				replica.prevTxn = w.NStats[NTXN]
 				replica.prevAborts = w.NStats[NABORTS]
 
@@ -203,6 +204,7 @@ func (w *Worker) run() {
 				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
 				replica.prevExec = w.NExecute
+				replica.prevGen = w.NGen
 				replica.prevTxn = w.NStats[NTXN]
 				replica.prevAborts = w.NStats[NABORTS]
 
@@ -284,11 +286,11 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	select {
 	case action := <-w.actionTrans:
-		clog.Info("Begin Index Partitioning from %v to %v", action.start, action.end)
+		//clog.Info("Begin Index Partitioning from %v to %v", action.start, action.end)
 		s := w.coord.store
 		s.IndexPartition(w.iaAR, action.start, action.end, w.partitioner)
 		w.coord.indexActionACK[w.ID] <- true
-		clog.Info("End Index Partitioning")
+		//clog.Info("End Index Partitioning")
 	default:
 	}
 
