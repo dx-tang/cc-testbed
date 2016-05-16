@@ -4,7 +4,7 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
 	"sync"
-	//"time"
+	"time"
 )
 
 const (
@@ -30,6 +30,7 @@ type Table interface {
 	GetValueBySec(k Key, partNum int, val Value) error
 	SetMode(mode int)
 	BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
+	MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	Reset()
 }
 
@@ -417,6 +418,32 @@ func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, p
 		}
 	}
 	//clog.Info("Basic Table Bulkload Takes %.2fs", time.Since(start).Seconds())
+}
+
+func (bt *BasicTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
+	recs := make([]InsertRec, 1)
+	start := time.Now()
+	for i := begin; i < end; i++ {
+		part := &bt.data[i]
+		for j, _ := range part.shardedMap {
+			shard := &part.shardedMap[j]
+			for k, v := range shard.rows {
+				if WLTYPE == TPCCWL {
+					recs[0].k = k
+					recs[0].rec = v
+					recs[0].partNum = 0
+					table.InsertRecord(recs, ia)
+				} else {
+					recs[0].k = k
+					recs[0].rec = v
+					recs[0].partNum = 0
+					table.InsertRecord(recs, ia)
+				}
+			}
+		}
+	}
+	clog.Info("Basic Table Merging Takes %.2fs", time.Since(start).Seconds())
+
 }
 
 func (bt *BasicTable) Reset() {

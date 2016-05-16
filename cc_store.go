@@ -415,3 +415,15 @@ func (s *Store) IndexPartition(iaAR []IndexAlloc, begin int, end int, partitione
 		}
 	}
 }
+
+func (s *Store) IndexMerge(iaAR []IndexAlloc, begin int, end int, partitioner []Partitioner) {
+	for j := 0; j < len(s.priTables); j++ {
+		if WLTYPE == TPCCWL {
+			if j != ITEM && j != HISTORY {
+				s.secTables[j].MergeLoad(s.priTables[j], iaAR[j], begin, end, nil)
+			}
+		} else {
+			s.secTables[j].MergeLoad(s.priTables[j], nil, begin, end, partitioner[j])
+		}
+	}
+}

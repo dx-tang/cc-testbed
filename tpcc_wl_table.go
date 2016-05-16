@@ -2,7 +2,7 @@ package testbed
 
 import (
 	"sync"
-	//"time"
+	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
@@ -331,6 +331,12 @@ func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int
 		}
 	}
 	//clog.Info("NewOrder Iteration Take %.2fs", time.Since(start).Seconds())
+}
+
+func (no *NewOrderTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
+	start := time.Now()
+	no.BulkLoad(table, ia, begin, end, partitioner)
+	clog.Info("NewOrder Merging Take %.2fs", time.Since(start).Seconds())
 }
 
 func (no *NewOrderTable) Reset() {
@@ -900,17 +906,29 @@ func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, pa
 		}
 	}
 
-	/*
-		for i, _ := range o.secIndex {
-			secPart := &o.secIndex[i]
-			for k, _ := range secPart.o_id_map {
-				if k == compKey {
-					nKeys++
+	//clog.Info("OrderTable Bulkload Takes %.2fs", time.Since(start).Seconds())
+}
+
+func (o *OrderTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
+	iRecs := make([]InsertRec, 1)
+	start := time.Now()
+	for i := begin; i < end; i++ {
+		part := &o.data[i]
+		for j, _ := range part.buckets {
+			bucket := &part.buckets[j]
+			tail := bucket.tail
+			for tail != nil {
+				for p := tail.t - 1; p >= 0; p-- {
+					iRecs[0].k = tail.keys[p]
+					iRecs[0].rec = tail.oRecs[p]
+					iRecs[0].partNum = 0
+					table.InsertRecord(iRecs, ia)
 				}
+				tail = tail.before
 			}
 		}
-	*/
-	//clog.Info("OrderTable Bulkload Takes %.2fs", time.Since(start).Seconds())
+	}
+	clog.Info("OrderTable Merging Takes %.2fs", time.Since(start).Seconds())
 }
 
 func (o *OrderTable) Reset() {
@@ -1321,6 +1339,25 @@ func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int,
 	//clog.Info("CustomerTable Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
+func (c *CustomerTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
+	iRecs := make([]InsertRec, 1)
+	start := time.Now()
+	for i := begin; i < end; i++ {
+		part := &c.data[i]
+		for j, _ := range part.shardedMap {
+			shard := &part.shardedMap[j]
+			for k, v := range shard.rows {
+				iRecs[0].k = k
+				iRecs[0].rec = v
+				iRecs[0].partNum = 0
+				table.InsertRecord(iRecs, ia)
+			}
+		}
+	}
+	clog.Info("CustomerTable Merging Takes %.2fs", time.Since(start).Seconds())
+
+}
+
 func (c *CustomerTable) Reset() {
 
 }
@@ -1470,6 +1507,10 @@ func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum in
 }
 
 func (h *HistoryTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
+
+}
+
+func (h *HistoryTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 
 }
 
@@ -1872,6 +1913,28 @@ func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end in
 	}
 
 	//clog.Info("OrderLineTable Iteration Takes %.2fs", time.Since(start).Seconds())
+}
+
+func (ol *OrderLineTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
+	iRecs := make([]InsertRec, 1)
+	start := time.Now()
+	for i := begin; i < end; i++ {
+		part := &ol.data[i]
+		for j, _ := range part.buckets {
+			bucket := &part.buckets[j]
+			tail := bucket.tail
+			for tail != nil {
+				for p := tail.t - 1; p >= 0; p-- {
+					iRecs[0].k = tail.keys[p]
+					iRecs[0].rec = tail.oRecs[p]
+					iRecs[0].partNum = 0
+					table.InsertRecord(iRecs, ia)
+				}
+				tail = tail.before
+			}
+		}
+	}
+	clog.Info("OrderLineTable Merging Takes %.2fs", time.Since(start).Seconds())
 }
 
 func (ol *OrderLineTable) Reset() {

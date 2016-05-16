@@ -14,6 +14,7 @@ import (
 
 const (
 	NLOADERS = 1
+	NMERGERS = 1
 )
 
 const (
@@ -172,6 +173,7 @@ type Coordinator struct {
 	indexDoneACK   []chan bool
 	indexActions   []*IndexAction
 	startLoader    int
+	startMerger    int
 	summary        *ReportInfo
 	perTest        int
 	TxnAR          []float64
@@ -182,6 +184,7 @@ type Coordinator struct {
 	clf            classifier.Classifier
 	workload       int
 	indexpart      bool
+	isMerge        bool
 	testCases      []TestCase
 	tpccWL         *TPCCWorkload
 	singleWL       *SingelWorkload
@@ -212,10 +215,12 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		indexDoneACK:   make([]chan bool, nWorkers),
 		indexActions:   make([]*IndexAction, nWorkers),
 		startLoader:    nWorkers - NLOADERS,
+		startMerger:    nWorkers - NMERGERS,
 		summary:        NewReportInfo(store.nParts, tableCount),
 		indexpart:      false,
 		testCases:      testCases,
 		curTest:        0,
+		isMerge:        true,
 	}
 
 	if *Report {
@@ -319,7 +324,8 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 func (coord *Coordinator) process() {
 	summary := coord.summary
 	var ri *ReportInfo
-	var indexPartStart time.Time
+	var indexChangeStart time.Time
+	startWorker := 0
 	for {
 		select {
 		case ri = <-coord.reports[0]:
@@ -343,8 +349,23 @@ func (coord *Coordinator) process() {
 			coord.rc++
 
 			if !coord.indexpart {
-				clog.Info("Starting Index Partitioning")
-				indexPartStart = time.Now()
+				perWorker := 0
+				residue := 0
+				actionType := INDEX_ACTION_NONE
+				if coord.isMerge {
+					clog.Info("Starting Index Merging")
+					actionType = INDEX_ACTION_MERGE
+					startWorker = coord.startMerger
+					perWorker = *NumPart / NMERGERS
+					residue = *NumPart % NMERGERS
+				} else {
+					clog.Info("Starting Index Partitioning")
+					actionType = INDEX_ACTION_PARTITION
+					startWorker = coord.startLoader
+					perWorker = *NumPart / NLOADERS
+					residue = *NumPart % NLOADERS
+				}
+				indexChangeStart = time.Now()
 				coord.indexpart = true
 				store := coord.store
 				// Begin Index Partitioning
@@ -360,23 +381,21 @@ func (coord *Coordinator) process() {
 				store.priTables = store.secTables
 				store.secTables = tmpTables
 
-				perLoader := *NumPart / NLOADERS
-				residue := *NumPart % NLOADERS
 				for i := 0; i < len(coord.Workers); i++ {
 					action := coord.indexActions[i]
-					if i < coord.startLoader {
+					if i < startWorker {
 						action.actionType = INDEX_ACTION_NONE
 					} else {
-						iLoader := (i - coord.startLoader)
-						action.actionType = INDEX_ACTION_PARTITION
-						begin := iLoader * perLoader
-						if iLoader < residue {
-							begin += iLoader
+						iWorker := (i - startWorker)
+						action.actionType = actionType
+						begin := iWorker * perWorker
+						if iWorker < residue {
+							begin += iWorker
 						} else {
 							begin += residue
 						}
-						end := begin + perLoader
-						if iLoader < residue {
+						end := begin + perWorker
+						if iWorker < residue {
 							end++
 						}
 						action.start = begin
@@ -421,8 +440,8 @@ func (coord *Coordinator) process() {
 					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.TPCCTransPer)
 				}
 			}
-		case <-coord.indexActionACK[coord.startLoader]:
-			for i := coord.startLoader + 1; i < len(coord.indexActionACK); i++ {
+		case <-coord.indexActionACK[startWorker]:
+			for i := startWorker + 1; i < len(coord.indexActionACK); i++ {
 				<-coord.indexActionACK[i]
 			}
 			// Now All Loaders done; Confirm this to all workers
@@ -435,17 +454,34 @@ func (coord *Coordinator) process() {
 
 			coord.store.state = INDEX_NONE
 
-			clog.Info("Done with Index Partitioning: %.3f", time.Since(indexPartStart).Seconds())
+			if coord.isMerge {
+				clog.Info("Done with Index Merging: %.3f", time.Since(indexChangeStart).Seconds())
+			} else {
+				clog.Info("Done with Index Partitioning: %.3f", time.Since(indexChangeStart).Seconds())
+
+			}
 
 			if coord.workload == SINGLEWL {
 				single := coord.singleWL
-				single.ResetPart(*NumPart, true)
+				if coord.isMerge {
+					single.ResetPart(1, false)
+				} else {
+					single.ResetPart(*NumPart, true)
+				}
 			} else if coord.workload == SMALLBANKWL {
 				sb := coord.sbWL
-				sb.ResetPart(*NumPart, true)
+				if coord.isMerge {
+					sb.ResetPart(1, false)
+				} else {
+					sb.ResetPart(*NumPart, true)
+				}
 			} else { // TPCCWL
 				tpccWL := coord.tpccWL
-				tpccWL.ResetPart(*NumPart, true)
+				if coord.isMerge {
+					tpccWL.ResetPart(1, false)
+				} else {
+					tpccWL.ResetPart(*NumPart, true)
+				}
 			}
 
 			for i := 0; i < len(coord.Workers); i++ {

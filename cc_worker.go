@@ -218,7 +218,7 @@ func (w *Worker) run() {
 			action := <-w.indexAction
 			w.Unlock()
 			if action.actionType == INDEX_ACTION_MERGE {
-				clog.Error("Merging Index Not Support Yet")
+				w.actionTrans <- action
 			} else if action.actionType == INDEX_ACTION_PARTITION {
 				// Notify the worker to do IndexPartition
 				w.actionTrans <- action
@@ -288,7 +288,11 @@ func (w *Worker) One(t Trans) (Value, error) {
 	case action := <-w.actionTrans:
 		//clog.Info("Begin Index Partitioning from %v to %v", action.start, action.end)
 		s := w.coord.store
-		s.IndexPartition(w.iaAR, action.start, action.end, w.partitioner)
+		if action.actionType == INDEX_ACTION_MERGE {
+			s.IndexMerge(w.iaAR, action.start, action.end, w.partitioner)
+		} else {
+			s.IndexPartition(w.iaAR, action.start, action.end, w.partitioner)
+		}
 		w.coord.indexActionACK[w.ID] <- true
 		//clog.Info("End Index Partitioning")
 	default:
