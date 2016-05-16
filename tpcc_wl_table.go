@@ -980,7 +980,8 @@ type CustomerPart struct {
 }
 
 type CustomerEntry struct {
-	padding1   [PADDING]byte
+	padding1 [PADDING]byte
+	spinlock.Spinlock
 	c_id_array [CAP_CUSTOMER_ENTRY]int
 	next       *CustomerEntry
 	t          int
@@ -1058,6 +1059,21 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, mode int) *C
 		cTable.data[k].shardedMap = make([]Shard, SHARDCOUNT)
 		for i := 0; i < SHARDCOUNT; i++ {
 			cTable.data[k].shardedMap[i].rows = make(map[Key]Record)
+		}
+	}
+
+	var cKey [KEYLENTH]int
+	for i := 0; i < warehouse*DIST_COUNT; i++ {
+		cKey[0] = i / DIST_COUNT
+		cKey[1] = i % DIST_COUNT
+		for j := 0; j < C_LAST_PER_DIST; j++ {
+			cKey[2] = j
+			ce := &CustomerEntry{}
+			if isPartition {
+				cTable.secIndex[cKey[0]].c_id_map[cKey] = ce
+			} else {
+				cTable.secIndex[0].c_id_map[cKey] = ce
+			}
 		}
 	}
 
@@ -1230,7 +1246,16 @@ func (c *CustomerTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 
 		shardNum := c.shardHash(k)
 		shard := &c.data[partNum].shardedMap[shardNum]
+
+		if !c.isPartition {
+			shard.Lock()
+		}
+
 		shard.rows[k] = rec
+
+		if !c.isPartition {
+			shard.Unlock()
+		}
 
 		// Insert CustomerPart
 		var cKey Key
@@ -1253,6 +1278,10 @@ func (c *CustomerTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 			cEntry.t++
 			cEntry.total++
 		} else {
+			immEntry := cEntry
+			if !c.isPartition {
+				immEntry.Lock()
+			}
 			cEntry.total++
 			for cEntry.next != nil {
 				cEntry = cEntry.next
@@ -1270,7 +1299,9 @@ func (c *CustomerTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 				cEntry.c_id_array[cEntry.t] = cTuple.c_id
 				cEntry.t++
 			}
-
+			if !c.isPartition {
+				immEntry.Unlock()
+			}
 		}
 
 	}
