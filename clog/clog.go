@@ -18,8 +18,12 @@ func init() {
 	debug = nil
 }
 
-func SetDebugOutput(w io.Writer) {
+func OpenDebug() {
 	debug = log.New(w, "Debug: ", log.Ldate|log.Ltime|log.Lmicroseconds)
+}
+
+func CloseDebug() {
+	debug = nil
 }
 
 func Info(s string, v ...interface{}) {

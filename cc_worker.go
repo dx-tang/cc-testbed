@@ -286,7 +286,6 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	select {
 	case action := <-w.actionTrans:
-		//clog.Info("Begin Index Partitioning from %v to %v", action.start, action.end)
 		s := w.coord.store
 		if action.actionType == INDEX_ACTION_MERGE {
 			s.IndexMerge(w.iaAR, action.start, action.end, w.partitioner)
@@ -294,7 +293,6 @@ func (w *Worker) One(t Trans) (Value, error) {
 			s.IndexPartition(w.iaAR, action.start, action.end, w.partitioner)
 		}
 		w.coord.indexActionACK[w.ID] <- true
-		//clog.Info("End Index Partitioning")
 	default:
 	}
 

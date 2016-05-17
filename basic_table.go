@@ -390,7 +390,7 @@ func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int
 }
 func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	recs := make([]InsertRec, 1)
-	//start := time.Now()
+	start := time.Now()
 	for i, _ := range bt.data {
 		part := &bt.data[i]
 		for j, _ := range part.shardedMap {
@@ -417,7 +417,7 @@ func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, p
 			}
 		}
 	}
-	//clog.Info("Basic Table Bulkload Takes %.2fs", time.Since(start).Seconds())
+	clog.Debug("Basic Table Bulkload Takes %.2fs", time.Since(start).Seconds())
 }
 
 func (bt *BasicTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
@@ -442,7 +442,7 @@ func (bt *BasicTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, 
 			}
 		}
 	}
-	clog.Info("Basic Table Merging Takes %.2fs", time.Since(start).Seconds())
+	clog.Debug("Basic Table Merging Takes %.2fs", time.Since(start).Seconds())
 
 }
 
