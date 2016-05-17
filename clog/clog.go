@@ -1,7 +1,6 @@
 package clog
 
 import (
-	"io"
 	"log"
 	"os"
 )
@@ -19,7 +18,7 @@ func init() {
 }
 
 func OpenDebug() {
-	debug = log.New(w, "Debug: ", log.Ldate|log.Ltime|log.Lmicroseconds)
+	debug = log.New(os.Stdout, "Debug: ", log.Ldate|log.Ltime|log.Lmicroseconds)
 }
 
 func CloseDebug() {
