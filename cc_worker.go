@@ -106,9 +106,13 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		actionTrans:  make(chan *IndexAction, 1),
 	}
 
-	w.st = NewSampleTool(s.nParts, sampleRate, s)
+	/*w.st = NewSampleTool(s.nParts, sampleRate, s)
 	w.riMaster = NewReportInfo(s.nParts, tableCount)
-	w.riReplica = NewReportInfo(s.nParts, tableCount)
+	w.riReplica = NewReportInfo(s.nParts, tableCount)*/
+
+	w.st = NewSampleTool(*NumPart, sampleRate, s)
+	w.riMaster = NewReportInfo(*NumPart, tableCount)
+	w.riReplica = NewReportInfo(*NumPart, tableCount)
 
 	if *SysType == PARTITION {
 		w.E = StartPTransaction(w, tableCount)

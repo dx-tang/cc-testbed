@@ -201,7 +201,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		indexActions:   make([]*IndexAction, nWorkers),
 		startLoader:    nWorkers - NLOADERS,
 		startMerger:    nWorkers - NMERGERS,
-		summary:        NewReportInfo(store.nParts, tableCount),
+		summary:        NewReportInfo(*NumPart, tableCount),
 		indexpart:      false,
 		testCases:      testCases,
 		curTest:        0,
