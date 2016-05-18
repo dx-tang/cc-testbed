@@ -177,12 +177,35 @@ type TPCCTransGen struct {
 	oa              OrderAllocator
 	ola             OrderLineAllocator
 	ha              HistoryAllocator
+	validProb       float64
+	validTime       time.Time
+	endTime         time.Time
+	timeInit        bool
+	dt              DummyTrans
 	padding2        [PADDING]byte
 }
 
 func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
 	tg.Lock()
 	defer tg.Unlock()
+
+	start := time.Now()
+
+	if !tg.timeInit {
+		tg.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+		tg.validTime = start.Add(time.Duration(TIMESLICE*tg.validProb) * time.Millisecond)
+		tg.timeInit = true
+	}
+
+	if start.After(tg.validTime) {
+		if start.Before(tg.endTime) { // Issue Dummy Trans
+			return &tg.dt
+		} else {
+			tg.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+			tg.validTime = start.Add(time.Duration(TIMESLICE*tg.validProb) * time.Millisecond)
+		}
+	}
+
 	var t Trans
 	rnd := &tg.rnd
 
@@ -477,6 +500,7 @@ type TPCCWorkload struct {
 	nWorkers        int
 	nParts          int
 	isPartition     bool
+	zp              ZipfProb
 	padding2        [PADDING]byte
 }
 
@@ -485,6 +509,12 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 
 	if nParts == 1 {
 		isPartition = false
+	}
+
+	if isPartition {
+		tpccWL.zp = NewZipfProb(ps, *NumPart)
+	} else {
+		tpccWL.zp = NewZipfProb(NOPARTSKEW, *NumPart)
 	}
 
 	tpccWL.transPercentage = transPercentage
@@ -627,6 +657,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		tg := &tpccWL.transGen[i]
 		tg.rnd = *rand.New(rand.NewSource(time.Now().UnixNano() % int64(i+1)))
 		tg.transPercentage = tpccWL.transPercentage
+		tg.validProb = tpccWL.zp.GetProb(i)
+		tg.timeInit = false
 		for j := 0; j < QUEUESIZE; j++ {
 			// PreAllocate NewOrder for each Transaction
 			var noRec Record
@@ -670,7 +702,12 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		tg.i_id_gen = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, kr_i_id, isPartition)
 		tg.c_id_gen = tpcc_NewKeyGen(s, i, tpccWL.c_id_range, kr_c_id, isPartition)
 		tg.c_last_gen = tpcc_NewKeyGen(s, i, tpccWL.c_last_range, kr_c_last, isPartition)
-		tg.w_id_gen = tpcc_NewKeyGen(ps, i, tpccWL.w_id_range, kr_w_id, isPartition)
+
+		if isPartition {
+			tg.w_id_gen = tpcc_NewKeyGen(NOPARTSKEW, i, tpccWL.w_id_range, kr_w_id, isPartition)
+		} else {
+			tg.w_id_gen = tpcc_NewKeyGen(ps, i, tpccWL.w_id_range, kr_w_id, isPartition)
+		}
 
 		tg.oa.OneAllocate()
 		tg.ola.OneAllocate()
@@ -761,7 +798,7 @@ func (tpccWL *TPCCWorkload) NewPartGen(ps float64) []KeyGen {
 	return keygens
 }
 
-func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord *Coordinator, isTrain bool) {
+func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord *Coordinator, isTrain bool, ps float64) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != TPCCTRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -786,6 +823,8 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		return
 	}
 
+	tpccWL.zp.Reconf(ps)
+
 	for i := 0; i < len(tpccWL.transGen); i++ {
 		tg := &tpccWL.transGen[i]
 		tg.transPercentage = tpccWL.transPercentage
@@ -797,6 +836,8 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		tg.oa.Reset()
 		tg.ola.Reset()
 		tg.ha.Reset()
+		tg.validProb = tpccWL.zp.GetProb(i)
+		tg.timeInit = false
 	}
 
 	for _, table := range tpccWL.store.priTables {
@@ -816,7 +857,8 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 
 }
 
-func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, cr float64, transper [TPCCTRANSNUM]int) {
+func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, cr float64, transper [TPCCTRANSNUM]int, ps float64) {
+	tpccWL.zp.Reconf(ps)
 	tpccWL.transPercentage = transper
 	for i := 0; i < tpccWL.nWorkers; i++ {
 		tg := &tpccWL.transGen[i]
@@ -828,6 +870,8 @@ func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, 
 		tg.cr = cr
 		tg.transPercentage = transper
 		tg.Unlock()
+		tg.validProb = tpccWL.zp.GetProb(i)
+		tg.timeInit = false
 	}
 }
 

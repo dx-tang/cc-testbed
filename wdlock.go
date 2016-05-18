@@ -5,8 +5,6 @@ import (
 	"github.com/totemtang/cc-testbed/spinlock"
 )
 
-var locking_wait bool = false
-
 const (
 	maxreaders   = 1 << 7
 	readermask   = 1<<8 - 1

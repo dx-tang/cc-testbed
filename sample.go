@@ -9,14 +9,6 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-const (
-	HISTOGRAMLEN = 100
-	CACHESIZE    = 1000
-	BUFSIZE      = 5
-	TRIAL        = 20
-	RECSR        = 1000
-)
-
 var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
 
 type ReportInfo struct {

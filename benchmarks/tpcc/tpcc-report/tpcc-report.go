@@ -169,7 +169,9 @@ func main() {
 						clog.Error("%s\n", err.Error())
 					}
 				} else {
-					gen.ReleaseOneTrans(t)
+					if t.GetTXN() != -1 {
+						gen.ReleaseOneTrans(t)
+					}
 				}
 			}
 			w.Finish()

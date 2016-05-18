@@ -9,15 +9,7 @@ import (
 )
 
 const (
-	DIST_COUNT         = 10
-	CAP_NEWORDER_ENTRY = 1000
-	CAP_HISTORY_ENTRY  = 1000
-	CAP_CUSTOMER_ENTRY = 5
-
-	CAP_BUCKET_COUNT           = 2000
-	CAP_ORDER_SEC_ENTRY        = 5
-	CAP_ORDER_BUCKET_ENTRY     = 5
-	CAP_ORDERLINE_BUCKET_ENTRY = 50
+	DIST_COUNT = 10
 )
 
 type NoEntry struct {

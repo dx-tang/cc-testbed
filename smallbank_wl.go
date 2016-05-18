@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
 	"github.com/totemtang/cc-testbed/spinlock"
@@ -224,12 +225,35 @@ type SBTransGen struct {
 	partIndex       int
 	nParts          int
 	isPartition     bool
+	validProb       float64
+	validTime       time.Time
+	endTime         time.Time
+	timeInit        bool
+	dt              DummyTrans
 	padding2        [PADDING]byte
 }
 
 func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	s.Lock()
 	defer s.Unlock()
+
+	start := time.Now()
+
+	if !s.timeInit {
+		s.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+		s.validTime = start.Add(time.Duration(TIMESLICE*s.validProb) * time.Millisecond)
+		s.timeInit = true
+	}
+
+	if start.After(s.validTime) {
+		if start.Before(s.endTime) { // Issue Dummy Trans
+			return &s.dt
+		} else {
+			s.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+			s.validTime = start.Add(time.Duration(TIMESLICE*s.validProb) * time.Millisecond)
+		}
+	}
+
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
 	rnd := s.rnd
@@ -379,9 +403,12 @@ func (s *SBTransGen) ReleaseOneTrans(t Trans) {
 }
 
 type SBWorkload struct {
+	padding1        [PADDING]byte
 	transPercentage [SBTRANSNUM]int
 	basic           *BasicWorkload
 	transGen        []*SBTransGen
+	zp              ZipfProb
+	padding2        [PADDING]byte
 }
 
 func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [SBTRANSNUM]int, cr float64, ps float64, initMode int) *SBWorkload {
@@ -393,7 +420,13 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 
 	sbWorkload.transPercentage = transPercentage
 
-	sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
+	if isPartition {
+		sbWorkload.zp = NewZipfProb(ps, *NumPart)
+		sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode)
+	} else {
+		sbWorkload.zp = NewZipfProb(NOPARTSKEW, *NumPart)
+		sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
+	}
 
 	// Populating the Store
 	hp := sbWorkload.basic.generators[0]
@@ -461,6 +494,8 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 			cr:              cr,
 			nParts:          nParts,
 			isPartition:     isPartition,
+			validProb:       sbWorkload.zp.GetProb(i),
+			timeInit:        false,
 		}
 
 		tg.partIndex = i
@@ -499,7 +534,7 @@ func (s *SBWorkload) GetStore() *Store {
 	return s.basic.store
 }
 
-func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
+func (s *SBWorkload) ResetConf(transPercentage string, cr float64, ps float64) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != SBTRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -520,6 +555,8 @@ func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
+	s.zp.Reconf(ps)
+
 	for i := 0; i < len(s.transGen); i++ {
 		tg := s.transGen[i]
 		tg.gen = s.basic.generators[i]
@@ -527,6 +564,8 @@ func (s *SBWorkload) ResetConf(transPercentage string, cr float64) {
 		tg.cr = cr
 		tg.head = 0
 		tg.tail = -1
+		tg.validProb = s.zp.GetProb(i)
+		tg.timeInit = false
 	}
 
 }
@@ -623,7 +662,8 @@ func (s *SBWorkload) ResetData() {
 	}
 }
 
-func (sb *SBWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr float64, transper [SBTRANSNUM]int) {
+func (sb *SBWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr float64, transper [SBTRANSNUM]int, ps float64) {
+	sb.zp.Reconf(ps)
 	for i := 0; i < len(sb.transGen); i++ {
 		tg := sb.transGen[i]
 		tg.Lock()
@@ -631,6 +671,8 @@ func (sb *SBWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr fl
 		tg.gen.partGen = partGens[i]
 		tg.cr = cr
 		tg.transPercentage = transper
+		tg.validProb = sb.zp.GetProb(i)
+		tg.timeInit = false
 		tg.Unlock()
 	}
 }

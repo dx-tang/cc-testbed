@@ -4,20 +4,6 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-const (
-	ORDER_PER_ALLOC     = 30000
-	ORDERLINE_PER_ALLOC = 300000
-	HISTORY_PER_ALLOC   = 10000
-)
-
-const (
-	ORDER_INDEX_PER_ALLOC     = 30
-	ORDER_SECINDEX_PER_ALLOC  = 30
-	ORDERLINE_INDEX_PER_ALLOC = 300
-	HISTORY_INDEX_PER_ALLOC   = 100
-	NEWORDER_INDEX_PER_ALLOC  = 300
-)
-
 type OrderAllocator struct {
 	padding1 [PADDING]byte
 	lRecs    []LRecord

@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -83,8 +84,29 @@ func main() {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
 
-	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps, testbed.PARTITION)
-	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SMALLBANKWL)
+	var sbTranPer [testbed.SBTRANSNUM]int
+	transtr := strings.Split(*tp, ":")
+	if len(transtr) != testbed.SBTRANSNUM {
+		clog.Error("Wrong format of transaction percentage string %s\n", transtr)
+	}
+	for i, str := range transtr {
+		per, err := strconv.Atoi(str)
+		if err != nil {
+			clog.Error("TransPercentage Format Error %s\n", str)
+		}
+		if i != 0 {
+			sbTranPer[i] = sbTranPer[i-1] + per
+		} else {
+			sbTranPer[i] = per
+		}
+	}
+
+	if sbTranPer[testbed.SBTRANSNUM-1] != 100 {
+		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transtr)
+	}
+
+	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, sbTranPer, *cr, *ps, testbed.PARTITION)
+	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SMALLBANKWL, sb)
 
 	clog.Info("Done with Populating Store\n")
 
@@ -135,7 +157,9 @@ func main() {
 						clog.Error("%s\n", err.Error())
 					}
 				} else {
-					gen.ReleaseOneTrans(t)
+					if t.GetTXN() != -1 {
+						gen.ReleaseOneTrans(t)
+					}
 				}
 				//txn--
 

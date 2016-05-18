@@ -41,6 +41,32 @@ type Trans interface {
 	DecTrial()
 }
 
+type DummyTrans struct{}
+
+func (d *DummyTrans) GetTXN() int {
+	return -1
+}
+
+func (d *DummyTrans) GetAccessParts() []int {
+	return nil
+}
+
+func (d *DummyTrans) SetTID(tid TID) {
+
+}
+
+func (d *DummyTrans) SetTrial(trials int) {
+
+}
+
+func (d *DummyTrans) GetTrial() int {
+	return 0
+}
+
+func (d *DummyTrans) DecTrial() {
+
+}
+
 type TransGen interface {
 	GenOneTrans(mode int) Trans
 	ReleaseOneTrans(t Trans)

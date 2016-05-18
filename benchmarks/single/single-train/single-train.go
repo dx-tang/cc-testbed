@@ -36,7 +36,6 @@ var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var tc = flag.String("tc", "train.conf", "configuration for training")
 var np = flag.Bool("np", false, "Whether not test partition")
-var prune = flag.Bool("prune", false, "Whether prune tests")
 var isPart = flag.Bool("p", true, "Whether partition index")
 var isTest = flag.Bool("test", false, "Whether test or train")
 
@@ -191,7 +190,7 @@ func main() {
 		for {
 			if single == nil {
 				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, tmpPS, testbed.PARTITION)
-				coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SINGLEWL)
+				coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SINGLEWL, single)
 			} else {
 				basic := single.GetBasicWL()
 				keyGens, ok := keyGenPool[tmpContention]
@@ -199,15 +198,19 @@ func main() {
 					keyGens = basic.NewKeyGen(tmpContention)
 					keyGenPool[tmpContention] = keyGens
 				}
-
-				partGens, ok1 := partGenPool[tmpPS]
-				if !ok1 {
-					partGens = basic.NewPartGen(tmpPS)
-					partGenPool[tmpPS] = partGens
-				}
 				basic.SetKeyGen(keyGens)
-				basic.SetPartGen(partGens)
-				single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR)
+
+				if isPartition {
+					single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR, tmpPS)
+				} else {
+					partGens, ok1 := partGenPool[tmpPS]
+					if !ok1 {
+						partGens = basic.NewPartGen(tmpPS)
+						partGenPool[tmpPS] = partGens
+					}
+					basic.SetPartGen(partGens)
+					single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR, testbed.NOPARTSKEW)
+				}
 			}
 			clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", curCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
 
@@ -359,7 +362,9 @@ func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]
 								clog.Error("%s\n", err.Error())
 							}
 						} else {
-							gen.ReleaseOneTrans(t)
+							if t.GetTXN() != -1 {
+								gen.ReleaseOneTrans(t)
+							}
 						}
 					}
 					w.Finish()

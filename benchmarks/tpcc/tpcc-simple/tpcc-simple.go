@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -75,9 +76,30 @@ func main() {
 
 	testbed.InitGlobalBuffer()
 
-	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *ps, *dataDir, *testbed.SysType)
+	var tpccTranPer [testbed.TPCCTRANSNUM]int
+	transtr := strings.Split(*tp, ":")
+	if len(transtr) != testbed.TPCCTRANSNUM {
+		clog.Error("Wrong format of transaction percentage string %s\n", transtr)
+	}
+	for i, str := range transtr {
+		per, err := strconv.Atoi(str)
+		if err != nil {
+			clog.Error("TransPercentage Format Error %s\n", str)
+		}
+		if i != 0 {
+			tpccTranPer[i] = tpccTranPer[i-1] + per
+		} else {
+			tpccTranPer[i] = per
+		}
+	}
 
-	coord := testbed.NewCoordinator(nWorkers, tpcc.GetStore(), tpcc.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
+	if tpccTranPer[testbed.TPCCTRANSNUM-1] != 100 {
+		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transtr)
+	}
+
+	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, tpccTranPer, *cr, *ps, *dataDir, *testbed.SysType)
+
+	coord := testbed.NewCoordinator(nWorkers, tpcc.GetStore(), tpcc.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpcc)
 
 	clog.Info("Done with Populating Store\n")
 
@@ -137,7 +159,9 @@ func main() {
 						clog.Error("%s\n", err.Error())
 					}
 				} else {
-					gen.ReleaseOneTrans(t)
+					if t.GetTXN() != -1 {
+						gen.ReleaseOneTrans(t)
+					}
 				}
 				//txn--
 

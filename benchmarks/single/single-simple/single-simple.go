@@ -86,7 +86,7 @@ func main() {
 	testbed.InitGlobalBuffer()
 
 	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps, testbed.PARTITION)
-	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SINGLEWL)
+	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SINGLEWL, single)
 
 	clog.Info("Done with Populating Store\n")
 
@@ -136,7 +136,9 @@ func main() {
 						clog.Error("%s\n", err.Error())
 					}
 				} else {
-					gen.ReleaseOneTrans(t)
+					if t.GetTXN() != -1 {
+						gen.ReleaseOneTrans(t)
+					}
 				}
 				//txn--
 			}

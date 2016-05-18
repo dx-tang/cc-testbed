@@ -114,10 +114,6 @@ func (l *LockReqList) Remove(oldE *ReqEntry) {
 
 var globalBuf []LockReqBuffer
 
-const (
-	maxwaiters = 10
-)
-
 func allocEntry(id int) *ReqEntry {
 	return globalBuf[id].AllocateReqEntry()
 }

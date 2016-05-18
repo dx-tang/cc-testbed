@@ -12,21 +12,6 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-const (
-	NLOADERS = 1
-	NMERGERS = 1
-)
-
-const (
-	CLASSIFERPATH   = "/home/totemtang/ACC/workspace/src/github.com/totemtang/cc-testbed/classifier"
-	SINGLEPARTTRAIN = "single-part-train.out"
-	SINGLEOCCTRAIN  = "single-occ-train.out"
-	SBPARTTRAIN     = "sb-part-train.out"
-	SBOCCTRAIN      = "sb-occ-train.out"
-	TPCCPARTTRAIN   = "tpcc-part-train.out"
-	TPCCOCCTRAIN    = "tpcc-occ-train.out"
-)
-
 type TestCase struct {
 	padding1     [PADDING]byte
 	CR           float64
@@ -110,15 +95,15 @@ func BuildTestCases(f string, workload int) []TestCase {
 			if len(tp) != SBTRANSNUM {
 				clog.Error("Wrong format of transaction percentage string %s\n", transper[i])
 			}
-			for i, str := range tp {
+			for j, str := range tp {
 				per, err := strconv.Atoi(str)
 				if err != nil {
 					clog.Error("TransPercentage Format Error %s\n", str)
 				}
-				if i != 0 {
-					tc.SBTransper[i] = tc.SBTransper[i-1] + per
+				if j != 0 {
+					tc.SBTransper[j] = tc.SBTransper[j-1] + per
 				} else {
-					tc.SBTransper[i] = per
+					tc.SBTransper[j] = per
 				}
 			}
 
@@ -130,15 +115,15 @@ func BuildTestCases(f string, workload int) []TestCase {
 			if len(tp) != TPCCTRANSNUM {
 				clog.Error("Wrong format of transaction percentage string %s\n", transper[i])
 			}
-			for i, str := range tp {
+			for j, str := range tp {
 				per, err := strconv.Atoi(str)
 				if err != nil {
 					clog.Error("TransPercentage Format Error %s\n", str)
 				}
-				if i != 0 {
-					tc.TPCCTransPer[i] = tc.TPCCTransPer[i-1] + per
+				if j != 0 {
+					tc.TPCCTransPer[j] = tc.TPCCTransPer[j-1] + per
 				} else {
-					tc.TPCCTransPer[i] = per
+					tc.TPCCTransPer[j] = per
 				}
 			}
 
@@ -252,11 +237,17 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 					keyGens = basic.NewKeyGen(tc.Contention)
 					coordinator.keyGenPool[tc.Contention] = keyGens
 				}
+
 				partGens, ok2 := coordinator.partGenPool[tc.PS]
 				if !ok2 {
 					partGens = basic.NewPartGen(tc.PS)
 					coordinator.partGenPool[tc.PS] = partGens
 				}
+			}
+			partGens, ok := coordinator.partGenPool[NOPARTSKEW]
+			if !ok {
+				partGens = basic.NewPartGen(NOPARTSKEW)
+				coordinator.partGenPool[NOPARTSKEW] = partGens
 			}
 		} else if workload == SMALLBANKWL {
 			if *SysType == ADAPTIVE {
@@ -274,11 +265,17 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 					keyGens = basic.NewKeyGen(tc.Contention)
 					coordinator.keyGenPool[tc.Contention] = keyGens
 				}
+
 				partGens, ok2 := coordinator.partGenPool[tc.PS]
 				if !ok2 {
 					partGens = basic.NewPartGen(tc.PS)
 					coordinator.partGenPool[tc.PS] = partGens
 				}
+			}
+			partGens, ok := coordinator.partGenPool[NOPARTSKEW]
+			if !ok {
+				partGens = basic.NewPartGen(NOPARTSKEW)
+				coordinator.partGenPool[NOPARTSKEW] = partGens
 			}
 		} else if workload == TPCCWL {
 			//partTS := CLASSIFERPATH + "/" + TPCCPARTTRAIN
@@ -293,11 +290,17 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 					keyGens = tpccWL.NewKeyGen(tc.Contention)
 					coordinator.keyGenPool[tc.Contention] = keyGens
 				}
+
 				partGens, ok2 := coordinator.tpccPartPool[tc.PS]
 				if !ok2 {
 					partGens = tpccWL.NewPartGen(tc.PS)
 					coordinator.tpccPartPool[tc.PS] = partGens
 				}
+			}
+			partGens, ok := coordinator.tpccPartPool[NOPARTSKEW]
+			if !ok {
+				partGens = tpccWL.NewPartGen(NOPARTSKEW)
+				coordinator.tpccPartPool[NOPARTSKEW] = partGens
 			}
 		} else {
 			clog.Error("Workload %v Not Supported", workload)
@@ -423,20 +426,35 @@ func (coord *Coordinator) process() {
 				if coord.workload == SINGLEWL {
 					single := coord.singleWL
 					keyGens := coord.keyGenPool[tc.Contention]
-					partGens := coord.partGenPool[tc.PS]
-					single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR)
+					if single.basic.isPartition {
+						partGens := coord.partGenPool[NOPARTSKEW]
+						single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR, tc.PS)
+					} else {
+						partGens := coord.partGenPool[tc.PS]
+						single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR, NOPARTSKEW)
+					}
 					clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tc.CR, tc.MP, tc.PS, tc.Contention, tc.Tlen, tc.RR)
 				} else if coord.workload == SMALLBANKWL {
 					sb := coord.sbWL
 					keygens := coord.keyGenPool[tc.Contention]
-					partGens := coord.partGenPool[tc.PS]
-					sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper)
+					if sb.basic.isPartition {
+						partGens := coord.partGenPool[NOPARTSKEW]
+						sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper, tc.PS)
+					} else {
+						partGens := coord.partGenPool[tc.PS]
+						sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper, NOPARTSKEW)
+					}
 					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.SBTransper)
 				} else { // TPCCWL
 					tpccWL := coord.tpccWL
 					keygens := coord.keyGenPool[tc.Contention]
-					partGens := coord.tpccPartPool[tc.PS]
-					tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer)
+					if tpccWL.isPartition {
+						partGens := coord.tpccPartPool[NOPARTSKEW]
+						tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer, tc.PS)
+					} else {
+						partGens := coord.tpccPartPool[tc.PS]
+						tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer, NOPARTSKEW)
+					}
 					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.TPCCTransPer)
 				}
 			}

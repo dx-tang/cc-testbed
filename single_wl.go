@@ -19,6 +19,10 @@ const (
 )
 
 const (
+	TIMESLICE = 100 // 100 Milliseconds
+)
+
+const (
 	SINGLETRANSNUM = 2
 	SINGLEMAXPARTS = 10
 	SINGLEMAXKEYS  = 100
@@ -270,12 +274,35 @@ type SingleTransGen struct {
 	tlen            int
 	rr              int
 	mp              int
+	validProb       float64
+	validTime       time.Time
+	endTime         time.Time
+	timeInit        bool
+	dt              DummyTrans
 	padding2        [PADDING]byte
 }
 
 func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	s.Lock()
 	defer s.Unlock()
+
+	start := time.Now()
+
+	if !s.timeInit {
+		s.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+		s.validTime = start.Add(time.Duration(TIMESLICE*s.validProb) * time.Millisecond)
+		s.timeInit = true
+	}
+
+	if start.After(s.validTime) {
+		if start.Before(s.endTime) { // Issue Dummy Trans
+			return &s.dt
+		} else {
+			s.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+			s.validTime = start.Add(time.Duration(TIMESLICE*s.validProb) * time.Millisecond)
+		}
+	}
+
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
 
@@ -392,9 +419,12 @@ func (s *SingleTransGen) ReleaseOneTrans(t Trans) {
 }
 
 type SingelWorkload struct {
+	padding1        [PADDING]byte
 	transPercentage [SINGLETRANSNUM]int
 	basic           *BasicWorkload
 	transGen        []*SingleTransGen
+	zp              ZipfProb
+	padding2        [PADDING]byte
 }
 
 func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int) *SingelWorkload {
@@ -425,7 +455,13 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
-	singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
+	if isPartition {
+		singleWL.zp = NewZipfProb(ps, *NumPart)
+		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode)
+	} else {
+		singleWL.zp = NewZipfProb(NOPARTSKEW, *NumPart)
+		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
+	}
 
 	// Populating the Store
 	hp := singleWL.basic.generators[0]
@@ -474,6 +510,8 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			tlen:            tlen,
 			rr:              rr,
 			mp:              mp,
+			validProb:       singleWL.zp.GetProb(i),
+			timeInit:        false,
 		}
 
 		tg.partIndex = i
@@ -525,7 +563,7 @@ func (s *SingelWorkload) GetTableCount() int {
 	return s.basic.tableCount
 }
 
-func (singleWL *SingelWorkload) ResetConf(transPercentage string, cr float64, mp int, tlen int, rr int) {
+func (singleWL *SingelWorkload) ResetConf(transPercentage string, cr float64, mp int, tlen int, rr int, ps float64) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != SINGLETRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -546,6 +584,8 @@ func (singleWL *SingelWorkload) ResetConf(transPercentage string, cr float64, mp
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transPercentage)
 	}
 
+	singleWL.zp.Reconf(ps)
+
 	for i := 0; i < len(singleWL.transGen); i++ {
 		tg := singleWL.transGen[i]
 		tg.gen = singleWL.basic.generators[i]
@@ -556,6 +596,8 @@ func (singleWL *SingelWorkload) ResetConf(transPercentage string, cr float64, mp
 		tg.mp = mp
 		tg.head = 0
 		tg.tail = -1
+		tg.validProb = singleWL.zp.GetProb(i)
+		tg.timeInit = false
 	}
 }
 
@@ -598,7 +640,8 @@ func (singleWL *SingelWorkload) GetBasicWL() *BasicWorkload {
 	return singleWL.basic
 }
 
-func (singleWL *SingelWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr float64, mp int, tlen int, rr int) {
+func (singleWL *SingelWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr float64, mp int, tlen int, rr int, ps float64) {
+	singleWL.zp.Reconf(ps)
 	for i := 0; i < len(singleWL.transGen); i++ {
 		tg := singleWL.transGen[i]
 		tg.Lock()
@@ -608,6 +651,8 @@ func (singleWL *SingelWorkload) OnlineReconf(keygens [][]KeyGen, partGens []Part
 		tg.tlen = tlen
 		tg.rr = rr
 		tg.mp = mp
+		tg.validProb = singleWL.zp.GetProb(i)
+		tg.timeInit = false
 		tg.Unlock()
 	}
 }

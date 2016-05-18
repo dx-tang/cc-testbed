@@ -159,9 +159,29 @@ func main() {
 				break
 			}
 
+			var sbTranPer [testbed.SBTRANSNUM]int
+			if len(tp) != testbed.SBTRANSNUM {
+				clog.Error("Wrong format of transaction percentage string %s\n", tp)
+			}
+			for i, str := range tp {
+				per, err := strconv.Atoi(str)
+				if err != nil {
+					clog.Error("TransPercentage Format Error %s\n", str)
+				}
+				if i != 0 {
+					sbTranPer[i] = sbTranPer[i-1] + per
+				} else {
+					sbTranPer[i] = per
+				}
+			}
+
+			if sbTranPer[testbed.SBTRANSNUM-1] != 100 {
+				clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", tp)
+			}
+
 			if sb == nil {
-				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS, testbed.PARTITION)
-				coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.SMALLBANKWL)
+				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, sbTranPer, float64(curCR), tmpPS, testbed.PARTITION)
+				coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SMALLBANKWL, sb)
 			} else {
 				basic := sb.GetBasicWL()
 				keyGens, ok := keyGenPool[tmpContention]
@@ -170,14 +190,19 @@ func main() {
 					keyGenPool[tmpContention] = keyGens
 				}
 
-				partGens, ok1 := partGenPool[tmpPS]
-				if !ok1 {
-					partGens = basic.NewPartGen(tmpPS)
-					partGenPool[tmpPS] = partGens
-				}
 				basic.SetKeyGen(keyGens)
-				basic.SetPartGen(partGens)
-				sb.ResetConf(tmpTP, float64(curCR))
+
+				if isPartition {
+					sb.ResetConf(tmpTP, float64(curCR), tmpPS)
+				} else {
+					partGens, ok1 := partGenPool[tmpPS]
+					if !ok1 {
+						partGens = basic.NewPartGen(tmpPS)
+						partGenPool[tmpPS] = partGens
+					}
+					basic.SetPartGen(partGens)
+					sb.ResetConf(tmpTP, float64(curCR), testbed.NOPARTSKEW)
+				}
 			}
 			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, tmpPS, tmpContention, tmpTP)
 
@@ -331,7 +356,9 @@ func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed
 								clog.Error("%s\n", err.Error())
 							}
 						} else {
-							gen.ReleaseOneTrans(t)
+							if t.GetTXN() != -1 {
+								gen.ReleaseOneTrans(t)
+							}
 						}
 					}
 					w.Finish()

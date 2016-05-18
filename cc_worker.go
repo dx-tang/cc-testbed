@@ -137,9 +137,13 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.iaAR[ORDERLINE] = &OrderLineIndexAlloc{}
 		w.iaAR[ORDERLINE].OneAllocate()
 	} else if workload == SINGLEWL {
-		w.partitioner = c.singleWL.GetPartitioner(w.ID)
+		if *Report {
+			w.partitioner = c.singleWL.GetPartitioner(w.ID)
+		}
 	} else {
-		w.partitioner = c.sbWL.GetPartitioner(w.ID)
+		if *Report {
+			w.partitioner = c.sbWL.GetPartitioner(w.ID)
+		}
 	}
 
 	// SmallBank Workload
@@ -294,6 +298,10 @@ func (w *Worker) One(t Trans) (Value, error) {
 		}
 		w.coord.indexActionACK[w.ID] <- true
 	default:
+	}
+
+	if t.GetTXN() == -1 { // Dummy Trans
+		return nil, nil
 	}
 
 	w.Lock()

@@ -14,6 +14,10 @@ var (
 )
 
 const (
+	NOPARTSKEW = 0
+)
+
+const (
 	SINGLEWL = iota
 	SMALLBANKWL
 	TPCCWL

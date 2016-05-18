@@ -5,8 +5,6 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-var occ_wait bool = true
-
 var Spec = flag.Bool("spec", false, "Whether Speculatively Indicate MayWrite")
 
 const (

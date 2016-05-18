@@ -151,9 +151,29 @@ func main() {
 				break
 			}
 
+			var tpccTranPer [testbed.TPCCTRANSNUM]int
+			if len(tp) != testbed.TPCCTRANSNUM {
+				clog.Error("Wrong format of transaction percentage string %s\n", tp)
+			}
+			for i, str := range tp {
+				per, err := strconv.Atoi(str)
+				if err != nil {
+					clog.Error("TransPercentage Format Error %s\n", str)
+				}
+				if i != 0 {
+					tpccTranPer[i] = tpccTranPer[i-1] + per
+				} else {
+					tpccTranPer[i] = per
+				}
+			}
+
+			if tpccTranPer[testbed.TPCCTRANSNUM-1] != 100 {
+				clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", tp)
+			}
+
 			if tpccWL == nil {
-				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tmpTP, float64(curCR), tmpPS, *dataDir, testbed.PARTITION)
-				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, -1, -1, testbed.TPCCWL)
+				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tpccTranPer, float64(curCR), tmpPS, *dataDir, testbed.PARTITION)
+				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpccWL)
 				if *prof {
 					f, err := os.Create("tpcc.prof")
 					if err != nil {
@@ -168,15 +188,19 @@ func main() {
 					keyGens = tpccWL.NewKeyGen(tmpContention)
 					keyGenPool[tmpContention] = keyGens
 				}
-
-				partGens, ok1 := partGenPool[tmpPS]
-				if !ok1 {
-					partGens = tpccWL.NewPartGen(tmpPS)
-					partGenPool[tmpPS] = partGens
-				}
 				tpccWL.SetKeyGens(keyGens)
-				tpccWL.SetPartGens(partGens)
-				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true)
+
+				if isPartition {
+					tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, tmpPS)
+				} else {
+					partGens, ok1 := partGenPool[tmpPS]
+					if !ok1 {
+						partGens = tpccWL.NewPartGen(tmpPS)
+						partGenPool[tmpPS] = partGens
+					}
+					tpccWL.SetPartGens(partGens)
+					tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, testbed.NOPARTSKEW)
+				}
 			}
 			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, tmpPS, tmpContention, tmpTP)
 
@@ -322,7 +346,9 @@ func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*t
 								clog.Error("%s\n", err.Error())
 							}
 						} else {
-							gen.ReleaseOneTrans(t)
+							if t.GetTXN() != -1 {
+								gen.ReleaseOneTrans(t)
+							}
 						}
 					}
 					w.Finish()
