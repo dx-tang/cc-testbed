@@ -170,15 +170,9 @@ func main() {
 				continue
 			}
 		} else {
-			if !*isTest && !*np {
+			if !*isTest { // Train and Partition
 				if tmpMP == 1 && tmpPS != 0 {
 					continue
-				}
-			} else {
-				if curCR == 0 || tmpMP == 1 {
-					if curCR != 0 || tmpMP != 1 || tmpPS != 0 {
-						continue
-					}
 				}
 			}
 		}
