@@ -231,6 +231,23 @@ func main() {
 
 			oneTest(single, coord, ft, nWorkers)
 
+			for z := 0; z < testbed.ADAPTIVE; z++ { // Find the middle one
+				tmpFeature := ft[z]
+				for x := 0; x < 2; x++ {
+					tmp := tmpFeature[x]
+					tmpI := x
+					for y := x + 1; y < testbed.ADAPTIVE; y++ {
+						if tmp.Txn < tmpFeature[y].Txn {
+							tmp = tmpFeature[y]
+							tmpI = y
+						}
+					}
+					tmp = tmpFeature[x]
+					tmpFeature[x] = tmpFeature[tmpI]
+					tmpFeature[tmpI] = tmp
+				}
+			}
+
 			if outDetail {
 				outF := &testbed.Feature{}
 				for i := 0; i < 3; i++ {
@@ -250,25 +267,7 @@ func main() {
 					} else {
 						outFile = lockFile
 					}
-					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\n", tmpContention, ft[i][0].AR, outF.ConfRate, outF.Latency))
-
-				}
-			}
-
-			for z := 0; z < testbed.ADAPTIVE; z++ { // Find the middle one
-				tmpFeature := ft[z]
-				for x := 0; x < 2; x++ {
-					tmp := tmpFeature[x]
-					tmpI := x
-					for y := x + 1; y < testbed.ADAPTIVE; y++ {
-						if tmp.Txn < tmpFeature[y].Txn {
-							tmp = tmpFeature[y]
-							tmpI = y
-						}
-					}
-					tmp = tmpFeature[x]
-					tmpFeature[x] = tmpFeature[tmpI]
-					tmpFeature[tmpI] = tmp
+					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\n", tmpContention, ft[i][1].Txn, ft[i][1].AR, outF.ConfRate, outF.Latency))
 				}
 			}
 
