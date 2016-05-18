@@ -99,6 +99,27 @@ func main() {
 	}
 	defer f.Close()
 
+	occFile, err1 := os.OpenFile("occ.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err1 != nil {
+		clog.Error("Open File Error %s\n", err1.Error())
+	}
+
+	lockFile, err2 := os.OpenFile("2pl.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err2 != nil {
+		clog.Error("Open File Error %s\n", err2.Error())
+	}
+
+	pccFile, err3 := os.OpenFile("pcc.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err3 != nil {
+		clog.Error("Open File Error %s\n", err3.Error())
+	}
+
+	defer occFile.Close()
+	defer lockFile.Close()
+	defer pccFile.Close()
+
+	outDetail := true
+
 	nParts := nWorkers
 	var isPartition bool
 	if !*isPart && *np {
@@ -210,7 +231,28 @@ func main() {
 
 			oneTest(single, coord, ft, nWorkers)
 
-			for z := 0; z < testbed.ADAPTIVE; z++ {
+			if outDetail {
+				outF := &testbed.Feature{}
+				for i := 0; i < 3; i++ {
+					outF.Reset()
+					if *np && i == 0 {
+						continue
+					}
+					for _, f := range ft[i] {
+						outF.Add(f)
+					}
+					outF.Avg(3)
+					if i == 0 {
+						pccFile.WriteString(fmt.Sprintf("%v\t%.4f", tmpContention, outF.ConfRate))
+					} else if i == 1 {
+						occFile.WriteString(fmt.Sprintf("%v\t%.4f", tmpContention, outF.ConfRate))
+					} else {
+						lockFile.WriteString(fmt.Sprintf("%v\t%.4f", tmpContention, outF.ConfRate))
+					}
+				}
+			}
+
+			for z := 0; z < testbed.ADAPTIVE; z++ { // Find the middle one
 				tmpFeature := ft[z]
 				for x := 0; x < 2; x++ {
 					tmp := tmpFeature[x]
