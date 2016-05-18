@@ -243,11 +243,11 @@ func main() {
 					}
 					outF.Avg(3)
 					if i == 0 {
-						pccFile.WriteString(fmt.Sprintf("%v\t%.4f%.4f", tmpContention, outF.ConfRate, ft[i][0].AR))
+						pccFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f", tmpContention, outF.ConfRate, ft[i][0].AR))
 					} else if i == 1 {
-						occFile.WriteString(fmt.Sprintf("%v\t%.4f%.4f", tmpContention, outF.ConfRate, ft[i][0].AR))
+						occFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f", tmpContention, outF.ConfRate, ft[i][0].AR))
 					} else {
-						lockFile.WriteString(fmt.Sprintf("%v\t%.4f%.4f", tmpContention, outF.ConfRate, ft[i][0].AR))
+						lockFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f", tmpContention, outF.ConfRate, ft[i][0].AR))
 					}
 				}
 			}
