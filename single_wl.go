@@ -505,7 +505,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			rnd:             rand.New(rand.NewSource(time.Now().UnixNano() / int64(i*13+17))),
 			transPercentage: singleWL.transPercentage,
 			cr:              cr,
-			nParts:          nParts,
+			nParts:          *NumPart,
 			isPartition:     isPartition,
 			tlen:            tlen,
 			rr:              rr,
@@ -697,9 +697,9 @@ func (s *SingelWorkload) PrintSum() {
 }
 
 func (singleWL *SingelWorkload) ResetPart(nParts int, isPartition bool) {
-	singleWL.basic.ResetPart(nParts, isPartition)
+	singleWL.basic.ResetPart(*NumPart, isPartition)
 	for _, tranGen := range singleWL.transGen {
 		tranGen.isPartition = isPartition
-		tranGen.nParts = nParts
+		//tranGen.nParts = nParts
 	}
 }
