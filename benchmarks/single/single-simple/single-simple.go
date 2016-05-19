@@ -102,6 +102,7 @@ func main() {
 			w := coord.Workers[n]
 			gen := single.GetTransGen(n)
 			end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+			w.NTotal += time.Duration(*nsecs) * time.Second
 			w.Start()
 			for {
 				tm := time.Now()
@@ -118,7 +119,10 @@ func main() {
 						t.SetTID(tid)
 					}
 				}
-				w.NGen += time.Since(tm)
+
+				if t.GetTXN() != -1 {
+					w.NGen += time.Since(tm)
+				}
 
 				//tm = time.Now()
 				_, err := w.One(t)
@@ -159,6 +163,7 @@ func main() {
 	defer f.Close()
 	coord.PrintStats(f)
 
+	execTime := coord.NTotal.Seconds() - coord.NExecute.Seconds()
 	if *stat != "" {
 		st, err := os.OpenFile(*stat, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
@@ -167,10 +172,10 @@ func main() {
 		defer st.Close()
 
 		//st.WriteString(fmt.Sprintf("%.f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
-		st.WriteString(fmt.Sprintf("%.f", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds()))
+		st.WriteString(fmt.Sprintf("%.f", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/execTime))
 		st.WriteString(fmt.Sprintf("\t%.6f\n", float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN])))
 	}
 
-	clog.Info("TXN %.4f; Abort %.4f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/coord.NExecute.Seconds(), float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN]))
+	clog.Info("TXN %.4f; Abort %.4f\n", float64(coord.NStats[testbed.NTXN]-coord.NStats[testbed.NABORTS])/execTime, float64(coord.NStats[testbed.NABORTS])/float64(coord.NStats[testbed.NTXN]))
 
 }

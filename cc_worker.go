@@ -60,6 +60,7 @@ type Worker struct {
 	NStats       []int64
 	NGen         time.Duration
 	NExecute     time.Duration
+	NTotal       time.Duration
 	NWait        time.Duration
 	NCrossWait   time.Duration
 	NLockAcquire int64
@@ -194,24 +195,24 @@ func (w *Worker) run() {
 			w.riMaster = w.riReplica
 			w.riReplica = replica
 			if *SysType == ADAPTIVE {
-				replica.execTime = w.NExecute - w.riMaster.prevExec
+				//replica.execTime = w.NExecute - w.riMaster.prevExec
 				replica.genTime = w.NGen - w.riMaster.prevGen
 				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
 				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
-				replica.prevExec = w.NExecute
+				//replica.prevExec = w.NExecute
 				replica.prevGen = w.NGen
 				replica.prevTxn = w.NStats[NTXN]
 				replica.prevAborts = w.NStats[NABORTS]
 
 				w.coord.reports[w.ID] <- replica
 			} else {
-				replica.execTime = w.NExecute - w.riMaster.prevExec
+				//replica.execTime = w.NExecute - w.riMaster.prevExec
 				replica.genTime = w.NGen - w.riMaster.prevGen
 				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
 				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
-				replica.prevExec = w.NExecute
+				//replica.prevExec = w.NExecute
 				replica.prevGen = w.NGen
 				replica.prevTxn = w.NStats[NTXN]
 				replica.prevAborts = w.NStats[NABORTS]
@@ -289,7 +290,7 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 }
 
 func (w *Worker) One(t Trans) (Value, error) {
-	w.start = time.Now()
+	//w.start = time.Now()
 	var ap []int
 
 	select {
@@ -348,7 +349,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 		}
 	}
 
-	w.NExecute += time.Since(w.start)
+	//w.NExecute += time.Since(w.start)
 
 	w.Unlock()
 

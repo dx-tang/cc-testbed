@@ -1087,10 +1087,10 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 	var err error
 	var val Value
 	var col int
+	col = singleTrans.rnd.Intn(25) + SINGLE_VAL + 1
 	for i := 0; i < len(singleTrans.keys); i++ {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
-		col = singleTrans.rnd.Intn(20) + SINGLE_VAL + 1
 
 		if singleTrans.rnd.Intn(100) < singleTrans.rr {
 			val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req)

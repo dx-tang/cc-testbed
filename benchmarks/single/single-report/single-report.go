@@ -147,11 +147,11 @@ func main() {
 						t.SetTID(tid)
 					}
 				}
-				w.NGen += time.Since(tm)
+				if t.GetTXN() != -1 {
+					w.NGen += time.Since(tm)
+				}
 
-				//tm = time.Now()
 				_, err := w.One(t)
-				//w.NExecute += time.Since(tm)
 
 				if err != nil {
 					if err == testbed.EABORT {

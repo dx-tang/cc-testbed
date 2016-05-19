@@ -322,6 +322,7 @@ func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed
 					gen := sb.GetTransGen(n)
 					tq := testbed.NewTransQueue(BUFSIZE)
 					end_time := time.Now().Add(time.Duration(*nsecs) * time.Second)
+					w.NTotal += time.Duration(*nsecs) * time.Second
 					w.Start()
 					for {
 						tm := time.Now()
@@ -338,11 +339,11 @@ func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed
 								t.SetTID(tid)
 							}
 						}
-						w.NGen += time.Since(tm)
+						if t.GetTXN() != -1 {
+							w.NGen += time.Since(tm)
+						}
 
-						//tm = time.Now()
 						_, err := w.One(t)
-						//w.NExecute += time.Since(tm)
 
 						if err != nil {
 							if err == testbed.EABORT {

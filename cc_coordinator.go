@@ -145,6 +145,7 @@ type Coordinator struct {
 	NStats         []int64
 	NGen           time.Duration
 	NExecute       time.Duration
+	NTotal         time.Duration
 	NWait          time.Duration
 	NLockAcquire   int64
 	stat           *os.File
@@ -678,6 +679,7 @@ func (coord *Coordinator) Reset() {
 	coord.NStats[NCROSSTXN] = 0
 	coord.NGen = 0
 	coord.NExecute = 0
+	coord.NTotal = 0
 	coord.NWait = 0
 	coord.NLockAcquire = 0
 	coord.mode = PARTITION
@@ -697,6 +699,7 @@ func (coord *Coordinator) Reset() {
 		worker.NStats[NCROSSTXN] = 0
 		worker.NGen = 0
 		worker.NExecute = 0
+		worker.NTotal = 0
 		worker.NWait = 0
 		worker.NLockAcquire = 0
 		worker.next = 0
@@ -735,6 +738,7 @@ func (coord *Coordinator) gatherStats() {
 		coord.NStats[NCROSSTXN] += worker.NStats[NCROSSTXN]
 		coord.NGen += worker.NGen
 		coord.NExecute += worker.NExecute
+		coord.NTotal += worker.NTotal
 		coord.NWait += worker.NWait
 		coord.NLockAcquire += worker.NLockAcquire
 	}
@@ -750,7 +754,7 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 
 	f.WriteString(fmt.Sprintf("Issue %v Transactions in Total\n", coord.NStats[NTXN]))
 	f.WriteString(fmt.Sprintf("Transaction Generation Spends %v secs\n", float64(coord.NGen.Nanoseconds())/float64(PERSEC)))
-	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NExecute.Nanoseconds())/float64(PERSEC)))
+	f.WriteString(fmt.Sprintf("Transaction Processing Spends %v secs\n", float64(coord.NTotal.Nanoseconds()-coord.NGen.Nanoseconds())/float64(PERSEC)))
 
 	if *SysType == PARTITION || (*SysType == ADAPTIVE && mode == PARTITION) {
 		f.WriteString(fmt.Sprintf("Cross Partition %v Transactions\n", coord.NStats[NCROSSTXN]))
@@ -934,11 +938,14 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	txn := summary.txnSample
 
-	var sum int64
-	var sumpow int64
+	var sum float64
+	var sumpow float64
 	for _, p := range summary.partStat {
-		sum += p
-		sumpow += p * p
+		sum += float64(p)
+	}
+
+	for _, p := range summary.partStat {
+		sumpow += float64(p*p) / (sum * sum)
 	}
 
 	//f.WriteString(fmt.Sprintf("%v %v %v\n", sum, sumpow, txn))
@@ -946,7 +953,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
 	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
-	partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
+	n := float64(len(summary.partStat))
+	partVar := sumpow/n - 1/(n*n)
 
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
 	partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
@@ -978,7 +986,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	var recAvg float64
 	sum = 0
 	for _, rs := range summary.recStat {
-		sum += rs
+		sum += float64(rs)
 	}
 	recAvg = float64(sum) / float64(txn)
 
@@ -990,11 +998,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	}
 
 	latency := float64(summary.latency) / float64(summary.accessCount)
-	/*
-		f.WriteString(fmt.Sprintf("%.3f\t %.3f\t %.3f\t %.3f\t %.3f\t %v\t ", partAvg, partVar, recAvg, recVar, rr, coord.Workers[0].mode))
-		f.WriteString(fmt.Sprintf("%.4f\t %.4f\n",
-			float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), float64(coord.NStats[NABORTS])/float64(coord.NStats[NTXN])))
-	*/
+
 	coord.feature.PartAvg = partAvg
 	coord.feature.PartVar = partVar
 	coord.feature.PartLenVar = partLenVar
@@ -1005,7 +1009,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.Latency = latency
 	coord.feature.ReadRate = rr
 	coord.feature.ConfRate = confRate
-	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / coord.NExecute.Seconds()
+	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / (coord.NTotal.Seconds() - coord.NGen.Seconds())
 	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
 	coord.feature.Mode = coord.mode
 
@@ -1016,10 +1020,9 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	//clog.Info("PartAccess %v; PartSuccess %v", summary.partAccess, summary.partSuccess)
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
-	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
 	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartConf %.4f, PartVar %.4f\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), coord.feature.PartConf, coord.feature.PartVar)
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), coord.feature.PartConf, coord.feature.PartVar)
 
 	/*if coord.GetMode() == 0 {
 		f, err := os.OpenFile("partconf.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
