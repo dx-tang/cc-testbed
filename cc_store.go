@@ -120,6 +120,7 @@ type Store struct {
 	tableToIndex map[string]int
 	nParts       int
 	mode         int
+	isPartition  bool
 	padding2     [PADDING]byte
 }
 
@@ -168,6 +169,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int) *Store {
 		spinLock:     make([]SpinLockPad, *NumPart),
 		nParts:       nParts,
 		mode:         mode,
+		isPartition:  isPartition,
 	}
 
 	var line []byte

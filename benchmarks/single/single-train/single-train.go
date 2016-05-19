@@ -267,7 +267,7 @@ func main() {
 					} else {
 						outFile = lockFile
 					}
-					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\n", tmpContention, ft[i][1].Txn, ft[i][1].AR, outF.ConfRate, outF.Latency))
+					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", curCR, ft[i][1].Txn, ft[i][1].AR, outF.ConfRate, outF.Latency, outF.PartConf))
 				}
 			}
 

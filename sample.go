@@ -88,6 +88,7 @@ func NewReportInfo(nParts int, tableCount int) *ReportInfo {
 type SampleTool struct {
 	padding0     [PADDING]byte
 	nParts       int
+	isPartition  bool
 	tableCount   int
 	sampleCount  int
 	sampleAccess int
@@ -105,9 +106,10 @@ type SampleTool struct {
 
 func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 	st := &SampleTool{
-		nParts:     nParts,
-		tableCount: len(s.priTables),
-		sampleRate: sampleRate,
+		nParts:      nParts,
+		isPartition: s.isPartition,
+		tableCount:  len(s.priTables),
+		sampleRate:  sampleRate,
 		//lruAr:        make([]*LRU, len(IDToKeyRange)),
 	}
 
@@ -207,13 +209,17 @@ func (st *SampleTool) oneSample(tableID int, ri *ReportInfo, isRead bool) {
 
 }
 
-func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
+func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo, pi int) {
 	ri.txnSample++
 
 	plus := int64((len(ap) - 1))
 	ri.partTotal += plus*plus + 1
-	for _, p := range ap {
-		ri.partStat[p]++
+	if st.isPartition {
+		ri.partStat[pi]++
+	} else {
+		for _, p := range ap {
+			ri.partStat[p]++
+		}
 	}
 
 	//ri.partLenStat += int64(len(ap) * len(ap))
@@ -248,9 +254,9 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo) {
 		ok, _ := st.s.wfLock[st.ap[cur]].lock.Lock()
 		if !ok {
 			ri.partAccess++
-			if cur > 1 {
-				ri.partAccess += int64(cur + 1)
-			}
+			//if cur > 1 {
+			//	ri.partAccess += int64(cur + 1)
+			//}
 			break
 		}
 		cur++

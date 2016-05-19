@@ -319,7 +319,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 		w.st.sampleCount++
 		if w.st.sampleCount >= w.st.sampleRate {
 			w.st.sampleCount = 0
-			w.st.onePartSample(t.GetAccessParts(), w.riMaster)
+			w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
 		}
 	}
 

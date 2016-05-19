@@ -492,7 +492,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 			rnd:             rand.New(rand.NewSource(int64(i*13 + 17))),
 			transPercentage: sbWorkload.transPercentage,
 			cr:              cr,
-			nParts:          nParts,
+			nParts:          *NumPart,
 			isPartition:     isPartition,
 			validProb:       sbWorkload.zp.GetProb(i),
 			timeInit:        false,
@@ -574,7 +574,7 @@ func (sb *SBWorkload) ResetPart(nParts int, isPartition bool) {
 	sb.basic.ResetPart(nParts, isPartition)
 	for _, tranGen := range sb.transGen {
 		tranGen.isPartition = isPartition
-		tranGen.nParts = nParts
+		//tranGen.nParts = nParts
 	}
 }
 

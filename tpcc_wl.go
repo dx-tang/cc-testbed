@@ -524,7 +524,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	clog.Info("Building Store %.2fs \n", time.Since(start).Seconds())
 
 	tpccWL.nWorkers = nWorkers
-	tpccWL.nParts = nParts
+	tpccWL.nParts = *NumPart
 	tpccWL.isPartition = isPartition
 
 	tpccWL.w_id_range = *NumPart
@@ -696,7 +696,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 
 		tg.cr = cr
 		tg.partIndex = i
-		tg.nParts = nParts
+		tg.nParts = *NumPart
 		tg.isPartition = isPartition
 
 		tg.i_id_gen = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, kr_i_id, isPartition)
@@ -878,7 +878,7 @@ func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, 
 func (tpccWL *TPCCWorkload) ResetPart(nParts int, isPartition bool) {
 	for i := 0; i < tpccWL.nWorkers; i++ {
 		tg := &tpccWL.transGen[i]
-		tg.nParts = nParts
+		//tg.nParts = nParts
 		tg.isPartition = isPartition
 	}
 }

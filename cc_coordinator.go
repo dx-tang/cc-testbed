@@ -383,6 +383,7 @@ func (coord *Coordinator) process() {
 				tmpTables := store.priTables
 				store.priTables = store.secTables
 				store.secTables = tmpTables
+				store.isPartition = !store.isPartition
 
 				for i := 0; i < len(coord.Workers); i++ {
 					action := coord.indexActions[i]
@@ -476,7 +477,6 @@ func (coord *Coordinator) process() {
 				clog.Info("Done with Index Merging: %.3f", time.Since(indexChangeStart).Seconds())
 			} else {
 				clog.Info("Done with Index Partitioning: %.3f", time.Since(indexChangeStart).Seconds())
-
 			}
 
 			if coord.workload == SINGLEWL {
@@ -503,6 +503,7 @@ func (coord *Coordinator) process() {
 			}
 
 			for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[i].st.isPartition = !coord.Workers[i].st.isPartition
 				coord.Workers[i].indexConfirm <- true
 			}
 
@@ -946,6 +947,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
 	partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
+
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
 	partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
 
@@ -1016,8 +1018,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
 	//	float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.HitRate, coord.feature.ConfRate, coord.feature.PartConf, coord.GetMode())
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartConf %.4f\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), coord.feature.PartConf)
+	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartConf %.4f, PartVar %.4f\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/coord.NExecute.Seconds(), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), coord.feature.PartConf, coord.feature.PartVar)
 
 	/*if coord.GetMode() == 0 {
 		f, err := os.OpenFile("partconf.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
