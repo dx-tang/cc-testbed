@@ -53,6 +53,7 @@ type BaseTrans struct {
 	floatRB     FloatValue
 	dateRB      DateValue
 	rnd         rand.Rand
+	penalty     time.Time
 }
 
 func (bt *BaseTrans) GetTXN() int {
@@ -77,6 +78,14 @@ func (bt *BaseTrans) GetTrial() int {
 
 func (bt *BaseTrans) DecTrial() {
 	bt.trial--
+}
+
+func (bt *BaseTrans) SetPenalty(penalty time.Time) {
+	bt.penalty = penalty
+}
+
+func (bt *BaseTrans) GetPenalty() time.Time {
+	return bt.penalty
 }
 
 // Vary Distribution of i_id

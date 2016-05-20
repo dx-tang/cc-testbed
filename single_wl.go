@@ -19,7 +19,7 @@ const (
 )
 
 const (
-	TIMESLICE = 100 // 100 Milliseconds
+	TIMESLICE = 500 // 100 Milliseconds
 )
 
 const (
@@ -261,6 +261,7 @@ type SingleTrans struct {
 	rnd         *rand.Rand
 	rr          int
 	req         LockReq
+	penalty     time.Time
 	padding2    [PADDING]byte
 }
 
@@ -286,6 +287,14 @@ func (s *SingleTrans) GetTrial() int {
 
 func (s *SingleTrans) DecTrial() {
 	s.trial--
+}
+
+func (s *SingleTrans) GetPenalty() time.Time {
+	return s.penalty
+}
+
+func (s *SingleTrans) SetPenalty(penalty time.Time) {
+	s.penalty = penalty
 }
 
 type SingleTransGen struct {
@@ -347,7 +356,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 			pi = rnd.Intn(s.nParts)
 		}*/
 	nParts := s.nParts
-	isPart := s.isPartition && s.tlen > 1 && s.nParts > 1 && s.mp > 1
+	isPart := s.isPartition
 	tlen := s.tlen
 	mp := s.mp
 

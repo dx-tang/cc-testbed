@@ -2,9 +2,13 @@ package testbed
 
 import (
 	"strconv"
-	//"time"
+	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+)
+
+const (
+	PENALTY = 1000 // Microseconds
 )
 
 const (
@@ -39,9 +43,13 @@ type Trans interface {
 	SetTrial(trials int)
 	GetTrial() int
 	DecTrial()
+	SetPenalty(penalty time.Time)
+	GetPenalty() time.Time
 }
 
-type DummyTrans struct{}
+type DummyTrans struct {
+	t time.Time
+}
 
 func (d *DummyTrans) GetTXN() int {
 	return -1
@@ -67,6 +75,14 @@ func (d *DummyTrans) DecTrial() {
 
 }
 
+func (d *DummyTrans) GetPenalty() time.Time {
+	return d.t
+}
+
+func (d *DummyTrans) SetPenalty(penalty time.Time) {
+
+}
+
 type TransGen interface {
 	GenOneTrans(mode int) Trans
 	ReleaseOneTrans(t Trans)
@@ -89,6 +105,22 @@ func NewTransQueue(size int) *TransQueue {
 		count: 0,
 	}
 	return tq
+}
+
+func (tq *TransQueue) Executable() Trans {
+	if tq.IsEmpty() {
+		return nil
+	}
+
+	if tq.IsFull() {
+		return tq.Dequeue()
+	}
+
+	if time.Now().After(tq.queue[tq.tail].GetPenalty()) {
+		return tq.Dequeue()
+	} else {
+		return nil
+	}
 }
 
 func (tq *TransQueue) IsFull() bool {

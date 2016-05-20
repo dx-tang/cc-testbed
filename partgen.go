@@ -70,3 +70,15 @@ func NewUniformRandPart(s float64, partIndex int, nParts int) *UniformRandPart {
 func (ur *UniformRandPart) GetOnePart() int {
 	return ur.wholeUniform.Intn(ur.nParts)
 }
+
+/*type SeqZipfRandPart struct {
+	nParts int
+	prob   []float64
+}
+
+func NewSeqZipfRandPart(s float64, partIndex int, nParts int) *SeqZipfRandPart {
+	sz := &SeqZipfRandPart{
+		nParts: nParts,
+		prob: make([]float64, nParts),
+	}
+}*/

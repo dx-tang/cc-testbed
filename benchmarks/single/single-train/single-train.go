@@ -190,12 +190,6 @@ func main() {
 			if curCR != 0 || tmpMP != 1 || tmpPS != 0 {
 				continue
 			}
-		} else {
-			if !*isTest { // Train and Partition
-				if tmpMP == 1 && tmpPS != 0 {
-					continue
-				}
-			}
 		}
 
 		if tmpMP > tmpTlen {
@@ -373,9 +367,10 @@ func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]
 						if !end_time.After(tm) {
 							break
 						}
-						if tq.IsFull() {
-							t = tq.Dequeue()
-						} else {
+
+						t = tq.Executable()
+
+						if t == nil {
 							t = gen.GenOneTrans(j)
 							t.SetTrial(TRIALS)
 							if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
@@ -397,6 +392,8 @@ func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]
 								if t.GetTrial() == 0 {
 									gen.ReleaseOneTrans(t)
 								} else {
+									penalty := time.Now().Add(time.Duration(testbed.PENALTY) * time.Microsecond)
+									t.SetPenalty(penalty)
 									tq.Enqueue(t)
 								}
 							} else if err != testbed.EABORT {

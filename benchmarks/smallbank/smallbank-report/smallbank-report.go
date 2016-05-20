@@ -133,9 +133,10 @@ func main() {
 			w.Start()
 			for {
 				tm := time.Now()
-				if tq.IsFull() {
-					t = tq.Dequeue()
-				} else {
+
+				t = tq.Executable()
+
+				if t == nil {
 					t = gen.GenOneTrans(initMode)
 					t.SetTrial(TRIALS)
 					if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
@@ -155,6 +156,8 @@ func main() {
 						if t.GetTrial() == 0 {
 							gen.ReleaseOneTrans(t)
 						} else {
+							penalty := time.Now().Add(time.Duration(testbed.PENALTY) * time.Microsecond)
+							t.SetPenalty(penalty)
 							tq.Enqueue(t)
 						}
 					} else if err == testbed.FINISHED {

@@ -948,13 +948,15 @@ func (coord *Coordinator) GetFeature() *Feature {
 		sumpow += float64(p*p) / (sum * sum)
 	}
 
+	//clog.Info("%v", summary.partStat)
+
 	//f.WriteString(fmt.Sprintf("%v %v %v\n", sum, sumpow, txn))
 
 	//partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
 	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
 	n := float64(len(summary.partStat))
-	partVar := sumpow/n - 1/(n*n)
+	partVar := (sumpow/n - 1/(n*n)) * 1000
 
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
 	partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1

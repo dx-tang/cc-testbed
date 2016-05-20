@@ -185,6 +185,7 @@ type SBTrans struct {
 	ret         FloatValue
 	trial       int
 	req         LockReq
+	penalty     time.Time
 	padding2    [PADDING]byte
 }
 
@@ -210,6 +211,14 @@ func (s *SBTrans) GetTrial() int {
 
 func (s *SBTrans) DecTrial() {
 	s.trial--
+}
+
+func (s *SBTrans) SetPenalty(penalty time.Time) {
+	s.penalty = penalty
+}
+
+func (s *SBTrans) GetPenalty() time.Time {
+	return s.penalty
 }
 
 type SBTransGen struct {
