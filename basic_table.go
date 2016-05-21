@@ -134,32 +134,49 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 		tableID:     tableID,
 	}
 
-	if isPartition {
-		bt.shardHash = func(k Key) int {
-			return k[KEY1] % SHARDCOUNT
-		}
-	} else {
-		bt.shardHash = func(k Key) int {
-			hash := k[KEY1]*(*NumPart) + k[KEY0]
-			return hash % SHARDCOUNT
-		}
-	}
-
+	var shardCount int
 	if WLTYPE == TPCCWL {
+		if isPartition {
+			bt.shardHash = func(k Key) int {
+				return k[KEY1] % SHARDCOUNT
+			}
+			shardCount = SHARDCOUNT
+		} else {
+			bt.shardHash = func(k Key) int {
+				hash := k[KEY1]*(*NumPart) + k[KEY0]
+				return hash % (SHARDCOUNT * (*NumPart))
+			}
+			shardCount = SHARDCOUNT * (*NumPart)
+		}
 		if tableID == ITEM {
 			bt.shardHash = func(k Key) int {
 				return k[KEY0] % SHARDCOUNT
 			}
+			shardCount = SHARDCOUNT
 		} else if tableID == STOCK {
 			if isPartition {
 				bt.shardHash = func(k Key) int {
 					return k[KEY1] % SHARDCOUNT
 				}
+				shardCount = SHARDCOUNT
 			} else {
 				bt.shardHash = func(k Key) int {
-					return (k[KEY1]*(*NumPart) + k[KEY0]) % SHARDCOUNT
+					return (k[KEY1]*(*NumPart) + k[KEY0]) % (SHARDCOUNT * (*NumPart))
 				}
+				shardCount = SHARDCOUNT * (*NumPart)
 			}
+		}
+	} else {
+		if isPartition {
+			bt.shardHash = func(k Key) int {
+				return k[KEY0] % SHARDCOUNT
+			}
+			shardCount = SHARDCOUNT
+		} else {
+			bt.shardHash = func(k Key) int {
+				return k[KEY0] % (SHARDCOUNT * (*NumPart))
+			}
+			shardCount = SHARDCOUNT * (*NumPart)
 		}
 	}
 
@@ -181,8 +198,8 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 	*/
 	bt.data = make([]Partition, nParts)
 	for k := 0; k < nParts; k++ {
-		bt.data[k].shardedMap = make([]Shard, SHARDCOUNT)
-		for i := 0; i < SHARDCOUNT; i++ {
+		bt.data[k].shardedMap = make([]Shard, shardCount)
+		for i := 0; i < shardCount; i++ {
 			bt.data[k].shardedMap[i].rows = make(map[Key]Record)
 			bt.data[k].shardedMap[i].init_orders = make(map[Key]int)
 		}

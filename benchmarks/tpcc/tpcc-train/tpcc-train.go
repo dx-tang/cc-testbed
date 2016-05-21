@@ -45,7 +45,7 @@ var transper []string
 
 const (
 	TRIALS  = 3
-	BUFSIZE = 3
+	BUFSIZE = 100
 )
 
 var (
@@ -87,11 +87,15 @@ func main() {
 	}
 	defer f.Close()
 
+	if !*np && !*isPart {
+		clog.Error("PCC does not work without partition")
+	}
+
 	nParts := nWorkers
 	var isPartition bool
 	if !*isPart && *np {
 		nParts = 1
-		isPartition = *isPart
+		isPartition = false
 	} else {
 		isPartition = true
 	}

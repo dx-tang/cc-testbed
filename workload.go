@@ -24,7 +24,7 @@ const (
 )
 
 const (
-	QUEUESIZE = 10
+	QUEUESIZE = 100
 )
 
 type Generator struct {

@@ -44,7 +44,7 @@ var transper []string
 
 const (
 	TRIALS  = 3
-	BUFSIZE = 3
+	BUFSIZE = 100
 )
 
 var (
@@ -94,6 +94,10 @@ func main() {
 		clog.Error("Open File Error %s\n", err.Error())
 	}
 	defer f.Close()
+
+	if !*np && !*isPart {
+		clog.Error("PCC does not work without partition")
+	}
 
 	nParts := nWorkers
 	var isPartition bool
@@ -155,7 +159,7 @@ func main() {
 
 			// Single Pruning
 			tp := strings.Split(tmpTP, ":")
-			if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 {
+			if isPartition && strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 {
 				break
 			}
 

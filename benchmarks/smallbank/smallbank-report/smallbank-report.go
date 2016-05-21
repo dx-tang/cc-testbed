@@ -34,7 +34,7 @@ var isPart = flag.Bool("p", true, "Whether partition index")
 
 const (
 	TRIALS  = 3
-	BUFSIZE = 3
+	BUFSIZE = 100
 )
 
 func main() {
@@ -70,7 +70,17 @@ func main() {
 			clog.Info("Using 2PL\n")
 		}
 	} else if *testbed.SysType == testbed.ADAPTIVE {
-		clog.Info("Using Adaptive CC\n")
+		if *isPart {
+			clog.Info("Using Adaptive CC, Starting From PCC\n")
+			nParts = nWorkers
+			isPartition = true
+			initMode = testbed.PARTITION
+		} else {
+			clog.Info("Using Adaptive CC, Starting From OCC\n")
+			nParts = 1
+			isPartition = false
+			initMode = testbed.OCC
+		}
 	} else {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}

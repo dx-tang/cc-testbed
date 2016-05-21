@@ -31,7 +31,7 @@ var dataDir = flag.String("dd", "../data", "TPCC Data Dir")
 
 const (
 	TRIALS  = 3
-	BUFSIZE = 3
+	BUFSIZE = 100
 )
 
 func main() {

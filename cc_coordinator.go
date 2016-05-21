@@ -713,6 +713,7 @@ func (coord *Coordinator) Reset() {
 }
 
 func (coord *Coordinator) SetMode(mode int) {
+	coord.store.SetMode(mode)
 	coord.mode = mode
 	for _, w := range coord.Workers {
 		w.SetMode(mode)
