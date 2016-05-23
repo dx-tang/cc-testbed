@@ -420,7 +420,7 @@ type SBWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [SBTRANSNUM]int, cr float64, ps float64, initMode int) *SBWorkload {
+func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [SBTRANSNUM]int, cr float64, ps float64, initMode int, double bool) *SBWorkload {
 	sbWorkload := &SBWorkload{}
 
 	if nParts == 1 {
@@ -431,10 +431,10 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 
 	if isPartition {
 		sbWorkload.zp = NewZipfProb(ps, *NumPart)
-		sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode)
+		sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode, double)
 	} else {
 		sbWorkload.zp = NewZipfProb(NOPARTSKEW, *NumPart)
-		sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
+		sbWorkload.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode, double)
 	}
 
 	// Populating the Store

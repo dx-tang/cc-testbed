@@ -121,10 +121,11 @@ type Store struct {
 	nParts       int
 	mode         int
 	isPartition  bool
+	double       bool
 	padding2     [PADDING]byte
 }
 
-func NewStore(schema string, nParts int, isPartition bool, mode int) *Store {
+func NewStore(schema string, nParts int, isPartition bool, mode int, double bool) *Store {
 
 	if nParts == 1 {
 		isPartition = false
@@ -170,6 +171,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int) *Store {
 		nParts:       nParts,
 		mode:         mode,
 		isPartition:  isPartition,
+		double:       double,
 	}
 
 	var line []byte
@@ -258,7 +260,17 @@ func (s *Store) CreateRecByName(tableName string, k Key, partNum int, tuple Tupl
 
 func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Record, error) {
 	table := s.priTables[tableID]
-	return table.CreateRecByID(k, partNum, tuple)
+	rec, err := table.CreateRecByID(k, partNum, tuple)
+	if err != nil {
+		return nil, err
+	}
+	if s.double {
+		_, err1 := s.secTables[tableID].CreateRecByID(k, partNum, tuple)
+		if err1 != nil {
+			return nil, err1
+		}
+	}
+	return rec, err
 }
 
 func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, error) {
@@ -428,4 +440,13 @@ func (s *Store) IndexMerge(iaAR []IndexAlloc, begin int, end int, partitioner []
 			s.secTables[j].MergeLoad(s.priTables[j], nil, begin, end, partitioner[j])
 		}
 	}
+}
+
+func (s *Store) Switch() {
+	if !s.double {
+		clog.Error("No Double Table, Cannot Switch")
+	}
+	tmp := s.priTables
+	s.priTables = s.secTables
+	s.secTables = tmp
 }

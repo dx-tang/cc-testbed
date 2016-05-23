@@ -352,7 +352,7 @@ func (coord *Coordinator) process() {
 
 			coord.rc++
 
-			if !coord.indexpart {
+			if coord.indexpart {
 				perWorker := 0
 				residue := 0
 				actionType := INDEX_ACTION_NONE
@@ -713,6 +713,7 @@ func (coord *Coordinator) Reset() {
 }
 
 func (coord *Coordinator) SetMode(mode int) {
+	coord.store.SetMode(mode)
 	coord.mode = mode
 	for _, w := range coord.Workers {
 		w.SetMode(mode)
@@ -835,6 +836,7 @@ type Feature struct {
 	Txn        float64
 	AR         float64
 	Mode       int
+	TrainType  int
 	padding2   [PADDING]byte
 }
 
@@ -1022,9 +1024,13 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	//clog.Info("PartAccess %v; PartSuccess %v", summary.partAccess, summary.partSuccess)
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
+	ccType := coord.GetMode()
+	if !coord.store.isPartition && coord.mode != PARTITION {
+		ccType = ccType + 2
+	}
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, PartConf %.4f, PartVar %.4f\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), coord.feature.PartConf, coord.feature.PartVar)
+	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, Type %v, PartConf %.4f, PartVar %.4f\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), ccType, coord.feature.PartConf, coord.feature.PartVar)
 
 	/*if coord.GetMode() == 0 {
 		f, err := os.OpenFile("partconf.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)

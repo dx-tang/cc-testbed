@@ -529,7 +529,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	tpccWL.transPercentage = transPercentage
 
 	start := time.Now()
-	tpccWL.store = NewStore(workload, nParts, isPartition, initMode)
+	tpccWL.store = NewStore(workload, nParts, isPartition, initMode, false)
 	clog.Info("Building Store %.2fs \n", time.Since(start).Seconds())
 
 	tpccWL.nWorkers = nWorkers

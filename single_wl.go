@@ -376,7 +376,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 		pi = gen.GenOnePart()
 	}
 
-	if rnd.Intn(100) < cr {
+	if rnd.Intn(100) < cr && mp > 1 {
 		ap := nParts
 		if ap > mp {
 			ap = mp
@@ -466,7 +466,7 @@ type SingelWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int, double bool) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	if nParts == 1 {
@@ -496,10 +496,10 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 
 	if isPartition {
 		singleWL.zp = NewZipfProb(ps, *NumPart)
-		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode)
+		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode, double)
 	} else {
 		singleWL.zp = NewZipfProb(NOPARTSKEW, *NumPart)
-		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode)
+		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode, double)
 	}
 
 	// Populating the Store
@@ -740,5 +740,16 @@ func (singleWL *SingelWorkload) ResetPart(nParts int, isPartition bool) {
 	for _, tranGen := range singleWL.transGen {
 		tranGen.isPartition = isPartition
 		//tranGen.nParts = nParts
+	}
+}
+
+func (singleWL *SingelWorkload) Switch(nParts int, isPartition bool, tmpPS float64) {
+	singleWL.GetStore().Switch()
+	singleWL.ResetPart(nParts, isPartition)
+	singleWL.zp.Reconf(tmpPS)
+	for i := 0; i < len(singleWL.transGen); i++ {
+		tg := singleWL.transGen[i]
+		tg.validProb = singleWL.zp.GetProb(i)
+		tg.timeInit = false
 	}
 }

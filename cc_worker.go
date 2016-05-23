@@ -178,17 +178,6 @@ func (w *Worker) run() {
 	tm := time.NewTicker(duration).C
 	for {
 		select {
-		case <-w.done:
-			w.Lock()
-			w.finished = true
-			w.Unlock()
-			return
-		case <-w.modeChange:
-			w.Lock()
-			coord.changeACK[w.ID] <- true
-			w.mode = <-w.modeChan
-			w.E = w.ExecPool[w.mode]
-			w.Unlock()
 		case <-tm: // Report Information within One Period
 			w.Lock()
 			replica := w.riMaster
@@ -294,6 +283,12 @@ func (w *Worker) One(t Trans) (Value, error) {
 	var ap []int
 
 	select {
+	case <-w.done:
+		return nil, FINISHED
+	case <-w.modeChange:
+		w.coord.changeACK[w.ID] <- true
+		w.mode = <-w.modeChan
+		w.E = w.ExecPool[w.mode]
 	case action := <-w.actionTrans:
 		s := w.coord.store
 		if action.actionType == INDEX_ACTION_MERGE {
@@ -312,21 +307,6 @@ func (w *Worker) One(t Trans) (Value, error) {
 		return nil, nil
 	}
 
-	w.Lock()
-
-	if w.finished {
-		w.Unlock()
-		return nil, FINISHED
-	}
-
-	if *SysType == ADAPTIVE {
-		w.st.sampleCount++
-		if w.st.sampleCount >= w.st.sampleRate {
-			w.st.sampleCount = 0
-			w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
-		}
-	}
-
 	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
 		// Acquire all locks
 		s := w.store
@@ -343,7 +323,19 @@ func (w *Worker) One(t Trans) (Value, error) {
 		}
 	}
 
+	w.Lock()
+
+	if *SysType == ADAPTIVE {
+		w.st.sampleCount++
+		if w.st.sampleCount >= w.st.sampleRate {
+			w.st.sampleCount = 0
+			w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
+		}
+	}
+
 	r, err := w.doTxn(t)
+
+	w.Unlock()
 
 	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
 		s := w.store
@@ -353,8 +345,6 @@ func (w *Worker) One(t Trans) (Value, error) {
 	}
 
 	//w.NExecute += time.Since(w.start)
-
-	w.Unlock()
 
 	return r, err
 }
