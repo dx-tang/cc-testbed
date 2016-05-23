@@ -408,7 +408,7 @@ func main() {
 			}
 
 			if tm == TRAINPART || tm == TRAINOCCPART || tm == TESTING || tm == TRAININDEX {
-				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
+				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
 				fPart.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate))
 				for _, trainType := range typeAR {
 					fPart.WriteString(fmt.Sprintf("\t%v", trainType))
@@ -417,7 +417,7 @@ func main() {
 			}
 
 			if tm == TRAINOCCPURE || tm == TESTING || tm == TRAININDEX {
-				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
+				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
 				fMerge.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[OCCSHARE][1].PartConf, ft[OCCSHARE][1].PartVar, ft[OCCSHARE][1].RecAvg, ft[OCCSHARE][1].Latency, ft[OCCSHARE][1].ReadRate, ft[OCCSHARE][1].ConfRate))
 				for _, trainType := range typeAR {
 					fMerge.WriteString(fmt.Sprintf("\t%v", trainType))
@@ -434,6 +434,8 @@ func main() {
 				}
 			}
 			count++
+
+			clog.Info("\n")
 
 			if tm == TRAINPART && endCR-startCR > 3 {
 				if win == PCC {
