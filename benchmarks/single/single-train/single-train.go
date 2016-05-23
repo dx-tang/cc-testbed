@@ -181,6 +181,8 @@ func main() {
 	var totalTests int
 	if tm == TRAINPART { // Training for Partition
 		totalTests = len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
+	} else if tm == TRAININDEX {
+		totalTests = len(cr) * len(mp) * len(contention) * len(tlen) * len(rr)
 	} else {
 		totalTests = len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
 	}
@@ -190,6 +192,10 @@ func main() {
 		startCR := 0
 		endCR := 50
 		curCR := 0
+
+		startPS := float64(0)
+		endPS := float64(0.3)
+		curPS := float64(0)
 
 		d := k
 		r := 0
@@ -203,9 +209,11 @@ func main() {
 		tmpMP := mp[r]
 		d = d / len(mp)
 
-		r = d % len(ps)
-		tmpPS := ps[r]
-		d = d / len(ps)
+		if tm != TRAININDEX {
+			r = d % len(ps)
+			curPS = ps[r]
+			d = d / len(ps)
+		}
 
 		r = d % len(contention)
 		tmpContention := contention[r]
@@ -219,7 +227,7 @@ func main() {
 
 		// Prune
 		if tmpTlen == 1 {
-			if curCR != 0 || tmpMP != 1 || tmpPS != 0 {
+			if curCR != 0 || tmpMP != 1 || curPS != 0 {
 				continue
 			}
 		}
@@ -230,7 +238,7 @@ func main() {
 
 		for {
 			if single == nil {
-				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, tmpPS, testbed.PARTITION, double)
+				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, curPS, testbed.PARTITION, double)
 				coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SINGLEWL, single)
 			} else {
 				basic := single.GetBasicWL()
@@ -242,20 +250,22 @@ func main() {
 				basic.SetKeyGen(keyGens)
 
 				if isPartition {
-					single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR, tmpPS)
+					single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR, curPS)
 				} else {
-					partGens, ok1 := partGenPool[tmpPS]
+					partGens, ok1 := partGenPool[curPS]
 					if !ok1 {
-						partGens = basic.NewPartGen(tmpPS)
-						partGenPool[tmpPS] = partGens
+						partGens = basic.NewPartGen(curPS)
+						partGenPool[curPS] = partGens
 					}
 					basic.SetPartGen(partGens)
 					single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR, testbed.NOPARTSKEW)
 				}
 			}
-			clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", curCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR)
+			clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR)
 
-			oneTest(single, coord, ft, nWorkers, tm, tmpPS, partGenPool)
+			typeAR = typeAR[0:0]
+
+			oneTest(single, coord, ft, nWorkers, tm, curPS, partGenPool)
 
 			for z := 0; z < TOTALCC; z++ { // Find the middle one
 				tmpFeature := ft[z]
@@ -398,7 +408,7 @@ func main() {
 			}
 
 			if tm == TRAINPART || tm == TRAINOCCPART || tm == TESTING || tm == TRAININDEX {
-				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))
+				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
 				fPart.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate))
 				for _, trainType := range typeAR {
 					fPart.WriteString(fmt.Sprintf("\t%v", trainType))
@@ -407,7 +417,7 @@ func main() {
 			}
 
 			if tm == TRAINOCCPURE || tm == TESTING || tm == TRAININDEX {
-				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, tmpPS, tmpContention, tmpTlen, tmpRR))
+				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
 				fMerge.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[OCCSHARE][1].PartConf, ft[OCCSHARE][1].PartVar, ft[OCCSHARE][1].RecAvg, ft[OCCSHARE][1].Latency, ft[OCCSHARE][1].ReadRate, ft[OCCSHARE][1].ConfRate))
 				for _, trainType := range typeAR {
 					fMerge.WriteString(fmt.Sprintf("\t%v", trainType))
@@ -425,21 +435,29 @@ func main() {
 			}
 			count++
 
-			if tm != TRAINPART || endCR-startCR <= 3 {
-				break
-			} else {
-				if win == testbed.PARTITION {
+			if tm == TRAINPART && endCR-startCR > 3 {
+				if win == PCC {
 					startCR = curCR
 				} else {
 					endCR = curCR
 				}
 				curCR = (startCR + endCR) / 2
+			} else if tm == TRAININDEX && endPS-startPS > 0.02 {
+				if win <= LOCKPART { // Use Partition Index
+					startPS = curPS
+				} else {
+					endPS = curPS
+				}
+				curPS = (startPS + endPS) / 2
+			} else {
+				break
 			}
+
 		}
 	}
 }
 
-func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]*testbed.Feature, nWorkers int, tm int, tmpPS float64, partGenPool map[float64][]testbed.PartGen) {
+func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]*testbed.Feature, nWorkers int, tm int, curPS float64, partGenPool map[float64][]testbed.PartGen) {
 	for a := 0; a < 3; a++ {
 		for j := 0; j < TOTALCC; j++ {
 
@@ -470,10 +488,10 @@ func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]
 				if j == OCCSHARE {
 					single.Switch(*testbed.NumPart, false, testbed.NOPARTSKEW)
 					basic := single.GetBasicWL()
-					partGens, ok1 := partGenPool[tmpPS]
+					partGens, ok1 := partGenPool[curPS]
 					if !ok1 {
-						partGens = basic.NewPartGen(tmpPS)
-						partGenPool[tmpPS] = partGens
+						partGens = basic.NewPartGen(curPS)
+						partGenPool[curPS] = partGens
 					}
 					basic.SetPartGen(partGens)
 					coord.ResetPart(false)
@@ -563,7 +581,7 @@ func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]
 
 		}
 		if tm == TRAININDEX || tm == TESTING {
-			single.Switch(*testbed.NumPart, true, tmpPS)
+			single.Switch(*testbed.NumPart, true, curPS)
 
 			basic := single.GetBasicWL()
 			partGens, ok1 := partGenPool[testbed.NOPARTSKEW]
