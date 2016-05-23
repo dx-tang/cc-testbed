@@ -1035,8 +1035,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 		ccType = ccType + 2
 	}
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Mode %v, Type %v, PartConf %.4f, PartVar %.4f\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, latency, coord.GetMode(), ccType, coord.feature.PartConf, coord.feature.PartVar)
+	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Type %v, PartConf %.4f, PartVar %.4f\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, latency, ccType, coord.feature.PartConf, coord.feature.PartVar)
 
 	/*if coord.GetMode() == 0 {
 		f, err := os.OpenFile("partconf.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
