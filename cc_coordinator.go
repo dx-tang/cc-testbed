@@ -325,6 +325,12 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 	return coordinator
 }
 
+func (coord *Coordinator) ResetPart(isPartition bool) {
+	for _, w := range coord.Workers {
+		w.st.isPartition = isPartition
+	}
+}
+
 func (coord *Coordinator) process() {
 	summary := coord.summary
 	var ri *ReportInfo

@@ -412,6 +412,7 @@ func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]
 						partGenPool[tmpPS] = partGens
 					}
 					basic.SetPartGen(partGens)
+					coord.ResetPart(false)
 				}
 			}
 
@@ -506,6 +507,8 @@ func oneTest(single *testbed.SingelWorkload, coord *testbed.Coordinator, ft [][]
 				partGenPool[testbed.NOPARTSKEW] = partGens
 			}
 			basic.SetPartGen(partGens)
+
+			coord.ResetPart(true)
 		}
 	}
 }
