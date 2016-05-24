@@ -908,7 +908,7 @@ func (ft *Feature) Avg(count float64) {
 	//ft.AR /= count
 }
 
-// Currently, we support 8 features
+// Currently, we support 6 features
 func (coord *Coordinator) GetFeature() *Feature {
 	summary := coord.summary
 	for _, w := range coord.Workers {
@@ -927,10 +927,6 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 		summary.partLenStat += master.partLenStat
 
-		for i, rs := range master.recStat {
-			summary.recStat[i] += rs
-		}
-
 		summary.readCount += master.readCount
 		summary.writeCount += master.writeCount
 		summary.hits += master.hits
@@ -942,6 +938,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 		summary.partSuccess += master.partSuccess
 
 		summary.latency += master.latency
+		summary.latencyCount += master.latencyCount
 	}
 
 	txn := summary.txnSample
@@ -969,35 +966,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
 	partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
 
-	//var recVar float64
-
-	/*
-		for i := 0; i < len(summary.recStat); i++ {
-			sum = 0
-			sumpow = 0
-			for _, r := range summary.recStat[i] {
-				sum += r
-				sumpow += r * r
-			}
-
-			if sum == 0 {
-				continue
-			}
-			//clog.Info("Sum %v; SumPow %v\n", sum, sumpow)
-
-			tmpAvg := float64(sum) / float64(txn*HISTOGRAMLEN)
-			tmpVar := float64(sumpow*HISTOGRAMLEN)/float64(sum*sum) - 1
-			recAvg += tmpAvg
-			recVar += tmpVar * tmpAvg
-		}
-	*/
-	//recVar /= recAvg
-
 	var recAvg float64
-	sum = 0
-	for _, rs := range summary.recStat {
-		sum += float64(rs)
-	}
+	sum = float64(summary.readCount + summary.writeCount)
 	recAvg = float64(sum) / float64(txn)
 
 	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
@@ -1007,7 +977,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 		confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
 	}
 
-	latency := float64(summary.latency) / float64(summary.accessCount)
+	latency := float64(summary.latency) / float64(summary.latencyCount)
 
 	coord.feature.PartAvg = partAvg
 	coord.feature.PartVar = partVar

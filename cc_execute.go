@@ -107,6 +107,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			p.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if p.st.sampleCount == 0 {
@@ -154,6 +155,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			p.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if p.st.sampleCount == 0 {
@@ -259,6 +261,7 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			p.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if p.st.sampleCount == 0 {
@@ -461,6 +464,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			tm := time.Now()
 			_, _ = o.s.GetRecByID(tableID, k, partNum)
 			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			o.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if o.st.sampleCount == 0 {
@@ -552,6 +556,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			tm := time.Now()
 			_, _ = o.s.GetRecByID(tableID, k, partNum)
 			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			o.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if o.st.sampleCount == 0 {
@@ -679,6 +684,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			tm := time.Now()
 			_, _ = o.s.GetRecByID(tableID, k, partNum)
 			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			o.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if o.st.sampleCount == 0 {
@@ -980,6 +986,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			tm := time.Now()
 			_, _ = l.s.GetRecByID(tableID, k, partNum)
 			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			l.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if l.st.sampleCount == 0 {
@@ -1072,6 +1079,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			tm := time.Now()
 			_, _ = l.s.GetRecByID(tableID, k, partNum)
 			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			l.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if l.st.sampleCount == 0 {
@@ -1304,6 +1312,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			tm := time.Now()
 			_, _ = l.s.GetRecByID(tableID, k, partNum)
 			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			l.w.riMaster.latencyCount++
 		}
 		if isHome {
 			if l.st.sampleCount == 0 {

@@ -12,29 +12,30 @@ import (
 var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
 
 type ReportInfo struct {
-	padding0    [PADDING]byte
-	execTime    time.Duration
-	prevExec    time.Duration
-	genTime     time.Duration
-	prevGen     time.Duration
-	txn         int64
-	aborts      int64
-	prevTxn     int64
-	prevAborts  int64
-	txnSample   int64
-	partTotal   int64
-	partStat    []int64
-	partLenStat int64
-	recStat     []int64
-	readCount   int64
-	writeCount  int64
-	hits        int64
-	accessCount int64
-	conflicts   int64
-	partAccess  int64
-	partSuccess int64
-	latency     int64
-	padding1    [PADDING]byte
+	padding0     [PADDING]byte
+	execTime     time.Duration
+	prevExec     time.Duration
+	genTime      time.Duration
+	prevGen      time.Duration
+	txn          int64
+	aborts       int64
+	prevTxn      int64
+	prevAborts   int64
+	txnSample    int64
+	partTotal    int64
+	partStat     []int64
+	partLenStat  int64
+	recStat      []int64
+	readCount    int64
+	writeCount   int64
+	hits         int64
+	accessCount  int64
+	conflicts    int64
+	partAccess   int64
+	partSuccess  int64
+	latency      int64
+	latencyCount int64
+	padding1     [PADDING]byte
 }
 
 func (ri *ReportInfo) Reset() {
@@ -70,6 +71,7 @@ func (ri *ReportInfo) Reset() {
 	ri.partSuccess = 0
 
 	ri.latency = 0
+	ri.latencyCount = 0
 
 }
 
@@ -226,14 +228,14 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo, pi int) {
 
 	plus := int64((len(ap) - 1))
 	ri.partTotal += plus*plus + 1
-	//if st.isPartition {
-	//	ri.partStat[pi]++
-	//} else {
-	//	for _, p := range ap {
-	//		ri.partStat[p]++
-	//	}
-	//}
-	ri.partStat[pi]++
+	if st.isPartition {
+		ri.partStat[pi]++
+	} else {
+		for _, p := range ap {
+			ri.partStat[p]++
+		}
+	}
+	//ri.partStat[pi]++
 
 	//ri.partLenStat += int64(len(ap) * len(ap))
 
