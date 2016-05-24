@@ -15,13 +15,13 @@ const (
 
 type ETransaction interface {
 	Reset(t Trans)
-	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error)
-	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isDelta bool) error
+	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error)
+	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isDelta bool, isHome bool) error
 	MayWrite(tableID int, k Key, partNum int, req *LockReq) error
 	InsertRecord(tableID int, k Key, partNum int, rec Record) error
 	DeleteRecord(tableID int, k Key, partNum int) (Record, error)
 	GetKeysBySecIndex(tableID int, k Key, partNum int, val Value) error
-	GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error)
+	GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error)
 	Abort(req *LockReq) TID
 	Commit(req *LockReq) TID
 	Store() *Store
@@ -98,8 +98,8 @@ func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error) {
-	if *SysType == ADAPTIVE {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+	if *SysType == ADAPTIVE && isHome {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, true)
 		}
@@ -136,8 +136,8 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool) error {
-	if *SysType == ADAPTIVE {
+func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
+	if *SysType == ADAPTIVE && isHome {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, false)
 		}
@@ -232,8 +232,8 @@ func (p *PTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 	return p.s.GetValueBySec(tableID, k, partNum, val)
 }
 
-func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error) {
-	if *SysType == ADAPTIVE {
+func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
+	if *SysType == ADAPTIVE && isHome {
 		if p.st.sampleCount == 0 {
 			p.st.oneSample(tableID, p.w.riMaster, true)
 		}
@@ -425,8 +425,8 @@ func (o *OTransaction) Reset(t Trans) {
 
 }
 
-func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error) {
-	if *SysType == ADAPTIVE {
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+	if *SysType == ADAPTIVE && isHome {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, true)
 		}
@@ -507,8 +507,8 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool) error {
-	if *SysType == ADAPTIVE {
+func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
+	if *SysType == ADAPTIVE && isHome {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, false)
 		}
@@ -625,8 +625,8 @@ func (o *OTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 	return o.s.GetValueBySec(tableID, k, partNum, val)
 }
 
-func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error) {
-	if *SysType == ADAPTIVE {
+func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
+	if *SysType == ADAPTIVE && isHome {
 		if o.st.sampleCount == 0 {
 			o.st.oneSample(tableID, o.w.riMaster, true)
 		}
@@ -917,8 +917,8 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 func (l *LTransaction) Reset(t Trans) {
 }
 
-func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq) (Value, bool, error) {
-	if *SysType == ADAPTIVE {
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+	if *SysType == ADAPTIVE && isHome {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, true)
 		}
@@ -1000,8 +1000,8 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	return val, true, nil
 }
 
-func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool) error {
-	if *SysType == ADAPTIVE {
+func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
+	if *SysType == ADAPTIVE && isHome {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, false)
 		}
@@ -1223,8 +1223,8 @@ func (l *LTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 	return l.s.GetValueBySec(tableID, k, partNum, val)
 }
 
-func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq) (Record, error) {
-	if *SysType == ADAPTIVE {
+func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
+	if *SysType == ADAPTIVE && isHome {
 		if l.st.sampleCount == 0 {
 			l.st.oneSample(tableID, l.w.riMaster, true)
 		}

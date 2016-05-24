@@ -325,7 +325,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	w.Lock()
 
-	if *SysType == ADAPTIVE {
+	if *SysType == ADAPTIVE && t.isHome() {
 		w.st.sampleCount++
 		if w.st.sampleCount >= w.st.sampleRate {
 			w.st.sampleCount = 0

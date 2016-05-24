@@ -113,6 +113,12 @@ func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 		//lruAr:        make([]*LRU, len(IDToKeyRange)),
 	}
 
+	if !st.isPartition {
+		st.sampleRate = sampleRate / (*NumPart)
+	} else {
+		st.sampleRate = sampleRate - sampleRate%(*NumPart)
+	}
+
 	//for i := 0; i < len(IDToKeyRange); i++ {
 	//	st.lruAr[i] = NewLRU(CACHESIZE)
 	//}
@@ -214,13 +220,14 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo, pi int) {
 
 	plus := int64((len(ap) - 1))
 	ri.partTotal += plus*plus + 1
-	if st.isPartition {
-		ri.partStat[pi]++
-	} else {
-		for _, p := range ap {
-			ri.partStat[p]++
-		}
-	}
+	//if st.isPartition {
+	//	ri.partStat[pi]++
+	//} else {
+	//	for _, p := range ap {
+	//		ri.partStat[p]++
+	//	}
+	//}
+	ri.partStat[pi]++
 
 	//ri.partLenStat += int64(len(ap) * len(ap))
 
@@ -332,6 +339,15 @@ func (st *SampleTool) Reset() {
 	st.cur = -1
 	//st.cur = 0
 	st.partTrial = 0
+}
+
+func (st *SampleTool) reconf(isPartition bool) {
+	st.isPartition = isPartition
+	if isPartition {
+		st.sampleRate = st.sampleRate * (*NumPart)
+	} else {
+		st.sampleRate = st.sampleRate / (*NumPart)
+	}
 }
 
 type LRU struct {

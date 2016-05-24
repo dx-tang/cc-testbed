@@ -327,7 +327,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 
 func (coord *Coordinator) ResetPart(isPartition bool) {
 	for _, w := range coord.Workers {
-		w.st.isPartition = isPartition
+		w.st.reconf(isPartition)
 	}
 }
 
