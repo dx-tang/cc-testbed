@@ -96,6 +96,9 @@ type SampleTool struct {
 	trials       int
 	state        int
 	sampleRate   int
+	trueRate     int
+	trueCounter  int
+	recRate      int
 	lruAr        []*LRU
 	ap           []int
 	cur          int
@@ -109,14 +112,17 @@ func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 		nParts:      nParts,
 		isPartition: s.isPartition,
 		tableCount:  len(s.priTables),
-		sampleRate:  sampleRate,
+		trueRate:    sampleRate,
+		trueCounter: 0,
 		//lruAr:        make([]*LRU, len(IDToKeyRange)),
 	}
 
 	if !st.isPartition {
 		st.sampleRate = sampleRate / (*NumPart)
+		st.recRate = RECSR / (*NumPart)
 	} else {
 		st.sampleRate = sampleRate - sampleRate%(*NumPart)
+		st.recRate = RECSR - RECSR%(*NumPart)
 	}
 
 	//for i := 0; i < len(IDToKeyRange); i++ {
@@ -174,12 +180,12 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 		}
 	}
 
-	tm := time.Now()
+	//tm := time.Now()
 	rec, err := s.GetRecByID(tableID, key, partNum)
 	if err != nil {
 		clog.Error("Error No Key in Sample")
 	}
-	ri.latency += time.Since(tm).Nanoseconds()
+	//ri.latency += time.Since(tm).Nanoseconds()
 	tmpRec := rec.(*ARecord)
 	x := tmpRec.conflict.CheckLock()
 	if x != 0 {
@@ -345,8 +351,10 @@ func (st *SampleTool) reconf(isPartition bool) {
 	st.isPartition = isPartition
 	if isPartition {
 		st.sampleRate = st.sampleRate * (*NumPart)
+		st.recRate = st.recRate * (*NumPart)
 	} else {
 		st.sampleRate = st.sampleRate / (*NumPart)
+		st.recRate = st.recRate / (*NumPart)
 	}
 }
 
