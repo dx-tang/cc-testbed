@@ -149,9 +149,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 
 func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
 	if *SysType == ADAPTIVE {
-		p.st.trueCounter++
-		if p.st.trueCounter == p.st.trueRate { // Sample Latency
-			p.st.trueCounter = 0
+		if p.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -255,9 +253,7 @@ func (p *PTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 
 func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
 	if *SysType == ADAPTIVE {
-		p.st.trueCounter++
-		if p.st.trueCounter == p.st.trueRate { // Sample Latency
-			p.st.trueCounter = 0
+		if p.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -458,9 +454,7 @@ func (o *OTransaction) Reset(t Trans) {
 
 func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
-		o.st.trueCounter++
-		if o.st.trueCounter == o.st.trueRate { // Sample Latency
-			o.st.trueCounter = 0
+		if o.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = o.s.GetRecByID(tableID, k, partNum)
 			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -550,9 +544,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
 	if *SysType == ADAPTIVE {
-		o.st.trueCounter++
-		if o.st.trueCounter == o.st.trueRate { // Sample Latency
-			o.st.trueCounter = 0
+		if o.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = o.s.GetRecByID(tableID, k, partNum)
 			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -678,9 +670,7 @@ func (o *OTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 
 func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
 	if *SysType == ADAPTIVE {
-		o.st.trueCounter++
-		if o.st.trueCounter == o.st.trueRate { // Sample Latency
-			o.st.trueCounter = 0
+		if o.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = o.s.GetRecByID(tableID, k, partNum)
 			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -980,9 +970,7 @@ func (l *LTransaction) Reset(t Trans) {
 
 func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
-		l.st.trueCounter++
-		if l.st.trueCounter == l.st.trueRate { // Sample Latency
-			l.st.trueCounter = 0
+		if l.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = l.s.GetRecByID(tableID, k, partNum)
 			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -1073,9 +1061,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
 	if *SysType == ADAPTIVE {
-		l.st.trueCounter++
-		if l.st.trueCounter == l.st.trueRate { // Sample Latency
-			l.st.trueCounter = 0
+		if l.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = l.s.GetRecByID(tableID, k, partNum)
 			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -1306,9 +1292,7 @@ func (l *LTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 
 func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
 	if *SysType == ADAPTIVE {
-		l.st.trueCounter++
-		if l.st.trueCounter == l.st.trueRate { // Sample Latency
-			l.st.trueCounter = 0
+		if l.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = l.s.GetRecByID(tableID, k, partNum)
 			l.w.riMaster.latency += time.Since(tm).Nanoseconds()

@@ -228,13 +228,7 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo, pi int) {
 
 	plus := int64((len(ap) - 1))
 	ri.partTotal += plus*plus + 1
-	if st.isPartition {
-		ri.partStat[pi]++
-	} else {
-		for _, p := range ap {
-			ri.partStat[p]++
-		}
-	}
+
 	//ri.partStat[pi]++
 
 	//ri.partLenStat += int64(len(ap) * len(ap))

@@ -325,11 +325,24 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	w.Lock()
 
-	if *SysType == ADAPTIVE && t.isHome() {
-		w.st.sampleCount++
-		if w.st.sampleCount >= w.st.sampleRate {
-			w.st.sampleCount = 0
-			w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
+	if *SysType == ADAPTIVE {
+		if t.isHome() {
+			w.st.sampleCount++
+			if w.st.sampleCount >= w.st.sampleRate {
+				w.st.sampleCount = 0
+				w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
+			}
+		}
+		w.st.trueCounter++
+		if w.st.trueCounter == w.st.trueRate {
+			w.st.trueCounter = 0
+			if w.st.isPartition {
+				w.riMaster.partStat[w.ID]++
+			} else {
+				for _, p := range t.GetAccessParts() {
+					w.riMaster.partStat[p]++
+				}
+			}
 		}
 	}
 
