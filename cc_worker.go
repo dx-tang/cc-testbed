@@ -301,9 +301,9 @@ func (w *Worker) One(t Trans) (Value, error) {
 	}
 
 	if t.GetTXN() == -1 { // Dummy Trans
-		if *SysType == ADAPTIVE {
-			w.st.Reset()
-		}
+		//if *SysType == ADAPTIVE {
+		//	w.st.Reset()
+		//}
 		return nil, nil
 	}
 
