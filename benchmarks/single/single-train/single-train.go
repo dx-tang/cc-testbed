@@ -194,7 +194,7 @@ func main() {
 		curCR := 0
 
 		startPS := float64(0)
-		endPS := float64(0.3)
+		endPS := float64(0.5)
 		curPS := float64(0)
 
 		d := k

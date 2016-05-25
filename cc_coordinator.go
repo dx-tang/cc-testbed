@@ -945,6 +945,11 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	var sum float64
 	var sumpow float64
+
+	for i, p := range summary.partStat {
+		summary.partStat[i] = p / 10
+	}
+
 	for _, p := range summary.partStat {
 		sum += float64(p)
 	}
