@@ -19,7 +19,7 @@ const (
 )
 
 const (
-	TIMESLICE = 2000 // 100 Milliseconds
+	TIMESLICE = 100 // 100 Milliseconds
 )
 
 const (

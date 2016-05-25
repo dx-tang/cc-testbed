@@ -103,39 +103,53 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	fPart, err := os.OpenFile("train-part.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		clog.Error("Open File Error %s\n", err.Error())
-	}
-	defer fPart.Close()
+	var fPart, fMerge, fWhole *os.File
+	var err error
 
-	fMerge, err1 := os.OpenFile("train-merge.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err1 != nil {
-		clog.Error("Open File Error %s\n", err1.Error())
-	}
+	tm := *trainMode
 
-	occFile, err1 := os.OpenFile("occ.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err1 != nil {
-		clog.Error("Open File Error %s\n", err1.Error())
+	if tm == TRAINPART || tm == TRAINOCCPART {
+		fPart, err = os.OpenFile("train-part.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+		defer fPart.Close()
+	} else if tm == TRAINOCCPURE {
+		fMerge, err = os.OpenFile("train-merge.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+	} else {
+		fWhole, err = os.OpenFile("train-whole.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
 	}
-
-	lockFile, err2 := os.OpenFile("2pl.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err2 != nil {
-		clog.Error("Open File Error %s\n", err2.Error())
-	}
-
-	pccFile, err3 := os.OpenFile("pcc.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err3 != nil {
-		clog.Error("Open File Error %s\n", err3.Error())
-	}
-
-	defer occFile.Close()
-	defer lockFile.Close()
-	defer pccFile.Close()
 
 	outDetail := false
 
-	tm := *trainMode
+	var occFile, lockFile, pccFile *os.File
+
+	if outDetail {
+		occFile, err = os.OpenFile("occ.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+
+		lockFile, err = os.OpenFile("2pl.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+
+		pccFile, err = os.OpenFile("pcc.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+
+		defer occFile.Close()
+		defer lockFile.Close()
+		defer pccFile.Close()
+	}
 
 	if tm < TRAINPART || tm > TESTING {
 		clog.Error("Training Mode %v Error: 0 for Part; 1 for OCC-Part; 2 for OCC-NoPart; 3 for Index Merge/Partition; 4 for Testing", tm)
@@ -360,12 +374,6 @@ func main() {
 					}
 				}
 
-				if tm == TRAINOCCPART {
-					ft[0][1].Avg(float64(6))
-				} else if tm == TRAINPART || tm == TRAININDEX {
-					ft[0][1].Avg(float64(9))
-				}
-
 				for z := 3 * OCCSHARE; z < 3*(LOCKSHARE+1); z++ {
 					x := z / 3
 					y := z % 3
@@ -374,7 +382,21 @@ func main() {
 					}
 				}
 
-				ft[OCCSHARE][1].Avg(float64(6))
+				if tm == TRAINOCCPART {
+					ft[0][1].Avg(float64(6))
+				} else if tm == TRAINPART {
+					ft[0][1].Avg(float64(9))
+				} else if tm == TRAINOCCPURE {
+					ft[OCCSHARE][1].Avg(float64(6))
+				} else {
+					if ft[0][1].Txn > ft[OCCSHARE][1].Txn {
+						ft[0][1].Add(ft[OCCSHARE][1])
+						ft[0][1].Avg(15)
+					} else {
+						ft[OCCSHARE][1].Add(ft[0][1])
+						ft[OCCSHARE][1].Avg(15)
+					}
+				}
 
 			}
 
@@ -407,22 +429,33 @@ func main() {
 				}
 			}
 
-			if tm == TRAINPART || tm == TRAINOCCPART || tm == TESTING || tm == TRAININDEX {
+			if tm == TRAINPART || tm == TRAINOCCPART {
 				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
 				fPart.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate))
 				for _, trainType := range typeAR {
 					fPart.WriteString(fmt.Sprintf("\t%v", trainType))
 				}
 				fPart.WriteString("\n")
-			}
-
-			if tm == TRAINOCCPURE || tm == TESTING || tm == TRAININDEX {
+			} else if tm == TRAINOCCPURE {
 				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
 				fMerge.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[OCCSHARE][1].PartConf, ft[OCCSHARE][1].PartVar, ft[OCCSHARE][1].RecAvg, ft[OCCSHARE][1].Latency, ft[OCCSHARE][1].ReadRate, ft[OCCSHARE][1].ConfRate))
 				for _, trainType := range typeAR {
 					fMerge.WriteString(fmt.Sprintf("\t%v", trainType))
 				}
 				fMerge.WriteString("\n")
+			} else {
+				var tmpFeature *testbed.Feature
+				if ft[0][1].Txn > ft[OCCSHARE][1].Txn {
+					tmpFeature = ft[0][1]
+				} else {
+					tmpFeature = ft[OCCSHARE][1]
+				}
+				fWhole.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
+				fWhole.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", tmpFeature.PartConf, tmpFeature.PartVar, tmpFeature.RecAvg, tmpFeature.Latency, tmpFeature.ReadRate, tmpFeature.ConfRate))
+				for _, trainType := range typeAR {
+					fWhole.WriteString(fmt.Sprintf("\t%v", trainType))
+				}
+				fWhole.WriteString("\n")
 			}
 
 			win := typeAR[0]

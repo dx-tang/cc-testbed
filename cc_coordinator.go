@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	TAIL = 10
+	HEAD = 2
 )
 
 type TestCase struct {
@@ -951,18 +951,21 @@ func (coord *Coordinator) GetFeature() *Feature {
 	var sum float64
 	var sumpow float64
 
-	for i, p := range summary.partStat {
-		summary.partStat[i] = p / 10
+	var head int
+	if coord.store.isPartition {
+		head = 0
+	} else {
+		head = HEAD
 	}
 
 	for i, p := range summary.partStat {
-		if i < len(summary.partStat)-TAIL {
+		if i >= head {
 			sum += float64(p)
 		}
 	}
 
 	for i, p := range summary.partStat {
-		if i < len(summary.partStat)-TAIL {
+		if i >= head {
 			sumpow += float64(p*p) / (sum * sum)
 		}
 	}
@@ -974,7 +977,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
 	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
-	n := float64(len(summary.partStat) - TAIL)
+	n := float64(len(summary.partStat) - head)
 	partVar := (sumpow/n - 1/(n*n)) * 1000
 
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
@@ -992,6 +995,24 @@ func (coord *Coordinator) GetFeature() *Feature {
 	}
 
 	latency := float64(summary.latency) / float64(summary.latencyCount)
+
+	if !coord.store.isPartition {
+		if latency <= 350 {
+			latency -= 100
+		} else if latency <= 650 {
+			if coord.mode == 1 {
+				latency -= 100
+			} else {
+				latency -= 150
+			}
+		} else {
+			if coord.mode == 1 {
+				latency -= 150
+			} else {
+				latency -= 200
+			}
+		}
+	}
 
 	coord.feature.PartAvg = partAvg
 	partVar = math.Sqrt(partVar)
