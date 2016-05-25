@@ -1,39 +1,45 @@
 package testbed
 
+import (
+	"math"
+
+	"github.com/totemtang/cc-testbed/clog"
+)
+
 type ZipfProb struct {
 	padding1 [PADDING]byte
+	sum      float64
+	s        float64
 	n        int
-	id       int
-	partprob [32]float64
 	padding2 [PADDING]byte
 }
 
 func NewZipfProb(s float64, n int) ZipfProb {
 	var zp ZipfProb
+	sum := float64(0)
+	for i := 1; i <= n; i++ {
+		sum += 1 / math.Pow(float64(i), s)
+	}
 	zp.n = n
-	zg := NewZipfGenerator(int64(n), s, 0)
-	for i := 0; i < 10000000; i++ {
-		zp.partprob[zg.NextInt()]++
-	}
-	for i := 31; i >= 0; i-- {
-		zp.partprob[i] = zp.partprob[i] / zp.partprob[0]
-	}
+	zp.s = s
+	zp.sum = sum
 	return zp
 }
 
 func (zp *ZipfProb) GetProb(k int) float64 {
-	return zp.partprob[k]
+	if k >= zp.n || k < 0 {
+		clog.Error("Not Valid Rank %v", k)
+	}
+	e := 1 / math.Pow(float64(k+1), zp.s)
+	f := 1 / math.Pow(1, zp.s)
+	return e / f
 }
 
 func (zp *ZipfProb) Reconf(s float64) {
-	zg := NewZipfGenerator(int64(zp.n), s, 0)
-	for i, _ := range zp.partprob {
-		zp.partprob[i] = 0
+	zp.s = s
+	sum := float64(0)
+	for i := 1; i <= zp.n; i++ {
+		sum += 1 / math.Pow(float64(i), s)
 	}
-	for i := 0; i < 10000000; i++ {
-		zp.partprob[zg.NextInt()]++
-	}
-	for i := 31; i >= 0; i-- {
-		zp.partprob[i] = zp.partprob[i] / zp.partprob[0]
-	}
+	zp.sum = sum
 }

@@ -3,6 +3,7 @@ package testbed
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/totemtang/cc-testbed/classifier"
 	"github.com/totemtang/cc-testbed/clog"
+)
+
+const (
+	TAIL = 10
 )
 
 type TestCase struct {
@@ -950,12 +955,16 @@ func (coord *Coordinator) GetFeature() *Feature {
 		summary.partStat[i] = p / 10
 	}
 
-	for _, p := range summary.partStat {
-		sum += float64(p)
+	for i, p := range summary.partStat {
+		if i < len(summary.partStat)-TAIL {
+			sum += float64(p)
+		}
 	}
 
 	for _, p := range summary.partStat {
-		sumpow += float64(p*p) / (sum * sum)
+		if i < len(summary.partStat)-TAIL {
+			sumpow += float64(p*p) / (sum * sum)
+		}
 	}
 
 	//clog.Info("%v", summary.partStat)
@@ -965,7 +974,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
 	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
-	n := float64(len(summary.partStat))
+	n := float64(len(summary.partStat) - TAIL)
 	partVar := (sumpow/n - 1/(n*n)) * 1000
 
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
@@ -985,6 +994,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	latency := float64(summary.latency) / float64(summary.latencyCount)
 
 	coord.feature.PartAvg = partAvg
+	partVar = math.Sqrt(partVar)
 	coord.feature.PartVar = partVar
 	coord.feature.PartLenVar = partLenVar
 	coord.feature.PartConf = float64(summary.partAccess) / float64(summary.partSuccess)

@@ -336,13 +336,13 @@ func (w *Worker) One(t Trans) (Value, error) {
 		w.st.trueCounter++
 		if w.st.trueCounter == w.st.trueRate {
 			w.st.trueCounter = 0
-			if w.st.isPartition {
-				w.riMaster.partStat[w.ID]++
-			} else {
-				for _, p := range t.GetAccessParts() {
-					w.riMaster.partStat[p]++
-				}
+			//if w.st.isPartition {
+			//	w.riMaster.partStat[w.ID]++
+			//} else {
+			for _, p := range t.GetAccessParts() {
+				w.riMaster.partStat[p]++
 			}
+			//}
 		}
 	}
 
