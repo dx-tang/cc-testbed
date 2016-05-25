@@ -263,6 +263,7 @@ type SingleTrans struct {
 	req         LockReq
 	penalty     time.Time
 	home        bool
+	homePart    int
 	padding2    [PADDING]byte
 }
 
@@ -300,6 +301,10 @@ func (s *SingleTrans) SetPenalty(penalty time.Time) {
 
 func (s *SingleTrans) isHome() bool {
 	return s.home
+}
+
+func (s *SingleTrans) getHome() int {
+	return s.homePart
 }
 
 type SingleTransGen struct {
@@ -380,6 +385,8 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	} else {
 		pi = gen.GenOnePart()
 	}
+
+	t.homePart = pi
 
 	if pi == s.partIndex {
 		t.home = true

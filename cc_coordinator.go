@@ -961,7 +961,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 		}
 	}
 
-	for _, p := range summary.partStat {
+	for i, p := range summary.partStat {
 		if i < len(summary.partStat)-TAIL {
 			sumpow += float64(p*p) / (sum * sum)
 		}

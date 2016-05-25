@@ -46,6 +46,7 @@ type Trans interface {
 	SetPenalty(penalty time.Time)
 	GetPenalty() time.Time
 	isHome() bool
+	getHome() int
 }
 
 type DummyTrans struct {
@@ -86,6 +87,10 @@ func (d *DummyTrans) SetPenalty(penalty time.Time) {
 
 func (d *DummyTrans) isHome() bool {
 	return false
+}
+
+func (d *DummyTrans) getHome() int {
+	return -1
 }
 
 type TransGen interface {

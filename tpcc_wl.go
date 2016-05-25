@@ -55,6 +55,7 @@ type BaseTrans struct {
 	rnd         rand.Rand
 	penalty     time.Time
 	home        bool
+	homePart    int
 }
 
 func (bt *BaseTrans) GetTXN() int {
@@ -91,6 +92,10 @@ func (bt *BaseTrans) GetPenalty() time.Time {
 
 func (bt *BaseTrans) isHome() bool {
 	return bt.home
+}
+
+func (bt *BaseTrans) getHome() int {
+	return bt.homePart
 }
 
 // Vary Distribution of i_id

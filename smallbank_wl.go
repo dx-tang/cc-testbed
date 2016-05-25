@@ -187,6 +187,7 @@ type SBTrans struct {
 	req         LockReq
 	penalty     time.Time
 	home        bool
+	homePart    int
 	padding2    [PADDING]byte
 }
 
@@ -224,6 +225,10 @@ func (s *SBTrans) GetPenalty() time.Time {
 
 func (s *SBTrans) isHome() bool {
 	return s.home
+}
+
+func (s *SBTrans) getHome() int {
+	return s.homePart
 }
 
 type SBTransGen struct {
