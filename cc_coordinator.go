@@ -998,18 +998,18 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	if !coord.store.isPartition {
 		if latency <= 350 {
-			latency -= 100
+			latency -= 80
 		} else if latency <= 650 {
+			if coord.mode == 1 {
+				latency -= 80
+			} else {
+				latency -= 100
+			}
+		} else {
 			if coord.mode == 1 {
 				latency -= 100
 			} else {
 				latency -= 150
-			}
-		} else {
-			if coord.mode == 1 {
-				latency -= 150
-			} else {
-				latency -= 200
 			}
 		}
 	}

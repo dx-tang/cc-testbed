@@ -197,6 +197,8 @@ func main() {
 		totalTests = len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
 	} else if tm == TRAININDEX {
 		totalTests = len(cr) * len(mp) * len(contention) * len(tlen) * len(rr)
+	} else if tm == TRAINOCCPART || tm == TRAINOCCPURE {
+		totalTests = len(cr) * len(mp) * len(ps) * len(tlen) * len(rr)
 	} else {
 		totalTests = len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
 	}
@@ -208,8 +210,12 @@ func main() {
 		curCR := 0
 
 		startPS := float64(0)
-		endPS := float64(0.5)
+		endPS := float64(0.3)
 		curPS := float64(0)
+
+		startContention := float64(0)
+		endContention := float64(1.5)
+		curContention := float64(0)
 
 		d := k
 		r := 0
@@ -229,9 +235,11 @@ func main() {
 			d = d / len(ps)
 		}
 
-		r = d % len(contention)
-		tmpContention := contention[r]
-		d = d / len(contention)
+		if tm != TRAINOCCPURE && tm != TRAINOCCPART {
+			r = d % len(contention)
+			curContention = contention[r]
+			d = d / len(contention)
+		}
 
 		r = d % len(tlen)
 		tmpTlen := tlen[r]
@@ -252,14 +260,14 @@ func main() {
 
 		for {
 			if single == nil {
-				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tmpContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, curPS, testbed.PARTITION, double)
+				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, curContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, curPS, testbed.PARTITION, double)
 				coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SINGLEWL, single)
 			} else {
 				basic := single.GetBasicWL()
-				keyGens, ok := keyGenPool[tmpContention]
+				keyGens, ok := keyGenPool[curContention]
 				if !ok {
-					keyGens = basic.NewKeyGen(tmpContention)
-					keyGenPool[tmpContention] = keyGens
+					keyGens = basic.NewKeyGen(curContention)
+					keyGenPool[curContention] = keyGens
 				}
 				basic.SetKeyGen(keyGens)
 
@@ -275,7 +283,7 @@ func main() {
 					single.ResetConf(*tp, float64(curCR), tmpMP, tmpTlen, tmpRR, testbed.NOPARTSKEW)
 				}
 			}
-			clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR)
+			clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", curCR, tmpMP, curPS, curContention, tmpTlen, tmpRR)
 
 			typeAR = typeAR[0:0]
 
@@ -430,14 +438,14 @@ func main() {
 			}
 
 			if tm == TRAINPART || tm == TRAINOCCPART {
-				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
+				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, curContention, tmpTlen, tmpRR))
 				fPart.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate))
 				for _, trainType := range typeAR {
 					fPart.WriteString(fmt.Sprintf("\t%v", trainType))
 				}
 				fPart.WriteString("\n")
 			} else if tm == TRAINOCCPURE {
-				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
+				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, curContention, tmpTlen, tmpRR))
 				fMerge.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[OCCSHARE][1].PartConf, ft[OCCSHARE][1].PartVar, ft[OCCSHARE][1].RecAvg, ft[OCCSHARE][1].Latency, ft[OCCSHARE][1].ReadRate, ft[OCCSHARE][1].ConfRate))
 				for _, trainType := range typeAR {
 					fMerge.WriteString(fmt.Sprintf("\t%v", trainType))
@@ -450,7 +458,7 @@ func main() {
 				} else {
 					tmpFeature = ft[OCCSHARE][1]
 				}
-				fWhole.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, tmpContention, tmpTlen, tmpRR))
+				fWhole.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, curContention, tmpTlen, tmpRR))
 				fWhole.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", tmpFeature.PartConf, tmpFeature.PartVar, tmpFeature.RecAvg, tmpFeature.Latency, tmpFeature.ReadRate, tmpFeature.ConfRate))
 				for _, trainType := range typeAR {
 					fWhole.WriteString(fmt.Sprintf("\t%v", trainType))
@@ -484,6 +492,12 @@ func main() {
 					endPS = curPS
 				}
 				curPS = (startPS + endPS) / 2
+			} else if (tm == TRAINOCCPART || tm == TRAINOCCPURE) && endContention-startContention > 0.05 {
+				if win == OCCPART || win == OCCSHARE {
+					startContention = curContention
+				} else {
+					endContention = curContention
+				}
 			} else {
 				break
 			}

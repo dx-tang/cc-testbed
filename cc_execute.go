@@ -101,9 +101,7 @@ func (p *PTransaction) Reset(t Trans) {
 
 func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
 	if *SysType == ADAPTIVE {
-		p.st.trueCounter++
-		if p.st.trueCounter == p.st.trueRate { // Sample Latency
-			p.st.trueCounter = 0
+		if p.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
