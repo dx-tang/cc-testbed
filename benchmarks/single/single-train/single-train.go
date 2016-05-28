@@ -197,8 +197,8 @@ func main() {
 		totalTests = len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
 	} else if tm == TRAININDEX {
 		totalTests = len(cr) * len(mp) * len(contention) * len(tlen) * len(rr)
-	} else if tm == TRAINOCCPART || tm == TRAINOCCPURE {
-		totalTests = len(cr) * len(mp) * len(ps) * len(tlen) * len(rr)
+		//	} else if tm == TRAINOCCPART || tm == TRAINOCCPURE {
+		//		totalTests = len(cr) * len(mp) * len(ps) * len(tlen) * len(rr)
 	} else {
 		totalTests = len(cr) * len(mp) * len(ps) * len(contention) * len(tlen) * len(rr)
 	}
@@ -213,8 +213,8 @@ func main() {
 		endPS := float64(0.3)
 		curPS := float64(0)
 
-		startContention := float64(0)
-		endContention := float64(1.5)
+		//startContention := float64(0)
+		//endContention := float64(1.5)
 		curContention := float64(0)
 
 		d := k
@@ -235,11 +235,11 @@ func main() {
 			d = d / len(ps)
 		}
 
-		if tm != TRAINOCCPURE && tm != TRAINOCCPART {
-			r = d % len(contention)
-			curContention = contention[r]
-			d = d / len(contention)
-		}
+		//if tm != TRAINOCCPURE && tm != TRAINOCCPART {
+		r = d % len(contention)
+		curContention = contention[r]
+		d = d / len(contention)
+		//}
 
 		r = d % len(tlen)
 		tmpTlen := tlen[r]
@@ -340,7 +340,7 @@ func main() {
 					} else {
 						outFile = lockFile
 					}
-					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", curCR, ft[i][1].Txn, ft[i][1].AR, outF.ConfRate, outF.Latency, outF.PartConf))
+					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", curCR, ft[i][1].Txn, ft[i][1].AR, outF.HomeConfRate, outF.ConfRate, outF.Latency, outF.PartConf))
 				}
 			}
 
@@ -439,14 +439,14 @@ func main() {
 
 			if tm == TRAINPART || tm == TRAINOCCPART {
 				fPart.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, curContention, tmpTlen, tmpRR))
-				fPart.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].ConfRate))
+				fPart.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].HomeConfRate, ft[0][1].ConfRate))
 				for _, trainType := range typeAR {
 					fPart.WriteString(fmt.Sprintf("\t%v", trainType))
 				}
 				fPart.WriteString("\n")
 			} else if tm == TRAINOCCPURE {
 				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, curContention, tmpTlen, tmpRR))
-				fMerge.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[OCCSHARE][1].PartConf, ft[OCCSHARE][1].PartVar, ft[OCCSHARE][1].RecAvg, ft[OCCSHARE][1].Latency, ft[OCCSHARE][1].ReadRate, ft[OCCSHARE][1].ConfRate))
+				fMerge.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[OCCSHARE][1].PartConf, ft[OCCSHARE][1].PartVar, ft[OCCSHARE][1].RecAvg, ft[OCCSHARE][1].Latency, ft[OCCSHARE][1].ReadRate, ft[OCCSHARE][1].HomeConfRate, ft[OCCSHARE][1].ConfRate))
 				for _, trainType := range typeAR {
 					fMerge.WriteString(fmt.Sprintf("\t%v", trainType))
 				}
@@ -459,7 +459,7 @@ func main() {
 					tmpFeature = ft[OCCSHARE][1]
 				}
 				fWhole.WriteString(fmt.Sprintf("%v\t%v\t%v\t%.4f\t%v\t%v\t%v\t", count, curCR, tmpMP, curPS, curContention, tmpTlen, tmpRR))
-				fWhole.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", tmpFeature.PartConf, tmpFeature.PartVar, tmpFeature.RecAvg, tmpFeature.Latency, tmpFeature.ReadRate, tmpFeature.ConfRate))
+				fWhole.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", tmpFeature.PartConf, tmpFeature.PartVar, tmpFeature.RecAvg, tmpFeature.Latency, tmpFeature.ReadRate, tmpFeature.HomeConfRate, tmpFeature.ConfRate))
 				for _, trainType := range typeAR {
 					fWhole.WriteString(fmt.Sprintf("\t%v", trainType))
 				}
@@ -492,12 +492,13 @@ func main() {
 					endPS = curPS
 				}
 				curPS = (startPS + endPS) / 2
-			} else if (tm == TRAINOCCPART || tm == TRAINOCCPURE) && endContention-startContention > 0.05 {
+				/*} else if (tm == TRAINOCCPART || tm == TRAINOCCPURE) && endContention-startContention > 0.05 {
 				if win == OCCPART || win == OCCSHARE {
 					startContention = curContention
 				} else {
 					endContention = curContention
 				}
+				*/
 			} else {
 				break
 			}

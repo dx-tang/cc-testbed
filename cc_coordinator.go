@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	HEAD = 2
+	HEAD = 0
 )
 
 type TestCase struct {
@@ -834,21 +834,22 @@ func (coord *Coordinator) PrintStats(f *os.File) {
 }
 
 type Feature struct {
-	padding1   [PADDING]byte
-	PartAvg    float64
-	PartVar    float64
-	PartLenVar float64
-	PartConf   float64
-	RecAvg     float64
-	HitRate    float64
-	Latency    float64
-	ReadRate   float64
-	ConfRate   float64
-	Txn        float64
-	AR         float64
-	Mode       int
-	TrainType  int
-	padding2   [PADDING]byte
+	padding1     [PADDING]byte
+	PartAvg      float64
+	PartVar      float64
+	PartLenVar   float64
+	PartConf     float64
+	RecAvg       float64
+	HitRate      float64
+	Latency      float64
+	ReadRate     float64
+	HomeConfRate float64
+	ConfRate     float64
+	Txn          float64
+	AR           float64
+	Mode         int
+	TrainType    int
+	padding2     [PADDING]byte
 }
 
 func (f *Feature) Reset() {
@@ -862,6 +863,7 @@ func (f *Feature) Reset() {
 	f.Latency = 0
 	f.ReadRate = 0
 	f.ConfRate = 0
+	f.HomeConfRate = 0
 	f.Txn = 0
 	f.AR = 0
 	f.Mode = 0
@@ -878,6 +880,7 @@ func (ft *Feature) Add(tmpFt *Feature) {
 	ft.Latency += tmpFt.Latency
 	ft.ReadRate += tmpFt.ReadRate
 	ft.ConfRate += tmpFt.ConfRate
+	ft.HomeConfRate += tmpFt.HomeConfRate
 	//ft.Txn += tmpFt.Txn
 	//ft.AR += tmpFt.AR
 }
@@ -893,6 +896,7 @@ func (ft *Feature) Set(tmpFt *Feature) {
 	ft.Latency = tmpFt.Latency
 	ft.ReadRate = tmpFt.ReadRate
 	ft.ConfRate = tmpFt.ConfRate
+	ft.HomeConfRate = tmpFt.HomeConfRate
 	ft.Txn = tmpFt.Txn
 	ft.AR = tmpFt.AR
 	ft.Mode = tmpFt.Mode
@@ -909,6 +913,7 @@ func (ft *Feature) Avg(count float64) {
 	ft.Latency /= count
 	ft.ReadRate /= count
 	ft.ConfRate /= count
+	ft.HomeConfRate /= count
 	//ft.Txn /= count
 	//ft.AR /= count
 }
@@ -937,13 +942,14 @@ func (coord *Coordinator) GetFeature() *Feature {
 		summary.hits += master.hits
 
 		summary.accessCount += master.accessCount
+		summary.accessHomeCount += master.accessHomeCount
 		summary.conflicts += master.conflicts
+		summary.homeConflicts += master.homeConflicts
 
 		summary.partAccess += master.partAccess
 		summary.partSuccess += master.partSuccess
 
 		summary.latency += master.latency
-		summary.latencyCount += master.latencyCount
 	}
 
 	txn := summary.txnSample
@@ -990,11 +996,16 @@ func (coord *Coordinator) GetFeature() *Feature {
 	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
 	hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
 	var confRate float64
-	if summary.conflicts != 0 {
+	var homeConfRate float64
+
+	homeConfRate = float64(summary.homeConflicts*100) / float64(summary.accessHomeCount)
+	if coord.store.isPartition {
+		confRate = homeConfRate
+	} else {
 		confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
 	}
 
-	latency := float64(summary.latency) / float64(summary.latencyCount)
+	latency := float64(summary.latency) / float64(summary.readCount+summary.writeCount)
 
 	if !coord.store.isPartition {
 		if latency <= 350 {
@@ -1024,6 +1035,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	coord.feature.HitRate = hitRate
 	coord.feature.Latency = latency
 	coord.feature.ReadRate = rr
+	coord.feature.HomeConfRate = homeConfRate
 	coord.feature.ConfRate = confRate
 	coord.feature.Txn = float64(coord.NStats[NTXN]-coord.NStats[NABORTS]) / (coord.NTotal.Seconds() - coord.NGen.Seconds())
 	coord.feature.AR = float64(coord.NStats[NABORTS]) / float64(coord.NStats[NTXN])
@@ -1041,8 +1053,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 		ccType = ccType + 2
 	}
 
-	clog.Info("TXN %.4f, Abort Rate %.4f, Conficts %.4f, Latency %.4f, Type %v, PartConf %.4f, PartVar %.4f\n",
-		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, latency, ccType, coord.feature.PartConf, coord.feature.PartVar)
+	clog.Info("%.4f, %.4f, Conf %.4f, Home %.4f, Latency %.4f, Type %v, PConf %.4f, PVar %.4f\n",
+		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, coord.feature.HomeConfRate, latency, ccType, coord.feature.PartConf, coord.feature.PartVar)
 
 	/*if coord.GetMode() == 0 {
 		f, err := os.OpenFile("partconf.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)

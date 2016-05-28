@@ -105,20 +105,30 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			p.w.riMaster.latencyCount++
+			p.w.riMaster.readCount++
 		}
 		if isHome {
-			if p.st.sampleCount == 0 {
-				p.w.riMaster.readCount++
-			}
-
-			if p.st.state == 0 { // Not Enough locks acquired
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
+			sample := &p.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
 			} else {
-				p.st.sampleAccess++
-				if p.st.sampleAccess >= p.st.recRate {
-					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
-					p.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !p.st.isPartition {
+			sample := &p.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -151,20 +161,30 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			p.w.riMaster.latencyCount++
+			p.w.riMaster.writeCount++
 		}
 		if isHome {
-			if p.st.sampleCount == 0 {
-				p.w.riMaster.writeCount++
-			}
-
-			if p.st.state == 0 { // Not Enough locks acquired
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
+			sample := &p.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
 			} else {
-				p.st.sampleAccess++
-				if p.st.sampleAccess >= p.st.recRate {
-					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
-					p.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !p.st.isPartition {
+			sample := &p.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -250,25 +270,36 @@ func (p *PTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 }
 
 func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
+	transExec := p
 	if *SysType == ADAPTIVE {
-		if p.st.trueCounter == 0 { // Sample Latency
+		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = p.s.GetRecByID(tableID, k, partNum)
-			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			p.w.riMaster.latencyCount++
+			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			transExec.w.riMaster.readCount++
 		}
 		if isHome {
-			if p.st.sampleCount == 0 {
-				p.w.riMaster.readCount++
-			}
-
-			if p.st.state == 0 { // Not Enough locks acquired
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
+			sample := &transExec.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
 			} else {
-				p.st.sampleAccess++
-				if p.st.sampleAccess >= p.st.recRate {
-					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster)
-					p.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !transExec.st.isPartition {
+			sample := &transExec.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -451,25 +482,36 @@ func (o *OTransaction) Reset(t Trans) {
 }
 
 func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+	transExec := o
 	if *SysType == ADAPTIVE {
-		if o.st.trueCounter == 0 { // Sample Latency
+		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = o.s.GetRecByID(tableID, k, partNum)
-			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			o.w.riMaster.latencyCount++
+			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			transExec.w.riMaster.readCount++
 		}
 		if isHome {
-			if o.st.sampleCount == 0 {
-				o.w.riMaster.readCount++
-			}
-
-			if o.st.state == 0 { // Not Enough locks acquired
-				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
+			sample := &transExec.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
 			} else {
-				o.st.sampleAccess++
-				if o.st.sampleAccess >= o.st.recRate {
-					o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
-					o.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !transExec.st.isPartition {
+			sample := &transExec.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -541,25 +583,36 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 }
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
+	transExec := o
 	if *SysType == ADAPTIVE {
-		if o.st.trueCounter == 0 { // Sample Latency
+		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = o.s.GetRecByID(tableID, k, partNum)
-			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			o.w.riMaster.latencyCount++
+			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			transExec.w.riMaster.writeCount++
 		}
 		if isHome {
-			if o.st.sampleCount == 0 {
-				o.w.riMaster.writeCount++
-			}
-
-			if o.st.state == 0 { // Not Enough locks acquired
-				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
+			sample := &transExec.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
 			} else {
-				o.st.sampleAccess++
-				if o.st.sampleAccess >= o.st.recRate {
-					o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
-					o.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !transExec.st.isPartition {
+			sample := &transExec.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -667,25 +720,36 @@ func (o *OTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 }
 
 func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
+	transExec := o
 	if *SysType == ADAPTIVE {
-		if o.st.trueCounter == 0 { // Sample Latency
+		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = o.s.GetRecByID(tableID, k, partNum)
-			o.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			o.w.riMaster.latencyCount++
+			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			transExec.w.riMaster.readCount++
 		}
 		if isHome {
-			if o.st.sampleCount == 0 {
-				o.w.riMaster.readCount++
-			}
-
-			if o.st.state == 0 { // Not Enough locks acquired
-				o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
+			sample := &transExec.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
 			} else {
-				o.st.sampleAccess++
-				if o.st.sampleAccess >= o.st.recRate {
-					o.st.oneSampleConf(tableID, k, partNum, o.s, o.w.riMaster)
-					o.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !transExec.st.isPartition {
+			sample := &transExec.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -967,25 +1031,36 @@ func (l *LTransaction) Reset(t Trans) {
 }
 
 func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+	transExec := l
 	if *SysType == ADAPTIVE {
-		if l.st.trueCounter == 0 { // Sample Latency
+		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = l.s.GetRecByID(tableID, k, partNum)
-			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			l.w.riMaster.latencyCount++
+			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			transExec.w.riMaster.readCount++
 		}
 		if isHome {
-			if l.st.sampleCount == 0 {
-				l.w.riMaster.readCount++
-			}
-
-			if l.st.state == 0 { // Not Enough locks acquired
-				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
+			sample := &transExec.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
 			} else {
-				l.st.sampleAccess++
-				if l.st.sampleAccess >= l.st.recRate {
-					l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
-					l.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !transExec.st.isPartition {
+			sample := &transExec.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -1058,25 +1133,36 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 }
 
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool) error {
+	transExec := l
 	if *SysType == ADAPTIVE {
-		if l.st.trueCounter == 0 { // Sample Latency
+		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = l.s.GetRecByID(tableID, k, partNum)
-			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			l.w.riMaster.latencyCount++
+			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			transExec.w.riMaster.writeCount++
 		}
 		if isHome {
-			if l.st.sampleCount == 0 {
-				l.w.riMaster.writeCount++
-			}
-
-			if l.st.state == 0 { // Not Enough locks acquired
-				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
+			sample := &transExec.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
 			} else {
-				l.st.sampleAccess++
-				if l.st.sampleAccess >= l.st.recRate {
-					l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
-					l.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !transExec.st.isPartition {
+			sample := &transExec.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}
@@ -1289,25 +1375,36 @@ func (l *LTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 }
 
 func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
+	transExec := l
 	if *SysType == ADAPTIVE {
-		if l.st.trueCounter == 0 { // Sample Latency
+		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = l.s.GetRecByID(tableID, k, partNum)
-			l.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			l.w.riMaster.latencyCount++
+			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
+			transExec.w.riMaster.readCount++
 		}
 		if isHome {
-			if l.st.sampleCount == 0 {
-				l.w.riMaster.readCount++
-			}
-
-			if l.st.state == 0 { // Not Enough locks acquired
-				l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
+			sample := &transExec.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
 			} else {
-				l.st.sampleAccess++
-				if l.st.sampleAccess >= l.st.recRate {
-					l.st.oneSampleConf(tableID, k, partNum, l.s, l.w.riMaster)
-					l.st.sampleAccess = 0
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
+			}
+		}
+
+		if !transExec.st.isPartition {
+			sample := &transExec.st.allSample
+			if sample.state == 0 { // Not Enough locks acquired
+				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+					sample.sampleAccess = 0
 				}
 			}
 		}

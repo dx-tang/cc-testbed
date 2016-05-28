@@ -12,30 +12,31 @@ import (
 var Report = flag.Bool("report", false, "whether periodically report runtime information to coordinator")
 
 type ReportInfo struct {
-	padding0     [PADDING]byte
-	execTime     time.Duration
-	prevExec     time.Duration
-	genTime      time.Duration
-	prevGen      time.Duration
-	txn          int64
-	aborts       int64
-	prevTxn      int64
-	prevAborts   int64
-	txnSample    int64
-	partTotal    int64
-	partStat     []int64
-	partLenStat  int64
-	recStat      []int64
-	readCount    int64
-	writeCount   int64
-	hits         int64
-	accessCount  int64
-	conflicts    int64
-	partAccess   int64
-	partSuccess  int64
-	latency      int64
-	latencyCount int64
-	padding1     [PADDING]byte
+	padding0        [PADDING]byte
+	execTime        time.Duration
+	prevExec        time.Duration
+	genTime         time.Duration
+	prevGen         time.Duration
+	txn             int64
+	aborts          int64
+	prevTxn         int64
+	prevAborts      int64
+	txnSample       int64
+	partTotal       int64
+	partStat        []int64
+	partLenStat     int64
+	recStat         []int64
+	readCount       int64
+	writeCount      int64
+	hits            int64
+	accessCount     int64
+	conflicts       int64
+	accessHomeCount int64
+	homeConflicts   int64
+	partAccess      int64
+	partSuccess     int64
+	latency         int64
+	padding1        [PADDING]byte
 }
 
 func (ri *ReportInfo) Reset() {
@@ -64,14 +65,15 @@ func (ri *ReportInfo) Reset() {
 	ri.txnSample = 0
 
 	ri.accessCount = 0
+	ri.accessHomeCount = 0
 	ri.conflicts = 0
+	ri.homeConflicts = 0
 	ri.hits = 0
 
 	ri.partAccess = 0
 	ri.partSuccess = 0
 
 	ri.latency = 0
-	ri.latencyCount = 0
 
 }
 
@@ -88,25 +90,30 @@ func NewReportInfo(nParts int, tableCount int) *ReportInfo {
 }
 
 type SampleTool struct {
-	padding0     [PADDING]byte
-	nParts       int
-	isPartition  bool
-	tableCount   int
-	sampleCount  int
+	padding0    [PADDING]byte
+	nParts      int
+	isPartition bool
+	tableCount  int
+	sampleRate  int
+	sampleCount int
+	trueRate    int
+	trueCounter int
+	lruAr       []*LRU
+	ap          []int
+	cur         int
+	partTrial   int
+	s           *Store
+	homeSample  ConfSample
+	allSample   ConfSample
+	padding1    [PADDING]byte
+}
+
+type ConfSample struct {
 	sampleAccess int
 	recBuf       []*ARecord
 	trials       int
 	state        int
-	sampleRate   int
-	trueRate     int
-	trueCounter  int
 	recRate      int
-	lruAr        []*LRU
-	ap           []int
-	cur          int
-	partTrial    int
-	s            *Store
-	padding1     [PADDING]byte
 }
 
 func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
@@ -121,11 +128,13 @@ func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 
 	if !st.isPartition {
 		st.sampleRate = sampleRate / (*NumPart)
-		st.recRate = RECSR / (*NumPart)
+		st.homeSample.recRate = RECSR / (*NumPart)
 	} else {
 		st.sampleRate = sampleRate - sampleRate%(*NumPart)
-		st.recRate = RECSR - RECSR%(*NumPart)
+		st.homeSample.recRate = RECSR - RECSR%(*NumPart)
 	}
+
+	st.allSample.recRate = RECSR - RECSR%(*NumPart)
 
 	//for i := 0; i < len(IDToKeyRange); i++ {
 	//	st.lruAr[i] = NewLRU(CACHESIZE)
@@ -139,16 +148,26 @@ func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 	//st.cur = 0
 	//st.partTrial = 0
 
-	st.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
-	st.recBuf = st.recBuf[PADDINGINT64:PADDINGINT64]
+	st.allSample.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
+	st.allSample.recBuf = st.allSample.recBuf[PADDINGINT64:PADDINGINT64]
+
+	st.homeSample.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
+	st.homeSample.recBuf = st.homeSample.recBuf[PADDINGINT64:PADDINGINT64]
 
 	return st
 }
 
-func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store, ri *ReportInfo) {
+func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store, ri *ReportInfo, isHome bool) {
+	var sample *ConfSample
+	if isHome {
+		sample = &st.homeSample
+	} else {
+		sample = &st.allSample
+	}
+
 	// We need acquire more locks
-	if st.state == 0 {
-		for _, rec := range st.recBuf {
+	if sample.state == 0 {
+		for _, rec := range sample.recBuf {
 			if rec.key == key {
 				return
 			}
@@ -159,23 +178,25 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 			clog.Error("Error No Key in Sample")
 		}
 		tmpRec := rec.(*ARecord)
-		ok := tmpRec.conflict.RLock()
-		if ok {
-			n := len(st.recBuf)
-			st.recBuf = st.recBuf[0 : n+1]
-			st.recBuf[n] = tmpRec
-			if n+1 == BUFSIZE {
-				st.state = 1
-			}
+		if isHome {
+			tmpRec.cd.IncrHomeCounter()
+		} else {
+			tmpRec.cd.IncrCounter()
+		}
+
+		n := len(sample.recBuf)
+		sample.recBuf = sample.recBuf[0 : n+1]
+		sample.recBuf[n] = tmpRec
+		if n+1 == BUFSIZE {
+			sample.state = 1
 		}
 
 		return
 	}
 
-	ri.accessCount++
 	var ok bool = false
 	conf := int32(0)
-	for _, rec := range st.recBuf {
+	for _, rec := range sample.recBuf {
 		if rec.key == key {
 			ok = true
 			conf++
@@ -189,23 +210,40 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 	}
 	//ri.latency += time.Since(tm).Nanoseconds()
 	tmpRec := rec.(*ARecord)
-	x := tmpRec.conflict.CheckLock()
+	var x int32
+	if isHome {
+		x = tmpRec.cd.CheckCounterHome()
+	} else {
+		x = tmpRec.cd.CheckCounter()
+	}
 	if x != 0 {
 		if ok {
-			ri.conflicts += int64(x - conf)
+			conf = x - conf
 		} else {
-			ri.conflicts += int64(x)
+			conf = x
 		}
 	}
 
-	st.trials++
-	if st.trials == TRIAL {
-		st.trials = 0
-		st.state = 0
-		for _, rec := range st.recBuf {
-			rec.conflict.RUnlock()
+	sample.trials++
+	if sample.trials == TRIAL {
+		sample.trials = 0
+		sample.state = 0
+		for _, rec := range sample.recBuf {
+			if isHome {
+				rec.cd.DecHomeCounter()
+			} else {
+				rec.cd.DecCounter()
+			}
 		}
-		st.recBuf = st.recBuf[0:0]
+		sample.recBuf = sample.recBuf[0:0]
+	}
+
+	if isHome {
+		ri.accessHomeCount++
+		ri.homeConflicts += int64(conf)
+	} else {
+		ri.accessCount++
+		ri.conflicts += int64(conf)
 	}
 }
 
@@ -224,10 +262,8 @@ func (st *SampleTool) oneSample(tableID int, ri *ReportInfo, isRead bool) {
 }
 
 func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo, pi int) {
-	ri.txnSample++
-
-	plus := int64((len(ap) - 1))
-	ri.partTotal += plus*plus + 1
+	//plus := int64((len(ap) - 1))
+	//ri.partTotal += plus*plus + 1
 
 	//ri.partStat[pi]++
 
@@ -313,13 +349,25 @@ func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
 
 func (st *SampleTool) Reset() {
 	st.sampleCount = 0
-	st.sampleAccess = 0
-	st.trials = 0
-	st.state = 0
-	for _, rec := range st.recBuf {
-		rec.conflict.RUnlock()
+	st.trueCounter = 0
+
+	sample := &st.allSample
+	sample.sampleAccess = 0
+	sample.trials = 0
+	sample.state = 0
+	for _, rec := range sample.recBuf {
+		rec.cd.CleanCounter()
 	}
-	st.recBuf = st.recBuf[0:0]
+	sample.recBuf = sample.recBuf[0:0]
+
+	sample = &st.homeSample
+	sample.sampleAccess = 0
+	sample.trials = 0
+	sample.state = 0
+	for _, rec := range sample.recBuf {
+		rec.cd.CleanHomeCounter()
+	}
+	sample.recBuf = sample.recBuf[0:0]
 
 	//for i := 0; i < len(st.lruAr); i++ {
 	//	st.lruAr[i] = NewLRU(st.lruAr[i].size)
@@ -347,10 +395,10 @@ func (st *SampleTool) reconf(isPartition bool) {
 	st.isPartition = isPartition
 	if isPartition {
 		st.sampleRate = st.sampleRate * (*NumPart)
-		st.recRate = st.recRate * (*NumPart)
+		st.homeSample.recRate = st.homeSample.recRate * (*NumPart)
 	} else {
 		st.sampleRate = st.sampleRate / (*NumPart)
-		st.recRate = st.recRate / (*NumPart)
+		st.homeSample.recRate = st.homeSample.recRate / (*NumPart)
 	}
 }
 

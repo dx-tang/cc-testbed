@@ -498,7 +498,7 @@ type ARecord struct {
 	wdLock   WDLock
 	nwLock   nowaitlock.NoWaitLock
 	last     wfmutex.WFMutex
-	conflict nowaitlock.NoWaitLock
+	cd       ConfDetector
 	table    Table
 	padding2 [PADDING]byte
 }

@@ -336,6 +336,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 		w.st.trueCounter++
 		if w.st.trueCounter == w.st.trueRate {
 			w.st.trueCounter = 0
+			w.riMaster.txnSample++
 			if w.st.isPartition {
 				w.riMaster.partStat[w.ID]++
 			} else {
