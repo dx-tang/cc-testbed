@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	HEAD = 0
+	HEAD = 2
 )
 
 // Number of Loaders for Index Partitioning
@@ -386,7 +386,9 @@ func (coord *Coordinator) process() {
 
 			// Switch
 			if *SysType == ADAPTIVE {
-				coord.predict(summary)
+				if coord.store.state == INDEX_NONE {
+					coord.predict(summary)
+				}
 			}
 
 			// Done
