@@ -508,8 +508,28 @@ func (coord *Coordinator) process() {
 				single := coord.singleWL
 				if coord.isMerge {
 					single.ResetPart(1, false)
+					single.zp.Reconf(NOPARTSKEW)
+					for i := 0; i < len(single.transGen); i++ {
+						tg := single.transGen[i]
+						tg.validProb = single.zp.GetProb(i)
+						tg.timeInit = false
+					}
+					basic := single.GetBasicWL()
+					partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
+					basic.SetPartGen(partGens)
+					coord.ResetPart(false)
 				} else {
 					single.ResetPart(*NumPart, true)
+					single.zp.Reconf(coord.testCases[coord.curTest].PS)
+					for i := 0; i < len(single.transGen); i++ {
+						tg := single.transGen[i]
+						tg.validProb = single.zp.GetProb(i)
+						tg.timeInit = false
+					}
+					basic := single.GetBasicWL()
+					partGens := basic.NewPartGen(NOPARTSKEW)
+					basic.SetPartGen(partGens)
+					coord.ResetPart(true)
 				}
 			} else if coord.workload == SMALLBANKWL {
 				sb := coord.sbWL
