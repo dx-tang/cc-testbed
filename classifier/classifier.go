@@ -10,105 +10,84 @@ import (
 )
 
 type Classifier interface {
-	Predict(partAvg float64, partSkew float64, recAvg float64, latency float64, readRate float64, confRate float64) int
+	Predict(curType int, partAvg float64, partSkew float64, recAvg float64, latency float64, readRate float64, homeConf float64, confRate float64) int
+	GetIndexProb() float64
+	GetPartProb() float64
+	GetOCCProb() float64
+	GetPureProb() float64
 	Finalize()
 }
 
 type SingleClassifier struct {
 	padding1 [64]byte
-	partClf  *C.PyObject
-	occClf   *C.PyObject
+	clf      *C.PyObject
 	padding2 [64]byte
 }
 
-func NewSingleClassifier(path string, partTS string, occTS string) *SingleClassifier {
+func NewSingleClassifier(path string, partFile string, occFile string, pureFile string, indexFile string) *SingleClassifier {
 	addPath := "sys.path.append('" + path + "')"
 	C.Init(C.CString(addPath))
 	sc := &SingleClassifier{}
-	part := C.CString(partTS)
-	occ := C.CString(occTS)
-	sc.partClf = C.SinglePartTrain(part)
-	if sc.partClf == nil {
-		clog.Error("Single Part Training Error")
-	}
-	sc.occClf = C.SingleOCCTrain(occ)
-	if sc.occClf == nil {
-		clog.Error("Single OCC Training Error")
+	part := C.CString(partFile)
+	occ := C.CString(occFile)
+	pure := C.CString(pureFile)
+	index := C.CString(indexFile)
+	sc.clf = C.Train(part, occ, pure, index)
+	if sc.clf == nil {
+		clog.Error("Training Error")
 	}
 	return sc
 }
 
-func (sc *SingleClassifier) Predict(partAvg float64, partSkew float64, recAvg float64, latency float64, readRate float64, confRate float64) int {
+func (sc *SingleClassifier) Predict(curType int, partAvg float64, partSkew float64, recAvg float64, latency float64, readRate float64, homeconf float64, confRate float64) int {
+	cCurType := C.int(curType)
 	cPartAvg := C.double(partAvg)
 	cPartSkew := C.double(partSkew)
 	cRecAvg := C.double(recAvg)
 	cLatency := C.double(latency)
 	cReadRate := C.double(readRate)
+	cHomeConf := C.double(homeconf)
 	cConfRate := C.double(confRate)
 
-	c := C.SinglePartPredict(sc.partClf, cPartAvg, cPartSkew, cRecAvg, cLatency, cReadRate, cConfRate)
+	c := C.Predict(sc.clf, cCurType, cPartAvg, cPartSkew, cRecAvg, cLatency, cReadRate, cHomeConf, cConfRate)
 	if c < 0 {
-		clog.Error("Single Part Predict Error")
-	}
-	if c != 0 {
-		c = C.SingleOCCPredict(sc.occClf, cRecAvg, cLatency, cReadRate, cConfRate)
-		if c < 0 {
-			clog.Error("Single OCC Predict Error")
-		}
+		clog.Error("Predict Error")
 	}
 	return int(c)
+}
+
+func (sc *SingleClassifier) GetIndexProb() float64 {
+	c := C.GetIndexProb(sc.clf)
+	if c < 0 {
+		clog.Error("Get Prob Error")
+	}
+	return float64(c)
+}
+
+func (sc *SingleClassifier) GetPartProb() float64 {
+	c := C.GetPartProb(sc.clf)
+	if c < 0 {
+		clog.Error("Get Prob Error")
+	}
+	return float64(c)
+}
+
+func (sc *SingleClassifier) GetOCCProb() float64 {
+	c := C.GetOCCProb(sc.clf)
+	if c < 0 {
+		clog.Error("Get Prob Error")
+	}
+	return float64(c)
+}
+
+func (sc *SingleClassifier) GetPureProb() float64 {
+	c := C.GetPureProb(sc.clf)
+	if c < 0 {
+		clog.Error("Get Prob Error")
+	}
+	return float64(c)
 }
 
 func (sc *SingleClassifier) Finalize() {
-	C.Final()
-}
-
-type SmallbankClassifier struct {
-	padding1 [64]byte
-	partClf  *C.PyObject
-	occClf   *C.PyObject
-	padding2 [64]byte
-}
-
-func NewSBClassifier(path string, partTS string, occTS string) *SmallbankClassifier {
-	addPath := "sys.path.append('" + path + "')"
-	C.Init(C.CString(addPath))
-	sbc := &SmallbankClassifier{}
-	part := C.CString(partTS)
-	occ := C.CString(occTS)
-	sbc.partClf = C.SBPartTrain(part)
-	if sbc.partClf == nil {
-		clog.Error("Smallbank Part Training Error")
-	}
-	sbc.occClf = C.SBOCCTrain(occ)
-	if sbc.occClf == nil {
-		clog.Error("Smallbank OCC Training Error")
-	}
-	return sbc
-}
-
-func (sbc *SmallbankClassifier) Predict(partAvg float64, partSkew float64, recAvg float64, latency float64, readRate float64, confRate float64) int {
-	cPartAvg := C.double(partAvg)
-	cPartSkew := C.double(partSkew)
-	//cPartLenSkew := C.double(partLenSkew)
-	cRecAvg := C.double(recAvg)
-	cLatency := C.double(latency)
-	cReadRate := C.double(readRate)
-	cConfRate := C.double(confRate)
-
-	c := C.SBPartPredict(sbc.partClf, cPartAvg, cPartSkew, cRecAvg, cLatency, cReadRate, cConfRate)
-	if c < 0 {
-		clog.Error("Smallbank Part Predict Error")
-	}
-	if c != 0 {
-		c = C.SBOCCPredict(sbc.occClf, cRecAvg, cLatency, cReadRate, cConfRate)
-		if c < 0 {
-			clog.Error("Smallbank OCC Predict Error")
-		}
-	}
-	return int(c)
-}
-
-func (sbc *SmallbankClassifier) Finalize() {
 	C.Final()
 }

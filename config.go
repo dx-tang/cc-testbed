@@ -31,13 +31,19 @@ const (
 
 // Location for Classifier and corresponding data
 const (
-	CLASSIFERPATH   = "/home/totemtang/ACC/workspace/src/github.com/totemtang/cc-testbed/classifier"
-	SINGLEPARTTRAIN = "single-part-train.out"
-	SINGLEOCCTRAIN  = "single-occ-train.out"
-	SBPARTTRAIN     = "sb-part-train.out"
-	SBOCCTRAIN      = "sb-occ-train.out"
-	TPCCPARTTRAIN   = "tpcc-part-train.out"
-	TPCCOCCTRAIN    = "tpcc-occ-train.out"
+	CLASSIFERPATH    = "/home/totemtang/ACC/workspace/src/github.com/totemtang/cc-testbed/classifier"
+	SINGLEPARTTRAIN  = "single-part-train.out"
+	SINGLEOCCTRAIN   = "single-occ-train.out"
+	SINGLEPURETRAIN  = "single-pure-train.out"
+	SINGLEINDEXTRAIN = "single-index-train.out"
+	SBPARTTRAIN      = "sb-part-train.out"
+	SBOCCTRAIN       = "sb-occ-train.out"
+	SBPURETRAIN      = "sb-pure-train.out"
+	SBINDEXTRAIN     = "sb-index-train.out"
+	TPCCPARTTRAIN    = "tpcc-part-train.out"
+	TPCCOCCTRAIN     = "tpcc-occ-train.out"
+	TPCCPURETRAIN    = "tpcc-pure-train.out"
+	TPCCINDEXTRAIN   = "tpcc-index-train.out"
 )
 
 // Sample Configuration

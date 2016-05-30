@@ -152,46 +152,49 @@ func BuildTestCases(f string, workload int) []TestCase {
 }
 
 type Coordinator struct {
-	padding0       [PADDING]byte
-	Workers        []*Worker
-	store          *Store
-	NStats         []int64
-	NGen           time.Duration
-	NExecute       time.Duration
-	NTotal         time.Duration
-	NWait          time.Duration
-	NLockAcquire   int64
-	stat           *os.File
-	mode           int
-	feature        *Feature
-	padding2       [PADDING]byte
-	reports        []chan *ReportInfo
-	changeACK      []chan bool
-	indexStartACK  []chan bool
-	indexActionACK []chan bool
-	indexDoneACK   []chan bool
-	indexActions   []*IndexAction
-	startLoader    int
-	startMerger    int
-	summary        *ReportInfo
-	perTest        int
-	TxnAR          []float64
-	ModeAR         []int
-	reportCount    int
-	rc             int
-	curTest        int
-	clf            classifier.Classifier
-	workload       int
-	indexpart      bool
-	isMerge        bool
-	testCases      []TestCase
-	tpccWL         *TPCCWorkload
-	singleWL       *SingelWorkload
-	sbWL           *SBWorkload
-	keyGenPool     map[float64][][]KeyGen
-	partGenPool    map[float64][]PartGen
-	tpccPartPool   map[float64][]KeyGen
-	padding1       [PADDING]byte
+	padding0         [PADDING]byte
+	Workers          []*Worker
+	store            *Store
+	NStats           []int64
+	NGen             time.Duration
+	NExecute         time.Duration
+	NTotal           time.Duration
+	NWait            time.Duration
+	NLockAcquire     int64
+	stat             *os.File
+	mode             int
+	feature          *Feature
+	padding2         [PADDING]byte
+	reports          []chan *ReportInfo
+	changeACK        []chan bool
+	indexStartACK    []chan bool
+	indexActionACK   []chan bool
+	indexDoneACK     []chan bool
+	indexActions     []*IndexAction
+	startLoader      int
+	startMerger      int
+	summary          *ReportInfo
+	perTest          int
+	TxnAR            []float64
+	ModeAR           []int
+	reportCount      int
+	rc               int
+	curTest          int
+	clf              classifier.Classifier
+	workload         int
+	indexpart        bool
+	isMerge          bool
+	testCases        []TestCase
+	tpccWL           *TPCCWorkload
+	singleWL         *SingelWorkload
+	sbWL             *SBWorkload
+	keyGenPool       map[float64][][]KeyGen
+	partGenPool      map[float64][]PartGen
+	tpccPartPool     map[float64][]KeyGen
+	indexChangeStart time.Time
+	potentialType    int
+	startWorker      int
+	padding1         [PADDING]byte
 }
 
 const (
@@ -237,9 +240,11 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		coordinator.workload = workload
 		if workload == SINGLEWL {
 			if *SysType == ADAPTIVE {
-				partTS := CLASSIFERPATH + "/" + SINGLEPARTTRAIN
-				occTS := CLASSIFERPATH + "/" + SINGLEOCCTRAIN
-				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partTS, occTS)
+				partFile := CLASSIFERPATH + "/" + SINGLEPARTTRAIN
+				occFile := CLASSIFERPATH + "/" + SINGLEOCCTRAIN
+				pureFile := CLASSIFERPATH + "/" + SINGLEPURETRAIN
+				indexFile := CLASSIFERPATH + "/" + SINGLEINDEXTRAIN
+				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile)
 			}
 			coordinator.singleWL = wl.(*SingelWorkload)
 			single := coordinator.singleWL
@@ -265,9 +270,11 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 			}
 		} else if workload == SMALLBANKWL {
 			if *SysType == ADAPTIVE {
-				partTS := CLASSIFERPATH + "/" + SBPARTTRAIN
-				occTS := CLASSIFERPATH + "/" + SBOCCTRAIN
-				coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
+				partFile := CLASSIFERPATH + "/" + SBPARTTRAIN
+				occFile := CLASSIFERPATH + "/" + SBOCCTRAIN
+				pureFile := CLASSIFERPATH + "/" + SBPURETRAIN
+				indexFile := CLASSIFERPATH + "/" + SBINDEXTRAIN
+				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile)
 			}
 			coordinator.sbWL = wl.(*SBWorkload)
 			sb := coordinator.sbWL
@@ -292,9 +299,13 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				coordinator.partGenPool[NOPARTSKEW] = partGens
 			}
 		} else if workload == TPCCWL {
-			//partTS := CLASSIFERPATH + "/" + TPCCPARTTRAIN
-			//occTS := CLASSIFERPATH + "/" + TPCCOCCTRAIN
-			//coordinator.clf = classifier.NewSBClassifier(CLASSIFERPATH, partTS, occTS)
+			if *SysType == ADAPTIVE {
+				partFile := CLASSIFERPATH + "/" + TPCCPARTTRAIN
+				occFile := CLASSIFERPATH + "/" + TPCCOCCTRAIN
+				pureFile := CLASSIFERPATH + "/" + TPCCPURETRAIN
+				indexFile := CLASSIFERPATH + "/" + TPCCINDEXTRAIN
+				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile)
+			}
 			coordinator.tpccWL = wl.(*TPCCWorkload)
 			tpccWL := coordinator.tpccWL
 			for i, _ := range testCases {
@@ -347,12 +358,10 @@ func (coord *Coordinator) ResetPart(isPartition bool) {
 func (coord *Coordinator) process() {
 	summary := coord.summary
 	var ri *ReportInfo
-	var indexChangeStart time.Time
 	timeFile, err := os.OpenFile("timeFile.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		clog.Error("%v", err)
 	}
-	startWorker := 0
 	for {
 		select {
 		case ri = <-coord.reports[0]:
@@ -374,64 +383,6 @@ func (coord *Coordinator) process() {
 			clog.Info("Test %v Mode %v; Txn %.4f; Abort %.4f; Total %v; ExecTime %.4f", coord.rc, coord.ModeAR[coord.rc], coord.TxnAR[coord.rc], float64(summary.aborts)/float64(summary.txn), summary.txn, execTime)
 
 			coord.rc++
-
-			if !coord.indexpart {
-				perWorker := 0
-				residue := 0
-				actionType := INDEX_ACTION_NONE
-				if coord.isMerge {
-					clog.Info("Starting Index Merging")
-					actionType = INDEX_ACTION_MERGE
-					startWorker = coord.startMerger
-					perWorker = *NumPart / *NMERGERS
-					residue = *NumPart % *NMERGERS
-				} else {
-					clog.Info("Starting Index Partitioning")
-					actionType = INDEX_ACTION_PARTITION
-					startWorker = coord.startLoader
-					perWorker = *NumPart / *NLOADERS
-					residue = *NumPart % *NLOADERS
-				}
-				indexChangeStart = time.Now()
-				coord.indexpart = true
-				store := coord.store
-				// Begin Index Partitioning
-				for i := 0; i < len(coord.Workers); i++ {
-					coord.Workers[i].indexStart <- true
-				}
-				for i := 0; i < len(coord.indexStartACK); i++ {
-					<-coord.indexStartACK[i]
-				}
-				// Get All ACK; All workers stop; Change State and switch pri/sec tables
-				store.state = INDEX_CHANGING
-				tmpTables := store.priTables
-				store.priTables = store.secTables
-				store.secTables = tmpTables
-				store.isPartition = !store.isPartition
-
-				for i := 0; i < len(coord.Workers); i++ {
-					action := coord.indexActions[i]
-					if i < startWorker {
-						action.actionType = INDEX_ACTION_NONE
-					} else {
-						iWorker := (i - startWorker)
-						action.actionType = actionType
-						begin := iWorker * perWorker
-						if iWorker < residue {
-							begin += iWorker
-						} else {
-							begin += residue
-						}
-						end := begin + perWorker
-						if iWorker < residue {
-							end++
-						}
-						action.start = begin
-						action.end = end
-					}
-					coord.Workers[i].indexAction <- action
-				}
-			}
 
 			// Switch
 			if *SysType == ADAPTIVE {
@@ -483,8 +434,8 @@ func (coord *Coordinator) process() {
 					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.TPCCTransPer)
 				}
 			}
-		case <-coord.indexActionACK[startWorker]:
-			for i := startWorker + 1; i < len(coord.indexActionACK); i++ {
+		case <-coord.indexActionACK[coord.startWorker]:
+			for i := coord.startWorker + 1; i < len(coord.indexActionACK); i++ {
 				<-coord.indexActionACK[i]
 			}
 			// Now All Loaders done; Confirm this to all workers
@@ -497,11 +448,11 @@ func (coord *Coordinator) process() {
 
 			coord.store.state = INDEX_NONE
 
-			timeFile.WriteString(fmt.Sprintf("%.4f\n", time.Since(indexChangeStart).Seconds()))
+			timeFile.WriteString(fmt.Sprintf("%.4f\n", time.Since(coord.indexChangeStart).Seconds()))
 			if coord.isMerge {
-				clog.Info("Done with Index Merging: %.3f", time.Since(indexChangeStart).Seconds())
+				clog.Info("Done with Index Merging: %.3f", time.Since(coord.indexChangeStart).Seconds())
 			} else {
-				clog.Info("Done with Index Partitioning: %.3f", time.Since(indexChangeStart).Seconds())
+				clog.Info("Done with Index Partitioning: %.3f", time.Since(coord.indexChangeStart).Seconds())
 			}
 
 			if coord.workload == SINGLEWL {
@@ -552,71 +503,182 @@ func (coord *Coordinator) process() {
 				coord.Workers[i].indexConfirm <- true
 			}
 
+			if !coord.isMerge && coord.potentialType == PARTITION {
+				coord.switchCC(PARTITION)
+			}
 		}
 	}
 }
 
 func (coord *Coordinator) predict(summary *ReportInfo) {
-	//for _, ps := range summary.partStat {
-	//	clog.Info("%v ", ps)
-	//}
 	// Compute Features
 	txn := summary.txnSample
 
-	var sum int64
-	var sumpow int64
-	for _, p := range summary.partStat {
-		sum += p
-		sumpow += p * p
+	var sum float64
+	var sumpow float64
+
+	var head int
+	if coord.store.isPartition {
+		head = 0
+	} else {
+		head = HEAD
 	}
 
-	//partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
-	partVar := float64(sumpow*int64(len(summary.partStat)))/float64(sum*sum) - 1
-	//partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
-	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
+	for i, p := range summary.partStat {
+		if i >= head {
+			sum += float64(p)
+		}
+	}
+
+	for i, p := range summary.partStat {
+		if i >= head {
+			sumpow += float64(p*p) / (sum * sum)
+		}
+	}
+
+	n := float64(len(summary.partStat) - head)
+	partVar := (sumpow/n - 1/(n*n)) * 1000
 
 	var recAvg float64
-	sum = 0
-	for _, rs := range summary.recStat {
-		sum += rs
-	}
+	sum = float64(summary.readCount + summary.writeCount)
 	recAvg = float64(sum) / float64(txn)
 
 	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
-	//hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
-	latency := float64(summary.latency) / float64(summary.accessCount)
+
 	var confRate float64
-	if summary.conflicts != 0 {
+	var homeConfRate float64
+
+	homeConfRate = float64(summary.homeConflicts*100) / float64(summary.accessHomeCount)
+	if coord.store.isPartition {
+		confRate = homeConfRate
+	} else {
 		confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
 	}
+
+	latency := float64(summary.latency) / float64(summary.readCount+summary.writeCount)
+
+	if !coord.store.isPartition {
+		if latency <= 350 {
+			latency -= 80
+		} else if latency <= 650 {
+			if coord.mode == 1 {
+				latency -= 80
+			} else {
+				latency -= 100
+			}
+		} else {
+			if coord.mode == 1 {
+				latency -= 100
+			} else {
+				latency -= 150
+			}
+		}
+	}
+	partVar = math.Sqrt(partVar)
+	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
 	//clog.Info("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
 
 	// Use Classifier to Predict Features
 	//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
-	mode := coord.clf.Predict(partConf, partVar, recAvg, latency, rr, confRate)
-	var change bool = false
-	if mode != coord.mode {
-		if !(mode == 3 && coord.mode != 0) {
-			change = true
-			if mode == 3 {
-				// Prefer 2PL
-				coord.mode = 2
-			} else {
-				coord.mode = mode
+	curType := coord.mode
+	if !coord.store.isPartition {
+		curType += 2
+	}
+	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
+	clog.Info("Switching from %v to %v", curType, execType)
+
+	if execType > 2 { // Use Shared Index
+		if coord.store.isPartition { // Start Merging
+			coord.switchCC(execType - 2)
+			coord.indexReorganize(true)
+		} else {
+			coord.switchCC(execType - 2)
+		}
+	} else { // Use Partitioned Index
+		if !coord.store.isPartition { // Start Partitioning
+			coord.indexReorganize(false)
+			if execType != 0 {
+				coord.switchCC(execType)
 			}
+			coord.potentialType = execType
+		} else {
+			coord.switchCC(execType)
 		}
 	}
-	if change {
-		for i := 0; i < len(coord.Workers); i++ {
-			coord.Workers[i].modeChange <- true
+}
+
+func (coord *Coordinator) switchCC(mode int) {
+	if mode == coord.mode {
+		return
+	}
+	coord.mode = mode
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].modeChange <- true
+	}
+	for i := 0; i < len(coord.Workers); i++ {
+		<-coord.changeACK[i]
+	}
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].modeChan <- coord.mode
+	}
+}
+
+func (coord *Coordinator) indexReorganize(isMerge bool) {
+	perWorker := 0
+	residue := 0
+	actionType := INDEX_ACTION_NONE
+	coord.isMerge = isMerge
+	if coord.isMerge {
+		clog.Info("Starting Index Merging")
+		actionType = INDEX_ACTION_MERGE
+		coord.startWorker = coord.startMerger
+		perWorker = *NumPart / *NMERGERS
+		residue = *NumPart % *NMERGERS
+	} else {
+		clog.Info("Starting Index Partitioning")
+		actionType = INDEX_ACTION_PARTITION
+		coord.startWorker = coord.startLoader
+		perWorker = *NumPart / *NLOADERS
+		residue = *NumPart % *NLOADERS
+	}
+	coord.indexChangeStart = time.Now()
+	store := coord.store
+	// Begin Index Partitioning
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].indexStart <- true
+	}
+	for i := 0; i < len(coord.indexStartACK); i++ {
+		<-coord.indexStartACK[i]
+	}
+	// Get All ACK; All workers stop; Change State and switch pri/sec tables
+	store.state = INDEX_CHANGING
+	tmpTables := store.priTables
+	store.priTables = store.secTables
+	store.secTables = tmpTables
+	store.isPartition = !store.isPartition
+
+	for i := 0; i < len(coord.Workers); i++ {
+		action := coord.indexActions[i]
+		if i < coord.startWorker {
+			action.actionType = INDEX_ACTION_NONE
+		} else {
+			iWorker := (i - coord.startWorker)
+			action.actionType = actionType
+			begin := iWorker * perWorker
+			if iWorker < residue {
+				begin += iWorker
+			} else {
+				begin += residue
+			}
+			end := begin + perWorker
+			if iWorker < residue {
+				end++
+			}
+			action.start = begin
+			action.end = end
 		}
-		for i := 0; i < len(coord.Workers); i++ {
-			<-coord.changeACK[i]
-		}
-		for i := 0; i < len(coord.Workers); i++ {
-			coord.Workers[i].modeChan <- coord.mode
-		}
+		coord.Workers[i].indexAction <- action
 	}
 }
 
@@ -627,31 +689,28 @@ func setReport(ri *ReportInfo, summary *ReportInfo) {
 	summary.genTime = ri.genTime
 
 	if *SysType == ADAPTIVE {
-		summary.txnSample = ri.txnSample
+		summary.txnSample += ri.txnSample
 
 		for i, ps := range ri.partStat {
-			summary.partStat[i] = ps
+			summary.partStat[i] += ps
 		}
-
-		//summary.partTotal = ri.partTotal
-
-		//summary.partLenStat = ri.partLenStat
 
 		for i, rs := range ri.recStat {
-			summary.recStat[i] = rs
+			summary.recStat[i] += rs
 		}
 
-		summary.readCount = ri.readCount
-		summary.writeCount = ri.writeCount
-		//summary.hits = ri.hits
+		summary.readCount += ri.readCount
+		summary.writeCount += ri.writeCount
 
-		summary.accessCount = ri.accessCount
-		summary.conflicts = ri.conflicts
+		summary.accessCount += ri.accessCount
+		summary.accessHomeCount += ri.accessHomeCount
+		summary.conflicts += ri.conflicts
+		summary.homeConflicts += ri.homeConflicts
 
-		summary.latency = ri.latency
+		summary.partAccess += ri.partAccess
+		summary.partSuccess += ri.partSuccess
 
-		summary.partAccess = ri.partAccess
-		summary.partSuccess = ri.partSuccess
+		summary.latency += ri.latency
 	}
 }
 
@@ -668,25 +727,22 @@ func collectReport(ri *ReportInfo, summary *ReportInfo) {
 			summary.partStat[i] += ps
 		}
 
-		//summary.partTotal += ri.partTotal
-
-		//summary.partLenStat += ri.partLenStat
-
 		for i, rs := range ri.recStat {
 			summary.recStat[i] += rs
 		}
 
 		summary.readCount += ri.readCount
 		summary.writeCount += ri.writeCount
-		//summary.hits += ri.hits
 
 		summary.accessCount += ri.accessCount
+		summary.accessHomeCount += ri.accessHomeCount
 		summary.conflicts += ri.conflicts
-
-		summary.latency += ri.latency
+		summary.homeConflicts += ri.homeConflicts
 
 		summary.partAccess += ri.partAccess
 		summary.partSuccess += ri.partSuccess
+
+		summary.latency += ri.latency
 	}
 }
 
@@ -1057,12 +1113,13 @@ func (coord *Coordinator) GetFeature() *Feature {
 			}
 		}
 	}
+	partVar = math.Sqrt(partVar)
+	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
 	coord.feature.PartAvg = partAvg
-	partVar = math.Sqrt(partVar)
 	coord.feature.PartVar = partVar
 	coord.feature.PartLenVar = partLenVar
-	coord.feature.PartConf = float64(summary.partAccess) / float64(summary.partSuccess)
+	coord.feature.PartConf = partConf
 	coord.feature.RecAvg = recAvg
 	//coord.feature.RecVar = recVar
 	coord.feature.HitRate = hitRate
