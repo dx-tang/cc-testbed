@@ -1,12 +1,5 @@
 package testbed
 
-// Number of Loaders for Index Partitioning
-// Number of Mergers for Index Merging
-const (
-	NLOADERS = 1
-	NMERGERS = 1
-)
-
 // TPCC Pre-allocation
 // Records Pre-allocated
 const (

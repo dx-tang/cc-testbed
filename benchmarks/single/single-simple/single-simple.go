@@ -85,7 +85,7 @@ func main() {
 
 	testbed.InitGlobalBuffer()
 
-	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps, testbed.PARTITION)
+	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps, testbed.PARTITION, false)
 	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SINGLEWL, single)
 
 	clog.Info("Done with Populating Store\n")
@@ -166,7 +166,7 @@ func main() {
 	defer f.Close()
 	coord.PrintStats(f)
 
-	execTime := coord.NTotal.Seconds() - coord.NExecute.Seconds()
+	execTime := coord.NTotal.Seconds() - coord.NGen.Seconds()
 	if *stat != "" {
 		st, err := os.OpenFile(*stat, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {

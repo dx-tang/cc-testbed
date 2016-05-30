@@ -258,6 +258,10 @@ func main() {
 			continue
 		}
 
+		if tmpMP == 1 && curCR > 0 {
+			continue
+		}
+
 		for {
 			if single == nil {
 				single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, curContention, *tp, float64(curCR), tmpTlen, tmpRR, tmpMP, curPS, testbed.PARTITION, double)

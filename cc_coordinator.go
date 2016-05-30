@@ -2,6 +2,7 @@ package testbed
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -15,6 +16,13 @@ import (
 
 const (
 	HEAD = 0
+)
+
+// Number of Loaders for Index Partitioning
+// Number of Mergers for Index Merging
+var (
+	NLOADERS = flag.Int("loaders", 1, "Number of Loaders")
+	NMERGERS = flag.Int("mergers", 1, "Number of Mergers")
 )
 
 type TestCase struct {
@@ -205,13 +213,13 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		indexActionACK: make([]chan bool, nWorkers),
 		indexDoneACK:   make([]chan bool, nWorkers),
 		indexActions:   make([]*IndexAction, nWorkers),
-		startLoader:    nWorkers - NLOADERS,
-		startMerger:    nWorkers - NMERGERS,
+		startLoader:    nWorkers - *NLOADERS,
+		startMerger:    nWorkers - *NMERGERS,
 		summary:        NewReportInfo(*NumPart, tableCount),
 		indexpart:      false,
 		testCases:      testCases,
 		curTest:        0,
-		isMerge:        true,
+		isMerge:        false,
 	}
 
 	if *Report {
@@ -340,6 +348,10 @@ func (coord *Coordinator) process() {
 	summary := coord.summary
 	var ri *ReportInfo
 	var indexChangeStart time.Time
+	timeFile, err := os.OpenFile("timeFile.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		clog.Error("%v", err)
+	}
 	startWorker := 0
 	for {
 		select {
@@ -363,7 +375,7 @@ func (coord *Coordinator) process() {
 
 			coord.rc++
 
-			if coord.indexpart {
+			if !coord.indexpart {
 				perWorker := 0
 				residue := 0
 				actionType := INDEX_ACTION_NONE
@@ -371,14 +383,14 @@ func (coord *Coordinator) process() {
 					clog.Info("Starting Index Merging")
 					actionType = INDEX_ACTION_MERGE
 					startWorker = coord.startMerger
-					perWorker = *NumPart / NMERGERS
-					residue = *NumPart % NMERGERS
+					perWorker = *NumPart / *NMERGERS
+					residue = *NumPart % *NMERGERS
 				} else {
 					clog.Info("Starting Index Partitioning")
 					actionType = INDEX_ACTION_PARTITION
 					startWorker = coord.startLoader
-					perWorker = *NumPart / NLOADERS
-					residue = *NumPart % NLOADERS
+					perWorker = *NumPart / *NLOADERS
+					residue = *NumPart % *NLOADERS
 				}
 				indexChangeStart = time.Now()
 				coord.indexpart = true
@@ -485,6 +497,7 @@ func (coord *Coordinator) process() {
 
 			coord.store.state = INDEX_NONE
 
+			timeFile.WriteString(fmt.Sprintf("%.4f\n", time.Since(indexChangeStart).Seconds()))
 			if coord.isMerge {
 				clog.Info("Done with Index Merging: %.3f", time.Since(indexChangeStart).Seconds())
 			} else {
