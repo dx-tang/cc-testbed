@@ -507,7 +507,6 @@ func (coord *Coordinator) process() {
 			}
 
 			for i := 0; i < len(coord.Workers); i++ {
-				coord.Workers[i].st.isPartition = !coord.Workers[i].st.isPartition
 				coord.Workers[i].indexConfirm <- true
 			}
 
@@ -627,6 +626,7 @@ func (coord *Coordinator) switchCC(mode int) {
 	for i := 0; i < len(coord.Workers); i++ {
 		<-coord.changeACK[i]
 	}
+	coord.store.SetMode(mode)
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].modeChan <- coord.mode
 	}

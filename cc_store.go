@@ -395,8 +395,9 @@ func (s *Store) GetValueBySec(tableID int, k Key, partNum int, val Value) error 
 
 func (s *Store) SetMode(mode int) {
 	s.mode = mode
-	for _, t := range s.priTables {
+	for i, t := range s.priTables {
 		t.SetMode(mode)
+		s.secTables[i].SetMode(mode)
 	}
 }
 

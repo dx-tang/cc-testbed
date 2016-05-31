@@ -183,10 +183,10 @@ func (pr *PRecord) DeltaValue(val Value, col int) {
 
 type ORecord struct {
 	padding1 [PADDING]byte
-	key      Key
 	tuple    Tuple
-	last     wfmutex.WFMutex
+	key      Key
 	table    Table
+	last     wfmutex.WFMutex
 	padding2 [PADDING]byte
 }
 
@@ -216,8 +216,6 @@ func (or *ORecord) GetKey() Key {
 }
 
 func (or *ORecord) SetValue(val Value, colNum int) {
-	//bt := or.table.valueSchema[colNum]
-	//setVal(bt, or.value[colNum], val)
 	or.tuple.SetValue(val, colNum)
 }
 
