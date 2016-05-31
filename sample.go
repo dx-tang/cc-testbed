@@ -111,6 +111,7 @@ type SampleTool struct {
 type ConfSample struct {
 	sampleAccess int
 	recBuf       []*ARecord
+	tableBuf     []int
 	trials       int
 	state        int
 	recRate      int
@@ -150,9 +151,13 @@ func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 
 	st.allSample.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
 	st.allSample.recBuf = st.allSample.recBuf[PADDINGINT64:PADDINGINT64]
+	st.allSample.tableBuf = make([]int, BUFSIZE+2*PADDINGINT)
+	st.allSample.tableBuf = st.allSample.tableBuf[PADDINGINT:PADDINGINT]
 
 	st.homeSample.recBuf = make([]*ARecord, BUFSIZE+2*PADDINGINT64)
 	st.homeSample.recBuf = st.homeSample.recBuf[PADDINGINT64:PADDINGINT64]
+	st.homeSample.tableBuf = make([]int, BUFSIZE+2*PADDINGINT)
+	st.homeSample.tableBuf = st.homeSample.tableBuf[PADDINGINT:PADDINGINT]
 
 	return st
 }
@@ -167,8 +172,8 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 
 	// We need acquire more locks
 	if sample.state == 0 {
-		for _, rec := range sample.recBuf {
-			if rec.key == key {
+		for i, rec := range sample.recBuf {
+			if rec.key == key && sample.tableBuf[i] == tableID {
 				return
 			}
 		}
@@ -187,17 +192,18 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 		n := len(sample.recBuf)
 		sample.recBuf = sample.recBuf[0 : n+1]
 		sample.recBuf[n] = tmpRec
+		sample.tableBuf = sample.tableBuf[0 : n+1]
+		sample.tableBuf[n] = tableID
 		if n+1 == BUFSIZE {
 			sample.state = 1
 		}
-
 		return
 	}
 
 	var ok bool = false
 	conf := int32(0)
-	for _, rec := range sample.recBuf {
-		if rec.key == key {
+	for i, rec := range sample.recBuf {
+		if rec.key == key && sample.tableBuf[i] == tableID {
 			ok = true
 			conf++
 		}
@@ -236,6 +242,7 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 			}
 		}
 		sample.recBuf = sample.recBuf[0:0]
+		sample.tableBuf = sample.tableBuf[0:0]
 	}
 
 	if isHome {

@@ -14,10 +14,6 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-const (
-	HEAD = 2
-)
-
 // Number of Loaders for Index Partitioning
 // Number of Mergers for Index Merging
 var (
@@ -494,8 +490,28 @@ func (coord *Coordinator) process() {
 				sb := coord.sbWL
 				if coord.isMerge {
 					sb.ResetPart(1, false)
+					sb.zp.Reconf(NOPARTSKEW)
+					for i := 0; i < len(sb.transGen); i++ {
+						tg := sb.transGen[i]
+						tg.validProb = sb.zp.GetProb(i)
+						tg.timeInit = false
+					}
+					basic := sb.GetBasicWL()
+					partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
+					basic.SetPartGen(partGens)
+					coord.ResetPart(false)
 				} else {
 					sb.ResetPart(*NumPart, true)
+					sb.zp.Reconf(coord.testCases[coord.curTest].PS)
+					for i := 0; i < len(sb.transGen); i++ {
+						tg := sb.transGen[i]
+						tg.validProb = sb.zp.GetProb(i)
+						tg.timeInit = false
+					}
+					basic := sb.GetBasicWL()
+					partGens := basic.NewPartGen(NOPARTSKEW)
+					basic.SetPartGen(partGens)
+					coord.ResetPart(true)
 				}
 			} else { // TPCCWL
 				tpccWL := coord.tpccWL

@@ -275,15 +275,12 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
+
 	rnd := s.rnd
 	gen := s.gen
 	cr := int(s.cr)
 	var pi int
-	/*if mode == PARTITION {
-		pi = s.partIndex
-	} else {
-		pi = rnd.Intn(s.nParts)
-	}*/
+
 	isPart := s.isPartition
 
 	if isPart {
@@ -301,6 +298,20 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	}
 
 	t.TXN = txn + SMALLBANKBASE
+
+	if isPart {
+		pi = s.partIndex
+	} else {
+		pi = gen.GenOnePart()
+	}
+
+	t.homePart = pi
+
+	if pi == s.partIndex {
+		t.home = true
+	} else {
+		t.home = false
+	}
 
 	var tmpPi int
 	switch t.TXN {
@@ -693,5 +704,16 @@ func (sb *SBWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr fl
 		tg.validProb = sb.zp.GetProb(i)
 		tg.timeInit = false
 		tg.Unlock()
+	}
+}
+
+func (sb *SBWorkload) Switch(nParts int, isPartition bool, tmpPS float64) {
+	sb.GetStore().Switch()
+	sb.ResetPart(nParts, isPartition)
+	sb.zp.Reconf(tmpPS)
+	for i := 0; i < len(sb.transGen); i++ {
+		tg := sb.transGen[i]
+		tg.validProb = sb.zp.GetProb(i)
+		tg.timeInit = false
 	}
 }

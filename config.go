@@ -65,3 +65,24 @@ var locking_wait bool = false
 const (
 	maxwaiters = 10
 )
+
+const (
+	TRAINPART = iota
+	TRAINOCCPART
+	TRAINOCCPURE
+	TRAININDEX
+	TESTING
+)
+
+const (
+	PCC = iota
+	OCCPART
+	LOCKPART
+	OCCSHARE
+	LOCKSHARE
+	TOTALCC
+)
+
+const (
+	HEAD = 0
+)
