@@ -42,11 +42,10 @@ class Single(object):
 			tmp.extend(columns[PARTAVG:PARTSKEW])
 			tmp.extend(columns[RECAVG:CONFRATE])
 			X.append(tmp)
-			if (columns[FEATURELEN] <= 2):
-				if (columns[FEATURELEN] == 0):
-					Y.extend([0])
-				else:
-					Y.extend([1])
+			if (columns[FEATURELEN] == 0):
+				Y.extend([0])
+			else:
+				Y.extend([1])
 		partclf = tree.DecisionTreeClassifier(max_depth=6)
 		partclf = partclf.fit(np.array(X), np.array(Y))
 		return partclf
@@ -79,6 +78,10 @@ class Single(object):
 			X.append(tmp)
 			if (columns[FEATURELEN] == 3):
 				Y.extend([3])
+				if len(columns[FEATURELEN:]) == 2:
+					if columns[FEATURELEN+1] == 4:
+						X.append(tmp)
+						Y.extend([4])
 			elif (columns[FEATURELEN] == 4):
 				Y.extend([4])
 		pureclf = tree.DecisionTreeClassifier(max_depth=4)
