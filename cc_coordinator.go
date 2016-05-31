@@ -194,6 +194,7 @@ type Coordinator struct {
 	indexChangeStart time.Time
 	potentialType    int
 	startWorker      int
+	justReconfig     bool
 	padding1         [PADDING]byte
 }
 
@@ -223,6 +224,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		testCases:      testCases,
 		curTest:        0,
 		isMerge:        false,
+		justReconfig:   false,
 	}
 
 	if *Report {
@@ -385,9 +387,11 @@ func (coord *Coordinator) process() {
 			coord.rc++
 
 			// Switch
-			if *SysType == ADAPTIVE {
-				if coord.store.state == INDEX_NONE {
+			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE {
+				if !coord.justReconfig {
 					coord.predict(summary)
+				} else {
+					coord.justReconfig = false
 				}
 			}
 
@@ -449,6 +453,8 @@ func (coord *Coordinator) process() {
 			}
 
 			coord.store.state = INDEX_NONE
+
+			coord.justReconfig = true
 
 			timeFile.WriteString(fmt.Sprintf("%.4f\n", time.Since(coord.indexChangeStart).Seconds()))
 			if coord.isMerge {
