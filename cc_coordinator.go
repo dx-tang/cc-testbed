@@ -588,7 +588,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 		curType += 2
 	}
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
-	clog.Info("Switching from %v to %v", curType, execType)
+	clog.Info("Switching from %v to %v, Conf %.4f, Home %.4f, Latency %.4f, PConf %.4f, PVar %.4f\n", curType, execType, confRate, homeConfRate, latency, partConf, partVar)
 
 	if execType > 2 { // Use Shared Index
 		if coord.store.isPartition { // Start Merging
@@ -691,28 +691,28 @@ func setReport(ri *ReportInfo, summary *ReportInfo) {
 	summary.genTime = ri.genTime
 
 	if *SysType == ADAPTIVE {
-		summary.txnSample += ri.txnSample
+		summary.txnSample = ri.txnSample
 
 		for i, ps := range ri.partStat {
-			summary.partStat[i] += ps
+			summary.partStat[i] = ps
 		}
 
 		for i, rs := range ri.recStat {
-			summary.recStat[i] += rs
+			summary.recStat[i] = rs
 		}
 
-		summary.readCount += ri.readCount
-		summary.writeCount += ri.writeCount
+		summary.readCount = ri.readCount
+		summary.writeCount = ri.writeCount
 
-		summary.accessCount += ri.accessCount
-		summary.accessHomeCount += ri.accessHomeCount
-		summary.conflicts += ri.conflicts
-		summary.homeConflicts += ri.homeConflicts
+		summary.accessCount = ri.accessCount
+		summary.accessHomeCount = ri.accessHomeCount
+		summary.conflicts = ri.conflicts
+		summary.homeConflicts = ri.homeConflicts
 
-		summary.partAccess += ri.partAccess
-		summary.partSuccess += ri.partSuccess
+		summary.partAccess = ri.partAccess
+		summary.partSuccess = ri.partSuccess
 
-		summary.latency += ri.latency
+		summary.latency = ri.latency
 	}
 }
 
