@@ -106,7 +106,7 @@ func main() {
 
 	outDetail := false
 
-	var occFile, lockFile, pccFile *os.File
+	var occFile, lockFile, pccFile, occPureFile, lockPureFile *os.File
 
 	if outDetail {
 		occFile, err = os.OpenFile("occ.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
@@ -124,9 +124,21 @@ func main() {
 			clog.Error("Open File Error %s\n", err.Error())
 		}
 
+		occPureFile, err = os.OpenFile("occpure.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+
+		lockPureFile, err = os.OpenFile("2plpure.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+
 		defer occFile.Close()
 		defer lockFile.Close()
 		defer pccFile.Close()
+		defer occPureFile.Close()
+		defer lockPureFile.Close()
 	}
 
 	if tm < testbed.TRAINPART || tm > testbed.TESTING {
@@ -212,7 +224,7 @@ func main() {
 
 			// Single Pruning
 			tp := strings.Split(tmpTP, ":")
-			if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 {
+			if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 && tm <= testbed.TRAINOCCPART {
 				break
 			}
 
@@ -284,7 +296,7 @@ func main() {
 				}
 			}
 
-			if outDetail && tm != testbed.TESTING && tm != testbed.TRAININDEX {
+			if outDetail {
 				outF := &testbed.Feature{}
 				for i := 0; i < testbed.TOTALCC; i++ {
 					outF.Reset()
@@ -299,7 +311,6 @@ func main() {
 						if i < testbed.OCCSHARE || i > testbed.LOCKSHARE {
 							continue
 						}
-						outIndex = i - 2
 					} else if tm == testbed.TRAINPART {
 						if i > testbed.LOCKPART {
 							continue
@@ -315,10 +326,14 @@ func main() {
 						outFile = pccFile
 					} else if outIndex == 1 {
 						outFile = occFile
-					} else {
+					} else if outIndex == 2 {
 						outFile = lockFile
+					} else if outIndex == 3 {
+						outFile = occPureFile
+					} else {
+						outFile = lockPureFile
 					}
-					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", curCR, ft[i][1].Txn, ft[i][1].AR, outF.HomeConfRate, outF.ConfRate, outF.Latency, outF.PartConf))
+					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", curCR, ft[i][1].Txn, ft[i][1].AR, outF.HomeConfRate, outF.ConfRate, outF.Latency, outF.PartConf, outF.PartVar))
 				}
 			}
 
