@@ -70,7 +70,15 @@ func main() {
 			clog.Info("Using 2PL\n")
 		}
 	} else if *testbed.SysType == testbed.ADAPTIVE {
-		clog.Info("Using Adaptive CC\n")
+		if *isPart {
+			initMode = testbed.PARTITION
+			clog.Info("Using Adaptive CC: Starting from PCC")
+		} else {
+			nParts = 1
+			isPartition = false
+			initMode = testbed.LOCKING
+			clog.Info("Using Adaptive CC: Starting from 2PL")
+		}
 	} else {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
@@ -102,7 +110,7 @@ func main() {
 	tc := &testCases[0]
 
 	clog.Info("Populating Whole Store\n")
-	sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tc.Contention, tc.SBTransper, tc.CR, tc.PS, initMode)
+	sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tc.Contention, tc.SBTransper, tc.CR, tc.PS, initMode, false)
 	coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, testCases, *nsecs, testbed.SMALLBANKWL, sb)
 
 	if *prof {

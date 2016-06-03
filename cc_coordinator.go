@@ -242,7 +242,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				occFile := CLASSIFERPATH + "/" + SINGLEOCCTRAIN
 				pureFile := CLASSIFERPATH + "/" + SINGLEPURETRAIN
 				indexFile := CLASSIFERPATH + "/" + SINGLEINDEXTRAIN
-				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile)
+				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, SINGLEWL)
 			}
 			coordinator.singleWL = wl.(*SingelWorkload)
 			single := coordinator.singleWL
@@ -272,7 +272,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				occFile := CLASSIFERPATH + "/" + SBOCCTRAIN
 				pureFile := CLASSIFERPATH + "/" + SBPURETRAIN
 				indexFile := CLASSIFERPATH + "/" + SBINDEXTRAIN
-				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile)
+				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, SMALLBANKWL)
 			}
 			coordinator.sbWL = wl.(*SBWorkload)
 			sb := coordinator.sbWL
@@ -302,7 +302,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				occFile := CLASSIFERPATH + "/" + TPCCOCCTRAIN
 				pureFile := CLASSIFERPATH + "/" + TPCCPURETRAIN
 				indexFile := CLASSIFERPATH + "/" + TPCCINDEXTRAIN
-				coordinator.clf = classifier.NewSingleClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile)
+				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, TPCCWL)
 			}
 			coordinator.tpccWL = wl.(*TPCCWorkload)
 			tpccWL := coordinator.tpccWL

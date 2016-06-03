@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.multiclass import OneVsRestClassifier
 import math
 
-FEATURESTART = 7
+FEATURESTART = 5
 FEATURELEN = 7
 PARTAVG = 0
 PARTSKEW = 1
@@ -19,7 +19,7 @@ CONFRATE = 6
 
 threshold = 0
 
-class Single(object):
+class Smallbank(object):
 
 	def __init__(self, partFile, occFile, pureFile, indexFile):
 		self.partclf = self.PartTrain(partFile)
@@ -99,15 +99,24 @@ class Single(object):
 			tmp.extend(columns[PARTAVG:RECAVG])
 			tmp.extend(columns[LATENCY:READRATE])
 			tmp.extend(columns[HOMECONF:CONFRATE])
-			X.append(tmp)
-			if (columns[FEATURELEN] <= 2):
+			ok1 = 0
+			ok2 = 0
+			for _, y in enumerate(columns[FEATURELEN:]):
+				if y <= 2:
+					ok1 = 1
+				if y > 2:
+					ok2 = 1
+			if ok1 == 1:
+				X.append(tmp)
 				Y.extend([0])
-			else:
+			if ok2 == 1:
+				X.append(tmp)
 				Y.extend([1])
 
 		indexclf = tree.DecisionTreeClassifier(max_depth=4)
 		indexclf = indexclf.fit(np.array(X), np.array(Y))
 		return indexclf
+
 
 	def Predict(self, curType, partAvg, partSkew, recAvg, latency, readRate, homeconf, confRate):
 		testIndex = [[partAvg, partSkew, latency, homeconf]]

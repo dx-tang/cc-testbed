@@ -9,6 +9,12 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+const (
+	SINGLEWL = iota
+	SMALLBANKWL
+	TPCCWL
+)
+
 type Classifier interface {
 	Predict(curType int, partAvg float64, partSkew float64, recAvg float64, latency float64, readRate float64, homeConf float64, confRate float64) int
 	GetIndexProb() float64
@@ -24,7 +30,7 @@ type SingleClassifier struct {
 	padding2 [64]byte
 }
 
-func NewSingleClassifier(path string, partFile string, occFile string, pureFile string, indexFile string) *SingleClassifier {
+func NewClassifier(path string, partFile string, occFile string, pureFile string, indexFile string, WLTYPE int) Classifier {
 	addPath := "sys.path.append('" + path + "')"
 	C.Init(C.CString(addPath))
 	sc := &SingleClassifier{}
@@ -32,10 +38,18 @@ func NewSingleClassifier(path string, partFile string, occFile string, pureFile 
 	occ := C.CString(occFile)
 	pure := C.CString(pureFile)
 	index := C.CString(indexFile)
-	sc.clf = C.Train(part, occ, pure, index)
-	if sc.clf == nil {
-		clog.Error("Training Error")
+	if WLTYPE == SINGLEWL {
+		sc.clf = C.SingleTrain(part, occ, pure, index)
+		if sc.clf == nil {
+			clog.Error("Training Error")
+		}
+	} else {
+		sc.clf = C.SBTrain(part, occ, pure, index)
+		if sc.clf == nil {
+			clog.Error("Training Error")
+		}
 	}
+
 	return sc
 }
 

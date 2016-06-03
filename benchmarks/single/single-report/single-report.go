@@ -79,8 +79,8 @@ func main() {
 		} else {
 			nParts = 1
 			isPartition = false
-			initMode = testbed.OCC
-			clog.Info("Using Adaptive CC: Starting from OCC")
+			initMode = testbed.LOCKING
+			clog.Info("Using Adaptive CC: Starting from 2PL")
 		}
 	} else {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)

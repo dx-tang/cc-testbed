@@ -6,7 +6,7 @@ void Init(char *addPath) {
     PyRun_SimpleString(addPath); 
 }
 
-PyObject* Train(char *partFile, char *occFile, char *pureFile, char *indexFile) {
+PyObject* SingleTrain(char *partFile, char *occFile, char *pureFile, char *indexFile) {
     PyObject *pModule = NULL, *pDict = NULL, *pClass = NULL, *pInstance = NULL, *pArg = NULL;
 
     pModule = PyImport_ImportModule("single-classifier");
@@ -20,6 +20,29 @@ PyObject* Train(char *partFile, char *occFile, char *pureFile, char *indexFile) 
     }
 
     pClass = PyDict_GetItemString(pDict, "Single");
+    if (pDict == NULL) {
+        return NULL;
+    }
+
+    pArg = Py_BuildValue("(s,s,s,s)", partFile, occFile, pureFile, indexFile);
+    pInstance = PyObject_CallObject(pClass, pArg);
+    return pInstance;
+}
+
+PyObject* SBTrain(char *partFile, char *occFile, char *pureFile, char *indexFile) {
+    PyObject *pModule = NULL, *pDict = NULL, *pClass = NULL, *pInstance = NULL, *pArg = NULL;
+
+    pModule = PyImport_ImportModule("sb-classifier");
+    if (pModule == NULL) {
+        return NULL;
+    }
+
+    pDict = PyModule_GetDict(pModule);
+    if (pDict == NULL) {
+        return NULL;
+    }
+
+    pClass = PyDict_GetItemString(pDict, "Smallbank");
     if (pDict == NULL) {
         return NULL;
     }
