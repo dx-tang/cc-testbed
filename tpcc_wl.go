@@ -554,6 +554,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 
 	start = time.Now()
 
+	clog.Info("Begin Loading Data")
 	var rowBytes []byte
 	var k Key
 	var partNum int
@@ -621,7 +622,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 						iRecs[0].rec = rec
 						store.tables[i].InsertRecord(iRecs)
 					}*/
-					store.priTables[i].CreateRecByID(k, partNum, tuple)
+					//store.priTables[i].CreateRecByID(k, partNum, tuple)
+					store.CreateRecByID(i, k, partNum, tuple)
 				}
 				df.Close()
 			}
