@@ -106,12 +106,15 @@ class Smallbank(object):
 					ok1 = 1
 				if y > 2:
 					ok2 = 1
-			if ok1 == 1:
-				X.append(tmp)
-				Y.extend([0])
+			#if ok1 == 1:
+			#	X.append(tmp)
+			#	Y.extend([0])
 			if ok2 == 1:
 				X.append(tmp)
 				Y.extend([1])
+			else:
+				X.append(tmp)
+				Y.extend([0])
 
 		indexclf = tree.DecisionTreeClassifier(max_depth=4)
 		indexclf = indexclf.fit(np.array(X), np.array(Y))

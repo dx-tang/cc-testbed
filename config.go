@@ -3,18 +3,18 @@ package testbed
 // TPCC Pre-allocation
 // Records Pre-allocated
 const (
-	ORDER_PER_ALLOC     = 30000
-	ORDERLINE_PER_ALLOC = 300000
+	ORDER_PER_ALLOC     = 1000000
+	ORDERLINE_PER_ALLOC = 10000000
 	HISTORY_PER_ALLOC   = 10000
 )
 
 // Index Pre-allocation
 const (
-	ORDER_INDEX_PER_ALLOC     = 30
-	ORDER_SECINDEX_PER_ALLOC  = 30
-	ORDERLINE_INDEX_PER_ALLOC = 300
-	HISTORY_INDEX_PER_ALLOC   = 100 // History Bucket Number 256
-	NEWORDER_INDEX_PER_ALLOC  = 300 // NewOrder Bucket Number warehouse*dist_count
+	ORDER_INDEX_PER_ALLOC     = 200000
+	ORDER_SECINDEX_PER_ALLOC  = 200000
+	ORDERLINE_INDEX_PER_ALLOC = 200000
+	HISTORY_INDEX_PER_ALLOC   = 100  // History Bucket Number 256
+	NEWORDER_INDEX_PER_ALLOC  = 1000 // NewOrder Bucket Number warehouse*dist_count
 )
 
 // Entry Size for Customized HashTable

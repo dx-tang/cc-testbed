@@ -517,8 +517,26 @@ func (coord *Coordinator) process() {
 				tpccWL := coord.tpccWL
 				if coord.isMerge {
 					tpccWL.ResetPart(1, false)
+					tpccWL.zp.Reconf(NOPARTSKEW)
+					for i := 0; i < len(tpccWL.transGen); i++ {
+						tg := &tpccWL.transGen[i]
+						tg.validProb = tpccWL.zp.GetProb(i)
+						tg.timeInit = false
+					}
+					partGens := tpccWL.NewPartGen(coord.testCases[coord.curTest].PS)
+					tpccWL.SetPartGens(partGens)
+					coord.ResetPart(false)
 				} else {
 					tpccWL.ResetPart(*NumPart, true)
+					tpccWL.zp.Reconf(coord.testCases[coord.curTest].PS)
+					for i := 0; i < len(tpccWL.transGen); i++ {
+						tg := &tpccWL.transGen[i]
+						tg.validProb = tpccWL.zp.GetProb(i)
+						tg.timeInit = false
+					}
+					partGens := tpccWL.NewPartGen(NOPARTSKEW)
+					tpccWL.SetPartGens(partGens)
+					coord.ResetPart(true)
 				}
 			}
 

@@ -523,7 +523,7 @@ type TPCCWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int) *TPCCWorkload {
+func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int, double bool) *TPCCWorkload {
 	tpccWL := &TPCCWorkload{}
 
 	if nParts == 1 {
@@ -539,7 +539,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	tpccWL.transPercentage = transPercentage
 
 	start := time.Now()
-	tpccWL.store = NewStore(workload, nParts, isPartition, initMode, false)
+	tpccWL.store = NewStore(workload, nParts, isPartition, initMode, double)
 	clog.Info("Building Store %.2fs \n", time.Since(start).Seconds())
 
 	tpccWL.nWorkers = nWorkers
@@ -863,6 +863,10 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		table.Reset()
 	}
 
+	for _, table := range tpccWL.store.secTables {
+		table.Reset()
+	}
+
 	for _, w := range coord.Workers {
 		w.iaAR[ORDER].Reset()
 		w.iaAR[ORDERLINE].Reset()
@@ -874,6 +878,17 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 	debug.FreeOSMemory()
 	debug.SetGCPercent(-1)
 
+}
+
+func (tpccWL *TPCCWorkload) Switch(nParts int, isPartition bool, tmpPS float64) {
+	tpccWL.store.Switch()
+	tpccWL.ResetPart(nParts, isPartition)
+	tpccWL.zp.Reconf(tmpPS)
+	for i := 0; i < len(tpccWL.transGen); i++ {
+		tg := &tpccWL.transGen[i]
+		tg.validProb = tpccWL.zp.GetProb(i)
+		tg.timeInit = false
+	}
 }
 
 func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, cr float64, transper [TPCCTRANSNUM]int, ps float64) {

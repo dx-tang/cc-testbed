@@ -72,15 +72,6 @@ func main() {
 
 	testbed.InitGlobalBuffer()
 
-	if *prof {
-		f, err := os.Create("smallbank.prof")
-		if err != nil {
-			clog.Error(err.Error())
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
 	var fPart, fMerge, fWhole *os.File
 	var err error
 
@@ -251,6 +242,14 @@ func main() {
 			if sb == nil {
 				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, sbTranPer, float64(curCR), curPS, testbed.PARTITION, double)
 				coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SMALLBANKWL, sb)
+				if *prof {
+					f, err := os.Create("smallbank.prof")
+					if err != nil {
+						clog.Error(err.Error())
+					}
+					pprof.StartCPUProfile(f)
+					defer pprof.StopCPUProfile()
+				}
 			} else {
 				basic := sb.GetBasicWL()
 				keyGens, ok := keyGenPool[tmpContention]
