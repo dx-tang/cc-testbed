@@ -10,8 +10,8 @@ var Spec = flag.Bool("spec", false, "Whether Speculatively Indicate MayWrite")
 
 const (
 	MAXTABLENUM    = 20
-	MAXCOLUMN      = 20
-	MAXTRACKINGKEY = 250
+	MAXCOLUMN      = 100
+	MAXTRACKINGKEY = 100
 )
 
 type ETransaction interface {
