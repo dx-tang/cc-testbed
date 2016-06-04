@@ -265,6 +265,9 @@ func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Rec
 		return nil, err
 	}
 	if s.double {
+		if WLTYPE == TPCCWL && (tableID == ITEM || tableID == HISTORY) {
+			return rec, err
+		}
 		_, err1 := s.secTables[tableID].CreateRecByID(k, partNum, tuple)
 		if err1 != nil {
 			return nil, err1

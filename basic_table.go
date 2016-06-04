@@ -151,6 +151,9 @@ func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, er
 	}
 
 	if _, ok := shard.rows[k]; ok {
+		if !bt.isPartition {
+			shard.Unlock()
+		}
 		return nil, EDUPKEY //One record with that key has existed;
 	}
 
