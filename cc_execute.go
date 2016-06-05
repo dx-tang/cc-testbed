@@ -16,7 +16,7 @@ const (
 
 type ETransaction interface {
 	Reset(t Trans)
-	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error)
+	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error)
 	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error
 	MayWrite(tableID int, k Key, partNum int, req *LockReq) error
 	InsertRecord(tableID int, k Key, partNum int, rec Record) error
@@ -99,7 +99,7 @@ func (p *PTransaction) Reset(t Trans) {
 
 }
 
-func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
 	if *SysType == ADAPTIVE {
 		if p.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
@@ -140,7 +140,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 		if wr.k == k {
 			for p := len(wr.cols) - 1; p >= 0; p-- {
 				if colNum == wr.cols[p] {
-					return wr.vals[p], false, nil
+					return wr.rec, wr.vals[p], false, nil
 				}
 			}
 			break
@@ -148,11 +148,13 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	s := p.s
-	err := s.GetValueByID(tableID, k, partNum, val, colNum)
+	//err := s.GetValueByID(tableID, k, partNum, val, colNum)
+	rec, err := s.GetRecByID(tableID, k, partNum)
 	if err != nil {
-		return nil, true, err
+		return nil, nil, true, err
 	}
-	return val, true, nil
+	rec.GetValue(val, colNum)
+	return rec, val, true, nil
 }
 
 func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error {
@@ -487,7 +489,7 @@ func (o *OTransaction) Reset(t Trans) {
 
 }
 
-func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
 	transExec := o
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
@@ -537,7 +539,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			r = wk.rec
 			for p := len(wk.cols) - 1; p >= 0; p-- {
 				if colNum == wk.cols[p] {
-					return wk.vals[p], false, nil
+					return wk.rec, wk.vals[p], false, nil
 				}
 			}
 			break
@@ -552,17 +554,17 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			if !ok {
 				o.Abort(req)
 				o.w.NStats[NREADABORTS]++
-				return nil, true, EABORT
+				return nil, nil, true, EABORT
 			}
 			rk.rec.GetValue(val, colNum)
-			return val, true, nil
+			return rk.rec, val, true, nil
 		}
 	}
 
 	if r == nil {
 		r, err = o.s.GetRecByID(tableID, k, partNum)
 		if err != nil {
-			return nil, true, ENOKEY
+			return nil, nil, true, ENOKEY
 		}
 	}
 
@@ -575,7 +577,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	if !ok {
 		o.Abort(req)
 		o.w.NStats[NREADABORTS]++
-		return nil, true, EABORT
+		return nil, nil, true, EABORT
 	}
 
 	n := len(t.rKeys)
@@ -585,7 +587,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	t.rKeys[n].rec = r
 
 	r.GetValue(val, colNum)
-	return val, true, nil
+	return r, val, true, nil
 }
 
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error {
@@ -1040,7 +1042,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 func (l *LTransaction) Reset(t Trans) {
 }
 
-func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Value, bool, error) {
+func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
 	transExec := l
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
@@ -1089,7 +1091,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			ok = true
 			for p := len(wr.cols) - 1; p >= 0; p-- {
 				if colNum == wr.cols[p] {
-					return wr.vals[p], false, nil
+					return wr.rec, wr.vals[p], false, nil
 				}
 			}
 			break
@@ -1098,7 +1100,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	// Has been Locked
 	if ok {
 		wr.rec.GetValue(val, colNum)
-		return val, true, nil
+		return wr.rec, val, true, nil
 	}
 
 	var rec Record
@@ -1114,19 +1116,19 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	if ok {
 		//return rr.rec.GetValue(colNum), true, nil
 		rr.rec.GetValue(val, colNum)
-		return val, true, nil
+		return rr.rec, val, true, nil
 	}
 
 	// Try RLock
 	rec, err = l.s.GetRecByID(tableID, k, partNum)
 	if err != nil {
-		return nil, true, err
+		return nil, nil, true, err
 	}
 
 	if !rec.RLock(req) {
 		w.NStats[NRLOCKABORTS]++
 		l.Abort(req)
-		return nil, true, EABORT
+		return nil, nil, true, EABORT
 	}
 
 	//clog.Info("Worker %v: Trans %v RLock Table %v; Key %v Success\n", w.ID, w.NStats[NTXN], tableID, ParseKey(k, 0))
@@ -1139,7 +1141,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	rt.rRecs[n].exist = true
 
 	rec.GetValue(val, colNum)
-	return val, true, nil
+	return rec, val, true, nil
 }
 
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error {
