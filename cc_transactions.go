@@ -171,6 +171,8 @@ func (tq *TransQueue) Dequeue() Trans {
 func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	noTrans := t.(*NewOrderTrans)
 
+	store := exec.Store()
+
 	distRead := false
 	var k Key
 
@@ -275,7 +277,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	for i := 0; i < int(noTrans.ol_cnt); i++ {
 		k[0] = noTrans.ol_i_id[i]
-		rec, err = exec.GetRecord(ITEM, k, 0, req, t.isHome())
+		rec, err = store.GetRecByID(ITEM, k, 0)
 		if err != nil {
 			return nil, err
 		}

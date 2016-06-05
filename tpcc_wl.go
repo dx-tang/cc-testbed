@@ -288,6 +288,14 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 		t.w_id = w_id_gen.GetWholeRank()
 	}
 
+	t.homePart = t.w_id
+
+	if t.homePart == pi {
+		t.home = true
+	} else {
+		t.home = false
+	}
+
 	if rnd.Intn(100) < cr {
 		t.accessParts = t.accessParts[:2]
 		for {
@@ -350,6 +358,14 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	}
 
 	tmpPi := t.w_id
+
+	t.homePart = t.w_id
+
+	if t.homePart == pi {
+		t.home = true
+	} else {
+		t.home = false
+	}
 
 	if rnd.Intn(100) < cr {
 		t.accessParts = t.accessParts[:2]
@@ -439,6 +455,14 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 		t.w_id = w_id_gen.GetWholeRank()
 	}
 
+	t.homePart = t.w_id
+
+	if t.homePart == pi {
+		t.home = true
+	} else {
+		t.home = false
+	}
+
 	if isLast {
 		dist_cust := c_last_gen.GetWholeRank()
 		t.d_id = dist_cust / C_LAST_PER_DIST
@@ -496,6 +520,15 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
 	} else {
 		t.w_id = w_id_gen.GetWholeRank()
 	}
+
+	t.homePart = t.w_id
+
+	if t.homePart == pi {
+		t.home = true
+	} else {
+		t.home = false
+	}
+
 	t.d_id = rnd.Intn(DIST_COUNT)
 	t.threshold = 10 + rnd.Intn(11)
 	t.i_id_ar = t.i_id_ar[:0]
