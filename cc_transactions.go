@@ -172,6 +172,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	noTrans := t.(*NewOrderTrans)
 
 	store := exec.Store()
+	table := store.priTables[ITEM].(*BasicTable)
 
 	distRead := false
 	var k Key
@@ -277,10 +278,8 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	for i := 0; i < int(noTrans.ol_cnt); i++ {
 		k[0] = noTrans.ol_i_id[i]
-		rec, err = store.priTables[ITEM].GetRecByID(k, 0)
-		if err != nil {
-			return nil, err
-		}
+		shard := table.data[0].shardedMap[table.shardHash(k)]
+		rec = shard.rows[k]
 		iTuple := rec.GetTuple().(*ItemTuple)
 
 		sKey[0] = noTrans.ol_supply_w_id[i]
