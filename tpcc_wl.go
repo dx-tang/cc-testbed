@@ -945,6 +945,8 @@ func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, 
 }
 
 func (tpccWL *TPCCWorkload) ResetPart(nParts int, isPartition bool) {
+	tpccWL.store.isPartition = isPartition
+	tpccWL.isPartition = isPartition
 	for i := 0; i < tpccWL.nWorkers; i++ {
 		tg := &tpccWL.transGen[i]
 		//tg.nParts = nParts
