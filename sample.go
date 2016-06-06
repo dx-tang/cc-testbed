@@ -29,10 +29,10 @@ type ReportInfo struct {
 	readCount       int64
 	writeCount      int64
 	hits            int64
-	accessCount     int64
-	conflicts       int64
-	accessHomeCount int64
-	homeConflicts   int64
+	accessCount     []int64
+	conflicts       []int64
+	accessHomeCount []int64
+	homeConflicts   []int64
 	partAccess      int64
 	partSuccess     int64
 	latency         int64
@@ -58,16 +58,17 @@ func (ri *ReportInfo) Reset() {
 
 	for i, _ := range ri.recStat {
 		ri.recStat[i] = 0
+		ri.accessCount[i] = 0
+		ri.accessHomeCount[i] = 0
+		ri.conflicts[i] = 0
+		ri.homeConflicts[i] = 0
+
 	}
 
 	ri.readCount = 0
 	ri.writeCount = 0
 	ri.txnSample = 0
 
-	ri.accessCount = 0
-	ri.accessHomeCount = 0
-	ri.conflicts = 0
-	ri.homeConflicts = 0
 	ri.hits = 0
 
 	ri.partAccess = 0
@@ -85,6 +86,18 @@ func NewReportInfo(nParts int, tableCount int) *ReportInfo {
 
 	ri.recStat = make([]int64, 2*PADDINGINT64+tableCount)
 	ri.recStat = ri.recStat[PADDINGINT64 : PADDINGINT64+tableCount]
+
+	ri.accessCount = make([]int64, 2*PADDINGINT64+tableCount)
+	ri.accessCount = ri.accessCount[PADDINGINT64 : PADDINGINT64+tableCount]
+
+	ri.conflicts = make([]int64, 2*PADDINGINT64+tableCount)
+	ri.conflicts = ri.conflicts[PADDINGINT64 : PADDINGINT64+tableCount]
+
+	ri.accessHomeCount = make([]int64, 2*PADDINGINT64+tableCount)
+	ri.accessHomeCount = ri.accessHomeCount[PADDINGINT64 : PADDINGINT64+tableCount]
+
+	ri.homeConflicts = make([]int64, 2*PADDINGINT64+tableCount)
+	ri.homeConflicts = ri.homeConflicts[PADDINGINT64 : PADDINGINT64+tableCount]
 
 	return ri
 }
@@ -246,11 +259,11 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 	}
 
 	if isHome {
-		ri.accessHomeCount++
-		ri.homeConflicts += int64(conf)
+		ri.accessHomeCount[tableID]++
+		ri.homeConflicts[tableID] += int64(conf)
 	} else {
-		ri.accessCount++
-		ri.conflicts += int64(conf)
+		ri.accessCount[tableID]++
+		ri.conflicts[tableID] += int64(conf)
 	}
 }
 
@@ -346,11 +359,11 @@ func (st *SampleTool) onePartSample(ap []int, ri *ReportInfo, pi int) {
 
 func (st *SampleTool) oneAccessSample(conflict bool, ri *ReportInfo) {
 
-	if conflict {
+	/*if conflict {
 		ri.conflicts++
 	} else {
 		ri.accessCount++
-	}
+	}*/
 
 }
 

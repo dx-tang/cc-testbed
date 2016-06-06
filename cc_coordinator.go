@@ -589,11 +589,15 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	var confRate float64
 	var homeConfRate float64
 
-	homeConfRate = float64(summary.homeConflicts*100) / float64(summary.accessHomeCount)
+	for i, _ := range summary.homeConflicts {
+		homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
+	}
 	if coord.store.isPartition {
 		confRate = homeConfRate
 	} else {
-		confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
+		for i, _ := range summary.conflicts {
+			confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+		}
 	}
 
 	latency := float64(summary.latency) / float64(summary.readCount+summary.writeCount)
@@ -744,10 +748,12 @@ func setReport(ri *ReportInfo, summary *ReportInfo) {
 		summary.readCount = ri.readCount
 		summary.writeCount = ri.writeCount
 
-		summary.accessCount = ri.accessCount
-		summary.accessHomeCount = ri.accessHomeCount
-		summary.conflicts = ri.conflicts
-		summary.homeConflicts = ri.homeConflicts
+		for i, _ := range ri.accessCount {
+			summary.accessCount[i] = ri.accessCount[i]
+			summary.accessHomeCount[i] = ri.accessHomeCount[i]
+			summary.conflicts[i] = ri.conflicts[i]
+			summary.homeConflicts[i] = ri.homeConflicts[i]
+		}
 
 		summary.partAccess = ri.partAccess
 		summary.partSuccess = ri.partSuccess
@@ -776,10 +782,12 @@ func collectReport(ri *ReportInfo, summary *ReportInfo) {
 		summary.readCount += ri.readCount
 		summary.writeCount += ri.writeCount
 
-		summary.accessCount += ri.accessCount
-		summary.accessHomeCount += ri.accessHomeCount
-		summary.conflicts += ri.conflicts
-		summary.homeConflicts += ri.homeConflicts
+		for i, _ := range ri.accessCount {
+			summary.accessCount[i] += ri.accessCount[i]
+			summary.accessHomeCount[i] += ri.accessHomeCount[i]
+			summary.conflicts[i] += ri.conflicts[i]
+			summary.homeConflicts[i] += ri.homeConflicts[i]
+		}
 
 		summary.partAccess += ri.partAccess
 		summary.partSuccess += ri.partSuccess
@@ -1072,10 +1080,12 @@ func (coord *Coordinator) GetFeature() *Feature {
 		summary.writeCount += master.writeCount
 		summary.hits += master.hits
 
-		summary.accessCount += master.accessCount
-		summary.accessHomeCount += master.accessHomeCount
-		summary.conflicts += master.conflicts
-		summary.homeConflicts += master.homeConflicts
+		for i, _ := range master.accessCount {
+			summary.accessCount[i] += master.accessCount[i]
+			summary.accessHomeCount[i] += master.accessHomeCount[i]
+			summary.conflicts[i] += master.conflicts[i]
+			summary.homeConflicts[i] += master.homeConflicts[i]
+		}
 
 		summary.partAccess += master.partAccess
 		summary.partSuccess += master.partSuccess
@@ -1129,11 +1139,15 @@ func (coord *Coordinator) GetFeature() *Feature {
 	var confRate float64
 	var homeConfRate float64
 
-	homeConfRate = float64(summary.homeConflicts*100) / float64(summary.accessHomeCount)
+	for i, _ := range summary.homeConflicts {
+		homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
+	}
 	if coord.store.isPartition {
 		confRate = homeConfRate
 	} else {
-		confRate = float64(summary.conflicts*100) / float64(summary.accessCount)
+		for i, _ := range summary.conflicts {
+			confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+		}
 	}
 
 	latency := float64(summary.latency) / float64(summary.readCount+summary.writeCount)
