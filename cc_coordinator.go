@@ -1161,21 +1161,26 @@ func (coord *Coordinator) GetFeature() *Feature {
 	latency := float64(summary.latency) / float64(summary.readCount+summary.writeCount)
 
 	if !coord.store.isPartition {
-		if latency <= 350 {
-			latency -= 80
-		} else if latency <= 650 {
-			if coord.mode == 1 {
+		if WLTYPE != TPCCWL {
+			if latency <= 350 {
 				latency -= 80
+			} else if latency <= 650 {
+				if coord.mode == 1 {
+					latency -= 80
+				} else {
+					latency -= 100
+				}
 			} else {
-				latency -= 100
+				if coord.mode == 1 {
+					latency -= 100
+				} else {
+					latency -= 150
+				}
 			}
 		} else {
-			if coord.mode == 1 {
-				latency -= 100
-			} else {
-				latency -= 150
-			}
+			latency -= 40
 		}
+
 	}
 	partVar = math.Sqrt(partVar)
 	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
