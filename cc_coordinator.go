@@ -590,13 +590,17 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	var homeConfRate float64
 
 	for i, _ := range summary.homeConflicts {
-		homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
+		if summary.accessHomeCount[i] != 0 {
+			homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
+		}
 	}
 	if coord.store.isPartition {
 		confRate = homeConfRate
 	} else {
 		for i, _ := range summary.conflicts {
-			confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+			if summary.accessCount[i] != 0 {
+				confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+			}
 		}
 	}
 
@@ -1140,13 +1144,17 @@ func (coord *Coordinator) GetFeature() *Feature {
 	var homeConfRate float64
 
 	for i, _ := range summary.homeConflicts {
-		homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
+		if summary.accessHomeCount[i] != 0 {
+			homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
+		}
 	}
 	if coord.store.isPartition {
 		confRate = homeConfRate
 	} else {
 		for i, _ := range summary.conflicts {
-			confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+			if summary.accessCount[i] != 0 {
+				confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+			}
 		}
 	}
 
