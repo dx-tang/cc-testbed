@@ -604,7 +604,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 		}
 	}
 
-	latency := float64(summary.latency) / float64(summary.readCount+summary.writeCount)
+	latency := float64(summary.latency) / float64(summary.totalCount)
 
 	if !coord.store.isPartition {
 		if latency <= 350 {
@@ -751,6 +751,7 @@ func setReport(ri *ReportInfo, summary *ReportInfo) {
 
 		summary.readCount = ri.readCount
 		summary.writeCount = ri.writeCount
+		summary.totalCount = ri.totalCount
 
 		for i, _ := range ri.accessCount {
 			summary.accessCount[i] = ri.accessCount[i]
@@ -785,6 +786,7 @@ func collectReport(ri *ReportInfo, summary *ReportInfo) {
 
 		summary.readCount += ri.readCount
 		summary.writeCount += ri.writeCount
+		summary.totalCount += ri.totalCount
 
 		for i, _ := range ri.accessCount {
 			summary.accessCount[i] += ri.accessCount[i]
@@ -1082,6 +1084,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 		summary.readCount += master.readCount
 		summary.writeCount += master.writeCount
+		summary.totalCount += master.totalCount
 		summary.hits += master.hits
 
 		for i, _ := range master.accessCount {
@@ -1158,7 +1161,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 		}
 	}
 
-	latency := float64(summary.latency) / float64(summary.readCount+summary.writeCount)
+	latency := float64(summary.latency) / float64(summary.totalCount)
 
 	if !coord.store.isPartition {
 		if WLTYPE != TPCCWL {

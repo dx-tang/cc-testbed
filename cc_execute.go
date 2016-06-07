@@ -117,6 +117,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			} else {
 				p.w.riMaster.readCount++
 			}
+			p.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &p.st.homeSample
@@ -181,6 +182,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			} else {
 				p.w.riMaster.writeCount++
 			}
+			p.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &p.st.homeSample
@@ -308,6 +310,7 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			} else {
 				p.w.riMaster.readCount++
 			}
+			p.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -526,6 +529,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			} else {
 				transExec.w.riMaster.readCount++
 			}
+			transExec.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -633,6 +637,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			} else {
 				transExec.w.riMaster.writeCount++
 			}
+			transExec.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -780,6 +785,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			} else {
 				transExec.w.riMaster.readCount++
 			}
+			transExec.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -1097,6 +1103,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			} else {
 				transExec.w.riMaster.readCount++
 			}
+			transExec.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -1205,6 +1212,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			} else {
 				transExec.w.riMaster.writeCount++
 			}
+			transExec.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -1457,6 +1465,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			} else {
 				transExec.w.riMaster.readCount++
 			}
+			transExec.w.riMaster.totalCount++
 		}
 		if isHome {
 			sample := &transExec.st.homeSample

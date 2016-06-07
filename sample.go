@@ -28,6 +28,7 @@ type ReportInfo struct {
 	recStat         []int64
 	readCount       int64
 	writeCount      int64
+	totalCount      int64
 	hits            int64
 	accessCount     []int64
 	conflicts       []int64
@@ -68,6 +69,7 @@ func (ri *ReportInfo) Reset() {
 	ri.readCount = 0
 	ri.writeCount = 0
 	ri.txnSample = 0
+	ri.totalCount = 0
 
 	ri.hits = 0
 
