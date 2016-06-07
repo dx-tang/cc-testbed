@@ -14,6 +14,11 @@ const (
 	MAXTRACKINGKEY = 100
 )
 
+const (
+	WAREHOUSEWEIGHT = 100000
+	DISTRICTWEIGHT  = 10000
+)
+
 type ETransaction interface {
 	Reset(t Trans)
 	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error)
@@ -105,7 +110,13 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			p.w.riMaster.readCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				p.w.riMaster.readCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				p.w.riMaster.readCount += DISTRICTWEIGHT
+			} else {
+				p.w.riMaster.readCount++
+			}
 		}
 		if isHome {
 			sample := &p.st.homeSample
@@ -163,7 +174,13 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			tm := time.Now()
 			_, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			p.w.riMaster.writeCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				p.w.riMaster.writeCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				p.w.riMaster.writeCount += DISTRICTWEIGHT
+			} else {
+				p.w.riMaster.writeCount++
+			}
 		}
 		if isHome {
 			sample := &p.st.homeSample
@@ -284,7 +301,13 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			tm := time.Now()
 			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			transExec.w.riMaster.readCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				p.w.riMaster.readCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				p.w.riMaster.readCount += DISTRICTWEIGHT
+			} else {
+				p.w.riMaster.readCount++
+			}
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -496,7 +519,13 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			tm := time.Now()
 			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			transExec.w.riMaster.readCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				transExec.w.riMaster.readCount += DISTRICTWEIGHT
+			} else {
+				transExec.w.riMaster.readCount++
+			}
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -597,7 +626,13 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			tm := time.Now()
 			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			transExec.w.riMaster.writeCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				transExec.w.riMaster.writeCount += DISTRICTWEIGHT
+			} else {
+				transExec.w.riMaster.writeCount++
+			}
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -738,7 +773,13 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			tm := time.Now()
 			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			transExec.w.riMaster.readCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				transExec.w.riMaster.readCount += DISTRICTWEIGHT
+			} else {
+				transExec.w.riMaster.readCount++
+			}
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -1049,7 +1090,13 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			tm := time.Now()
 			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			transExec.w.riMaster.readCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				transExec.w.riMaster.readCount += DISTRICTWEIGHT
+			} else {
+				transExec.w.riMaster.readCount++
+			}
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -1151,7 +1198,13 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			tm := time.Now()
 			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			transExec.w.riMaster.writeCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				transExec.w.riMaster.writeCount += DISTRICTWEIGHT
+			} else {
+				transExec.w.riMaster.writeCount++
+			}
 		}
 		if isHome {
 			sample := &transExec.st.homeSample
@@ -1397,7 +1450,13 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			tm := time.Now()
 			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			transExec.w.riMaster.readCount++
+			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+				transExec.w.riMaster.readCount += DISTRICTWEIGHT
+			} else {
+				transExec.w.riMaster.readCount++
+			}
 		}
 		if isHome {
 			sample := &transExec.st.homeSample

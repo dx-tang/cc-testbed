@@ -584,7 +584,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	sum = float64(summary.readCount + summary.writeCount)
 	recAvg = float64(sum) / float64(txn)
 
-	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
+	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount) * 10000
 
 	var confRate float64
 	var homeConfRate float64
@@ -1138,7 +1138,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	sum = float64(summary.readCount + summary.writeCount)
 	recAvg = float64(sum) / float64(txn)
 
-	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
+	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount) * 10000
 	hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
 	var confRate float64
 	var homeConfRate float64
