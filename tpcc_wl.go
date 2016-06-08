@@ -553,11 +553,14 @@ type TPCCWorkload struct {
 	nParts          int
 	isPartition     bool
 	zp              ZipfProb
+	isGC            bool
 	padding2        [PADDING]byte
 }
 
 func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int, double bool) *TPCCWorkload {
-	tpccWL := &TPCCWorkload{}
+	tpccWL := &TPCCWorkload{
+		isGC: false,
+	}
 
 	if nParts == 1 {
 		isPartition = false
@@ -909,9 +912,12 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		w.iaAR[NEWORDER].Reset()
 	}
 
-	debug.SetGCPercent(1)
-	debug.FreeOSMemory()
-	debug.SetGCPercent(-1)
+	if !tpccWL.isGC {
+		debug.SetGCPercent(1)
+		debug.FreeOSMemory()
+		debug.SetGCPercent(-1)
+		tpccWL.isGC = true
+	}
 
 }
 
