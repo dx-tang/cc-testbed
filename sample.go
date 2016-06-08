@@ -3,7 +3,8 @@ package testbed
 import (
 	"container/list"
 	"flag"
-	"time"
+	"runtime/debug"
+	"tim"
 
 	//"github.com/totemtang/cc-testbed/wfmutex"
 	"github.com/totemtang/cc-testbed/clog"
@@ -195,6 +196,7 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 
 		rec, err := s.GetRecByID(tableID, key, partNum)
 		if err != nil {
+			debug.PrintStack()
 			clog.Error("Error No Key in Sample")
 		}
 		tmpRec := rec.(*ARecord)

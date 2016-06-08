@@ -11,7 +11,7 @@ var Spec = flag.Bool("spec", false, "Whether Speculatively Indicate MayWrite")
 const (
 	MAXTABLENUM    = 20
 	MAXCOLUMN      = 100
-	MAXTRACKINGKEY = 100
+	MAXTRACKINGKEY = 350
 )
 
 const (

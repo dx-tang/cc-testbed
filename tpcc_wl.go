@@ -912,16 +912,20 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		w.iaAR[NEWORDER].Reset()
 	}
 
-	if !tpccWL.isGC {
-		debug.SetGCPercent(1)
-		debug.FreeOSMemory()
-		debug.SetGCPercent(-1)
-		tpccWL.isGC = true
-	}
+	debug.SetGCPercent(1)
+	debug.FreeOSMemory()
+	debug.SetGCPercent(-1)
 
 }
 
+func (tpccWL *TPCCWorkload) resetTmp() {
+	for _, table := range tpccWL.store.priTables {
+		table.Reset()
+	}
+}
+
 func (tpccWL *TPCCWorkload) Switch(nParts int, isPartition bool, tmpPS float64) {
+	tpccWL.resetTmp()
 	tpccWL.store.Switch()
 	tpccWL.ResetPart(nParts, isPartition)
 	tpccWL.zp.Reconf(tmpPS)
