@@ -46,6 +46,7 @@ type Record interface {
 	IsUnlocked() (bool, TID)
 	GetValue(val Value, colNum int)
 	GetKey() Key
+	SetKey(k Key)
 	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
@@ -113,6 +114,10 @@ type PRecord struct {
 
 func (pr *PRecord) GetKey() Key {
 	return pr.key
+}
+
+func (pr *PRecord) SetKey(k Key) {
+	pr.key = k
 }
 
 func (pr *PRecord) Lock() (bool, TID) {
@@ -215,6 +220,10 @@ func (or *ORecord) GetKey() Key {
 	return or.key
 }
 
+func (or *ORecord) SetKey(k Key) {
+	or.key = k
+}
+
 func (or *ORecord) SetValue(val Value, colNum int) {
 	or.tuple.SetValue(val, colNum)
 }
@@ -277,6 +286,10 @@ type DRecord struct {
 func (dr *DRecord) GetKey() Key {
 	clog.Error("Dummy Record does not support GetKey Operation")
 	return dr.key
+}
+
+func (dr *DRecord) SetKey(k Key) {
+	dr.key = k
 }
 
 func (dr *DRecord) Lock() (bool, TID) {
@@ -376,6 +389,10 @@ func (lr *LRecord) GetValue(val Value, colNum int) {
 
 func (lr *LRecord) GetKey() Key {
 	return lr.key
+}
+
+func (lr *LRecord) SetKey(k Key) {
+	lr.key = k
 }
 
 func (lr *LRecord) SetValue(val Value, colNum int) {
@@ -524,6 +541,10 @@ func (ar *ARecord) GetValue(val Value, colNum int) {
 
 func (ar *ARecord) GetKey() Key {
 	return ar.key
+}
+
+func (ar *ARecord) SetKey(k Key) {
+	ar.key = k
 }
 
 func (ar *ARecord) SetValue(val Value, colNum int) {

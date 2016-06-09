@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"flag"
 	"runtime/debug"
-	"tim"
+	"time"
 
 	//"github.com/totemtang/cc-testbed/wfmutex"
 	"github.com/totemtang/cc-testbed/clog"

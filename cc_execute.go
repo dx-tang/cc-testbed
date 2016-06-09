@@ -271,6 +271,7 @@ func (p *PTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record)
 	t.iRecs[n].k = k
 	t.iRecs[n].partNum = partNum
 	t.iRecs[n].rec = rec
+	rec.SetKey(k)
 
 	return nil
 }
@@ -746,6 +747,7 @@ func (o *OTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record)
 	t.iRecs[n].k = k
 	t.iRecs[n].partNum = partNum
 	t.iRecs[n].rec = rec
+	rec.SetKey(k)
 
 	return nil
 }
@@ -1426,6 +1428,7 @@ func (l *LTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record)
 	t.iRecs[n].k = k
 	t.iRecs[n].partNum = partNum
 	t.iRecs[n].rec = rec
+	rec.SetKey(k)
 
 	return nil
 }
