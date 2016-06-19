@@ -375,7 +375,8 @@ func (p *PTransaction) Abort(req *LockReq) TID {
 func (p *PTransaction) Commit(req *LockReq) TID {
 	s := p.Store()
 	w := p.w
-	for i := 0; i < len(p.tt); i++ {
+	//for i := 0; i < len(p.tt); i++ {
+	for i := len(p.tt) - 1; i >= 0; i-- {
 		t := &p.tt[i]
 		for j := 0; j < len(t.wRecs); j++ {
 			wr := &t.wRecs[j]
@@ -968,7 +969,8 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 	// Phase 3: Apply all writes
 	s := o.s
 	w := o.w
-	for p := 0; p < len(o.tt); p++ {
+	//for p := 0; p < len(o.tt); p++ {
+	for p := len(o.tt) - 1; p >= 0; p-- {
 		t := &o.tt[p]
 
 		for j := 0; j < len(t.dRecs); j++ {
@@ -1570,7 +1572,8 @@ func (l *LTransaction) Commit(req *LockReq) TID {
 	w := l.w
 	s := l.s
 
-	for i := 0; i < len(l.rt); i++ {
+	//for i := 0; i < len(l.rt); i++ {
+	for i := len(l.rt) - 1; i >= 0; i-- {
 		t := &l.rt[i]
 
 		for j := 0; j < len(t.dRecs); j++ {

@@ -216,9 +216,9 @@ func main() {
 
 			// Single Pruning
 			tp := strings.Split(tmpTP, ":")
-			if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 && tm <= testbed.TRAINOCCPART {
-				break
-			}
+			//if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 && tm <= testbed.TRAINOCCPART {
+			//	break
+			//}
 
 			var tpccTranPer [testbed.TPCCTRANSNUM]int
 			if len(tp) != testbed.TPCCTRANSNUM {

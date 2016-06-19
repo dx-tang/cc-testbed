@@ -345,6 +345,7 @@ func (no *NewOrderTable) Reset() {
 			}
 			head = head.next
 		}
+		no.tail[i] = head
 	}
 }
 
