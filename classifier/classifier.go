@@ -43,8 +43,13 @@ func NewClassifier(path string, partFile string, occFile string, pureFile string
 		if sc.clf == nil {
 			clog.Error("Training Error")
 		}
-	} else {
+	} else if WLTYPE == SMALLBANKWL {
 		sc.clf = C.SBTrain(part, occ, pure, index)
+		if sc.clf == nil {
+			clog.Error("Training Error")
+		}
+	} else {
+		sc.clf = C.TPCCTrain(part, occ, pure, index)
 		if sc.clf == nil {
 			clog.Error("Training Error")
 		}

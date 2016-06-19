@@ -52,6 +52,29 @@ PyObject* SBTrain(char *partFile, char *occFile, char *pureFile, char *indexFile
     return pInstance;
 }
 
+PyObject* TPCCTrain(char *partFile, char *occFile, char *pureFile, char *indexFile) {
+    PyObject *pModule = NULL, *pDict = NULL, *pClass = NULL, *pInstance = NULL, *pArg = NULL;
+
+    pModule = PyImport_ImportModule("tpcc-classifier");
+    if (pModule == NULL) {
+        return NULL;
+    }
+
+    pDict = PyModule_GetDict(pModule);
+    if (pDict == NULL) {
+        return NULL;
+    }
+
+    pClass = PyDict_GetItemString(pDict, "TPCC");
+    if (pDict == NULL) {
+        return NULL;
+    }
+
+    pArg = Py_BuildValue("(s,s,s,s)", partFile, occFile, pureFile, indexFile);
+    pInstance = PyObject_CallObject(pClass, pArg);
+    return pInstance;
+}
+
 long Predict(PyObject *pInstance, int curType, double partAvg, double partSkew, double recAvg, double latency, double readRate, double homeconf, double confRate) {
 	PyObject *result = PyObject_CallMethod(pInstance, "Predict", "(i,d,d,d,d,d,d,d)", curType, partAvg, partSkew, recAvg, latency, readRate, homeconf, confRate);
     if (result == NULL) {

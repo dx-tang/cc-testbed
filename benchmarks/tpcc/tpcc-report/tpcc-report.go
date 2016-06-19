@@ -106,7 +106,7 @@ func main() {
 	testCases := testbed.BuildTestCases(*tc, testbed.TPCCWL)
 
 	clog.Info("Populating Whole Store\n")
-	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode)
+	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode, false)
 	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL)
 
 	// Populate Key Gen and Part Gen

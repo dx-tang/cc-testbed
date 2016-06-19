@@ -7,6 +7,7 @@
 void Init(char *addPath);
 PyObject* SingleTrain(char *partFile, char *occFile, char *pureFile, char *indexFile);
 PyObject* SBTrain(char *partFile, char *occFile, char *pureFile, char *indexFile);
+PyObject* TPCCTrain(char *partFile, char *occFile, char *pureFile, char *indexFile);
 long Predict(PyObject *pInstance, int curType, double partAvg, double partSkew, double recAvg, double latency, double readRate, double homeconf, double confRate);
 double GetIndexProb(PyObject *pInstance);
 double GetPartProb(PyObject *pInstance);
