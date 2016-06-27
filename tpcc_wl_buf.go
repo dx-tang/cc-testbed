@@ -226,6 +226,7 @@ func (ha *HistoryAllocator) Reset() {
 
 type IndexAlloc interface {
 	OneAllocate()
+	OneAllocateSize(size int)
 	GetEntry() Value
 	GetSecEntry() Value
 	Reset()
@@ -243,6 +244,13 @@ type OrderIndexAlloc struct {
 func (oia *OrderIndexAlloc) OneAllocate() {
 	oia.bucketEntry = make([]OrderBucketEntry, ORDER_INDEX_PER_ALLOC)
 	oia.secEntry = make([]OrderSecEntry, ORDER_SECINDEX_PER_ALLOC)
+	oia.secCur = 0
+	oia.bucketCur = 0
+}
+
+func (oia *OrderIndexAlloc) OneAllocateSize(size int) {
+	oia.bucketEntry = make([]OrderBucketEntry, size)
+	oia.secEntry = make([]OrderSecEntry, size)
 	oia.secCur = 0
 	oia.bucketCur = 0
 }
@@ -292,6 +300,11 @@ func (ol *OrderLineIndexAlloc) OneAllocate() {
 	ol.bucketCur = 0
 }
 
+func (ol *OrderLineIndexAlloc) OneAllocateSize(size int) {
+	ol.bucketEntry = make([]OrderLineBucketEntry, size)
+	ol.bucketCur = 0
+}
+
 func (ol *OrderLineIndexAlloc) GetEntry() Value {
 	if ol.bucketCur == ORDERLINE_INDEX_PER_ALLOC {
 		clog.Info("OrderLine Index One Allocate")
@@ -325,6 +338,11 @@ func (h *HistoryIndexAlloc) OneAllocate() {
 	h.cur = 0
 }
 
+func (h *HistoryIndexAlloc) OneAllocateSize(size int) {
+	h.entry = make([]HistoryEntry, size)
+	h.cur = 0
+}
+
 func (h *HistoryIndexAlloc) GetEntry() Value {
 	if h.cur == HISTORY_INDEX_PER_ALLOC {
 		clog.Info("History Index One Allocate")
@@ -355,6 +373,16 @@ type NewOrderIndexAlloc struct {
 func (no *NewOrderIndexAlloc) OneAllocate() {
 	no.entry = make([]NoEntry, NEWORDER_INDEX_PER_ALLOC)
 	for i := 0; i < NEWORDER_INDEX_PER_ALLOC; i++ {
+		dRec := &DRecord{}
+		dRec.tuple = &NewOrderTuple{}
+		no.entry[i].rec = dRec
+	}
+	no.cur = 0
+}
+
+func (no *NewOrderIndexAlloc) OneAllocateSize(size int) {
+	no.entry = make([]NoEntry, size)
+	for i := 0; i < size; i++ {
 		dRec := &DRecord{}
 		dRec.tuple = &NewOrderTuple{}
 		no.entry[i].rec = dRec

@@ -80,6 +80,7 @@ type Worker struct {
 	riReplica    *ReportInfo
 	st           *SampleTool
 	iaAR         []IndexAlloc
+	preIAAR      []IndexAlloc
 	partitioner  []Partitioner
 	padding2     [PADDING]byte
 }
@@ -141,6 +142,26 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.iaAR[HISTORY].OneAllocate()
 		w.iaAR[ORDERLINE] = &OrderLineIndexAlloc{}
 		w.iaAR[ORDERLINE].OneAllocate()
+
+		loaders := *NLOADERS
+		if id >= *NumPart-loaders {
+			perWorker := *NumPart / loaders
+			residue := *NumPart % loaders
+			numWorkers := perWorker
+			tmpID := id - (*NumPart - loaders)
+			if tmpID < residue {
+				numWorkers += 1
+			}
+			w.preIAAR = make([]IndexAlloc, tableCount)
+			w.preIAAR[NEWORDER] = &NewOrderIndexAlloc{}
+			w.preIAAR[NEWORDER].OneAllocateSize(NEWORDER_INDEX_ORIGINAL * numWorkers)
+			w.preIAAR[ORDER] = &OrderIndexAlloc{}
+			w.preIAAR[ORDER].OneAllocateSize(ORDER_INDEX_ORIGINAL * numWorkers)
+			w.preIAAR[HISTORY] = &HistoryIndexAlloc{}
+			w.preIAAR[HISTORY].OneAllocateSize(HISTORY_INDEX_ORIGINAL * numWorkers)
+			w.preIAAR[ORDERLINE] = &OrderLineIndexAlloc{}
+			w.preIAAR[ORDERLINE].OneAllocateSize(ORDERLINE_INDEX_ORIGINAL * numWorkers)
+		}
 	} else if workload == SINGLEWL {
 		if *Report {
 			w.partitioner = c.singleWL.GetPartitioner(w.ID)
@@ -292,9 +313,11 @@ func (w *Worker) One(t Trans) (Value, error) {
 	case action := <-w.actionTrans:
 		s := w.coord.store
 		if action.actionType == INDEX_ACTION_MERGE {
-			s.IndexMerge(w.iaAR, action.start, action.end, w.partitioner)
+			//s.IndexMerge(w.iaAR, action.start, action.end, w.partitioner)
+			s.IndexMerge(w.preIAAR, action.start, action.end, w.partitioner)
 		} else {
-			s.IndexPartition(w.iaAR, action.start, action.end, w.partitioner)
+			//s.IndexPartition(w.iaAR, action.start, action.end, w.partitioner)
+			s.IndexPartition(w.preIAAR, action.start, action.end, w.partitioner)
 		}
 		w.coord.indexActionACK[w.ID] <- true
 	default:

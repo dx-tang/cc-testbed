@@ -17,6 +17,14 @@ const (
 	NEWORDER_INDEX_PER_ALLOC  = 1000 // NewOrder Bucket Number warehouse*dist_count
 )
 
+// Index Pre-allocation for original data
+const (
+	ORDER_INDEX_ORIGINAL     = 200
+	ORDERLINE_INDEX_ORIGINAL = 200
+	HISTORY_INDEX_ORIGINAL   = 200
+	NEWORDER_INDEX_ORIGINAL  = 200
+)
+
 // Entry Size for Customized HashTable
 const (
 	CAP_NEWORDER_ENTRY = 1000

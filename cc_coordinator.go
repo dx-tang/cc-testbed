@@ -197,7 +197,7 @@ type Coordinator struct {
 const (
 	PERSEC       = 1000000000
 	PERMINISEC   = 1000
-	REPORTPERIOD = 2000
+	REPORTPERIOD = 1000
 )
 
 func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, testCases []TestCase, nsecs int, workload int, wl interface{}) *Coordinator {
@@ -584,7 +584,11 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	sum = float64(summary.readCount + summary.writeCount)
 	recAvg = float64(sum) / float64(txn)
 
-	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount) * 10000
+	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
+
+	if WLTYPE == TPCCWL {
+		rr *= 10000
+	}
 
 	var confRate float64
 	var homeConfRate float64
@@ -1141,7 +1145,10 @@ func (coord *Coordinator) GetFeature() *Feature {
 	sum = float64(summary.readCount + summary.writeCount)
 	recAvg = float64(sum) / float64(txn)
 
-	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount) * 10000
+	rr := float64(summary.readCount) / float64(summary.readCount+summary.writeCount)
+	if WLTYPE == TPCCWL {
+		rr *= 10000
+	}
 	hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
 	var confRate float64
 	var homeConfRate float64
