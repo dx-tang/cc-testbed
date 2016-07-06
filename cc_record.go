@@ -361,11 +361,11 @@ func (dr *DRecord) DeltaValue(val Value, col int) {
 
 type LRecord struct {
 	padding1 [PADDING]byte
-	key      Key
 	tuple    Tuple
+	key      Key
 	wdLock   WDLock
-	nwLock   nowaitlock.NoWaitLock
 	table    Table
+	nwLock   nowaitlock.NoWaitLock
 	padding2 [PADDING]byte
 }
 

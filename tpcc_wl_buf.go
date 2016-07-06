@@ -256,9 +256,9 @@ func (oia *OrderIndexAlloc) OneAllocateSize(size int) {
 }
 
 func (oia *OrderIndexAlloc) GetEntry() Value {
-	if oia.bucketCur == ORDER_INDEX_PER_ALLOC {
+	if oia.bucketCur == len(oia.bucketEntry) {
 		clog.Info("Order Index One Allocate")
-		oia.bucketEntry = make([]OrderBucketEntry, ORDER_INDEX_PER_ALLOC)
+		oia.bucketEntry = make([]OrderBucketEntry, oia.bucketCur)
 		oia.bucketCur = 0
 	}
 	entry := &oia.bucketEntry[oia.bucketCur]
@@ -270,9 +270,9 @@ func (oia *OrderIndexAlloc) GetEntry() Value {
 }
 
 func (oia *OrderIndexAlloc) GetSecEntry() Value {
-	if oia.secCur == ORDER_SECINDEX_PER_ALLOC {
+	if oia.secCur == len(oia.secEntry) {
 		clog.Info("Order SecIndex One Allocate")
-		oia.secEntry = make([]OrderSecEntry, ORDER_SECINDEX_PER_ALLOC)
+		oia.secEntry = make([]OrderSecEntry, oia.secCur)
 		oia.secCur = 0
 	}
 	entry := &oia.secEntry[oia.secCur]
@@ -306,9 +306,9 @@ func (ol *OrderLineIndexAlloc) OneAllocateSize(size int) {
 }
 
 func (ol *OrderLineIndexAlloc) GetEntry() Value {
-	if ol.bucketCur == ORDERLINE_INDEX_PER_ALLOC {
+	if ol.bucketCur == len(ol.bucketEntry) {
 		clog.Info("OrderLine Index One Allocate")
-		ol.OneAllocate()
+		ol.OneAllocateSize(ol.bucketCur)
 	}
 	entry := &ol.bucketEntry[ol.bucketCur]
 	entry.t = 0
@@ -344,9 +344,9 @@ func (h *HistoryIndexAlloc) OneAllocateSize(size int) {
 }
 
 func (h *HistoryIndexAlloc) GetEntry() Value {
-	if h.cur == HISTORY_INDEX_PER_ALLOC {
+	if h.cur == len(h.entry) {
 		clog.Info("History Index One Allocate")
-		h.OneAllocate()
+		h.OneAllocateSize(h.cur)
 	}
 	entry := &h.entry[h.cur]
 	entry.index = 0
@@ -391,9 +391,9 @@ func (no *NewOrderIndexAlloc) OneAllocateSize(size int) {
 }
 
 func (no *NewOrderIndexAlloc) GetEntry() Value {
-	if no.cur == NEWORDER_INDEX_PER_ALLOC {
+	if no.cur == len(no.entry) {
 		clog.Info("NewOrder Index One Allocate")
-		no.OneAllocate()
+		no.OneAllocateSize(no.cur)
 	}
 	entry := &no.entry[no.cur]
 	entry.t = 0

@@ -123,6 +123,7 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 			}
 		}
 	*/
+
 	bt.data = make([]Partition, nParts)
 	for k := 0; k < nParts; k++ {
 		bt.data[k].shardedMap = make([]Shard, SHARDCOUNT)
@@ -180,15 +181,15 @@ func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, error) {
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	if bt.mode != PARTITION {
-		shard.RLock()
-	}
+	//if bt.mode != PARTITION {
+	//	shard.RLock()
+	//}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		if bt.mode != PARTITION {
-			shard.RUnlock()
-		}
+		//if bt.mode != PARTITION {
+		//	shard.RUnlock()
+		//}
 		return nil, ENOKEY
 	} else {
 		if bt.mode != PARTITION {
@@ -207,22 +208,22 @@ func (bt *BasicTable) SetValueByID(k Key, partNum int, value Value, colNum int) 
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	if bt.mode != PARTITION {
-		shard.RLock()
-	}
+	//if bt.mode != PARTITION {
+	//	shard.RLock()
+	//}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		if bt.mode != PARTITION {
-			shard.RUnlock()
-		}
+		//if bt.mode != PARTITION {
+		//	shard.RUnlock()
+		//}
 		return ENOKEY
 	}
 
 	r.SetValue(value, colNum)
-	if bt.mode != PARTITION {
-		shard.RUnlock()
-	}
+	//if bt.mode != PARTITION {
+	//	shard.RUnlock()
+	//}
 	return nil
 }
 
@@ -235,23 +236,23 @@ func (bt *BasicTable) GetValueByID(k Key, partNum int, value Value, colNum int) 
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	if bt.mode != PARTITION {
-		shard.RLock()
-	}
+	//if bt.mode != PARTITION {
+	//	shard.RLock()
+	//}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		if bt.mode != PARTITION {
-			shard.RUnlock()
-		}
+		//if bt.mode != PARTITION {
+		//	shard.RUnlock()
+		//}
 		return ENOKEY
 	}
 
 	r.GetValue(value, colNum)
 
-	if bt.mode != PARTITION {
-		shard.RUnlock()
-	}
+	//if bt.mode != PARTITION {
+	//	shard.RUnlock()
+	//}
 	return nil
 }
 
