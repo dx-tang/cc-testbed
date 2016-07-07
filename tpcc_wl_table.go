@@ -161,9 +161,9 @@ func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record,
 	return retRec, nil
 }
 
-func (no *NewOrderTable) GetRecByID(k Key, partNum int) (Record, error) {
+func (no *NewOrderTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 	clog.Error("New Order Table Not Support GetRecByID")
-	return nil, nil
+	return nil, nil, 0, nil
 }
 
 func (no *NewOrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
@@ -376,6 +376,7 @@ type OrderPart struct {
 type OrderBucket struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
+	iLock    IndexLock
 	initKeys int
 	tail     *OrderBucketEntry
 	head     *OrderBucketEntry
@@ -610,7 +611,7 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 
 }
 
-func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, error) {
+func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 
 	if !o.isPartition {
 		partNum = 0
@@ -619,28 +620,32 @@ func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, error) {
 	bucketNum := o.bucketHash(k, o.orderbucketcount)
 	bucket := &o.data[partNum].buckets[bucketNum]
 
-	if o.mode != PARTITION {
+	version := uint64(0)
+
+	if o.mode == LOCKING {
 		bucket.RLock()
+	} else if o.mode == OCC {
+		version = bucket.iLock.Read()
 	}
 
 	tail := bucket.tail
 	for tail != nil {
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
-				if o.mode != PARTITION {
+				if o.mode == LOCKING {
 					bucket.RUnlock()
 				}
-				return tail.oRecs[i], nil
+				return tail.oRecs[i], bucket, version, nil
 			}
 		}
 		tail = tail.before
 	}
 
-	if o.mode != PARTITION {
+	if o.mode == LOCKING {
 		bucket.RUnlock()
 	}
 
-	return nil, ENOKEY
+	return nil, nil, 0, ENOKEY
 
 }
 
@@ -753,8 +758,10 @@ func (o *OrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 			oPart.Lock()
 		}
 
-		if o.mode != PARTITION {
+		if o.mode == LOCKING {
 			bucket.Lock()
+		} else if o.mode == OCC {
+			bucket.iLock.Lock()
 		}
 
 		cur := bucket.tail.t
@@ -802,8 +809,10 @@ func (o *OrderTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		if !o.isPartition {
 			oPart.Unlock()
 		}
-		if o.mode != PARTITION {
+		if o.mode == LOCKING {
 			bucket.Unlock()
+		} else if o.mode == OCC {
+			bucket.iLock.Unlock()
 		}
 
 	}
@@ -1148,7 +1157,7 @@ func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, 
 
 }
 
-func (c *CustomerTable) GetRecByID(k Key, partNum int) (Record, error) {
+func (c *CustomerTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 
 	if !c.isPartition {
 		partNum = 0
@@ -1159,9 +1168,9 @@ func (c *CustomerTable) GetRecByID(k Key, partNum int) (Record, error) {
 
 	r, ok := shard.rows[k]
 	if !ok {
-		return nil, ENOKEY
+		return nil, nil, 0, ENOKEY
 	} else {
-		return r, nil
+		return r, nil, 0, nil
 	}
 }
 
@@ -1458,9 +1467,9 @@ func (h *HistoryTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, e
 	return rec, nil
 }
 
-func (h *HistoryTable) GetRecByID(k Key, partNum int) (Record, error) {
+func (h *HistoryTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 	clog.Error("HistoryTable Table Not Support GetRecByID")
-	return nil, nil
+	return nil, nil, 0, nil
 }
 
 func (h *HistoryTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
@@ -1566,6 +1575,7 @@ type OrderLinePart struct {
 type OrderLineBucket struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
+	iLock    IndexLock
 	tail     *OrderLineBucketEntry
 	head     *OrderLineBucketEntry
 	initKeys int
@@ -1707,7 +1717,7 @@ func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record
 	return rec, nil
 }
 
-func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, error) {
+func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 
 	if !ol.isPartition {
 		partNum = 0
@@ -1716,28 +1726,32 @@ func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, error) {
 	bucketNum := ol.bucketHash(k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 
-	if ol.mode != PARTITION {
+	version := uint64(0)
+
+	if ol.mode == LOCKING {
 		bucket.RLock()
+	} else if ol.mode == OCC {
+		version = bucket.iLock.Read()
 	}
 
 	tail := bucket.tail
 	for tail != nil {
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
-				if ol.mode != PARTITION {
+				if ol.mode == LOCKING {
 					bucket.RUnlock()
 				}
-				return tail.oRecs[i], nil
+				return tail.oRecs[i], bucket, version, nil
 			}
 		}
 		tail = tail.before
 	}
 
-	if ol.mode != PARTITION {
+	if ol.mode == LOCKING {
 		bucket.RUnlock()
 	}
 
-	return nil, ENOKEY
+	return nil, nil, 0, ENOKEY
 
 }
 
@@ -1837,8 +1851,10 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 	bucketNum := ol.bucketHash(recs[0].k, ol.olbucketcount)
 	bucket := &ol.data[partNum].buckets[bucketNum]
 
-	if ol.mode != PARTITION {
+	if ol.mode == LOCKING {
 		bucket.Lock()
+	} else if ol.mode == OCC {
+		bucket.iLock.Lock()
 	}
 
 	for i, _ := range recs {
@@ -1860,8 +1876,10 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 
 	}
 
-	if ol.mode != PARTITION {
+	if ol.mode == LOCKING {
 		bucket.Unlock()
+	} else if ol.mode == OCC {
+		bucket.iLock.Unlock()
 	}
 
 	return nil

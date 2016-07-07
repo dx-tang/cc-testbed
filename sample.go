@@ -194,7 +194,7 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 			}
 		}
 
-		rec, err := s.GetRecByID(tableID, key, partNum)
+		rec, _, _, err := s.GetRecByID(tableID, key, partNum)
 		if err != nil {
 			debug.PrintStack()
 			clog.Error("Error No Key in Sample")
@@ -227,7 +227,7 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 	}
 
 	//tm := time.Now()
-	rec, err := s.GetRecByID(tableID, key, partNum)
+	rec, _, _, err := s.GetRecByID(tableID, key, partNum)
 	if err != nil {
 		clog.Error("Error No Key in Sample")
 	}

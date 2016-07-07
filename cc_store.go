@@ -108,6 +108,8 @@ type NoWaitLockPad struct {
 	padding2 [PADDING]byte
 }
 
+type Bucket interface{}
+
 type Store struct {
 	padding1     [PADDING]byte
 	priTables    []Table
@@ -276,17 +278,17 @@ func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Rec
 	return rec, err
 }
 
-func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, error) {
+func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, Bucket, uint64, error) {
 	if s.state == INDEX_NONE {
 		table := s.priTables[tableID]
 		return table.GetRecByID(k, partNum)
 	} else { // INDEX_CHANGING
 		table := s.secTables[tableID]
-		rec, err := table.GetRecByID(k, partNum)
+		rec, bucket, version, err := table.GetRecByID(k, partNum)
 		if err == ENOKEY {
 			return s.priTables[tableID].GetRecByID(k, partNum)
 		}
-		return rec, err
+		return rec, bucket, version, err
 	}
 }
 

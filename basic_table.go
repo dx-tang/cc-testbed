@@ -17,7 +17,7 @@ const (
 
 type Table interface {
 	CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error)
-	GetRecByID(k Key, partNum int) (Record, error)
+	GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error)
 	SetValueByID(k Key, partNum int, value Value, colNum int) error
 	GetValueByID(k Key, partNum int, value Value, colNum int) error
 	DeltaValueByID(k Key, partNum int, value Value, colNum int) error
@@ -172,7 +172,7 @@ func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, er
 	return r, nil
 }
 
-func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, error) {
+func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 
 	if !bt.isPartition {
 		partNum = 0
@@ -190,12 +190,12 @@ func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, error) {
 		//if bt.mode != PARTITION {
 		//	shard.RUnlock()
 		//}
-		return nil, ENOKEY
+		return nil, nil, 0, ENOKEY
 	} else {
 		if bt.mode != PARTITION {
 			shard.RUnlock()
 		}
-		return r, nil
+		return r, nil, 0, nil
 	}
 }
 

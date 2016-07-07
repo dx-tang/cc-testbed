@@ -108,7 +108,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	if *SysType == ADAPTIVE {
 		if p.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = p.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				p.w.riMaster.readCount += WAREHOUSEWEIGHT
@@ -161,7 +161,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 
 	s := p.s
 	//err := s.GetValueByID(tableID, k, partNum, val, colNum)
-	rec, err := s.GetRecByID(tableID, k, partNum)
+	rec, _, _, err := s.GetRecByID(tableID, k, partNum)
 	if err != nil {
 		return nil, nil, true, err
 	}
@@ -173,7 +173,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	if *SysType == ADAPTIVE {
 		if p.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = p.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				p.w.riMaster.writeCount += WAREHOUSEWEIGHT
@@ -230,7 +230,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	var err error
 	var r Record
 	if inputRec == nil {
-		r, err = s.GetRecByID(tableID, k, partNum)
+		r, _, _, err = s.GetRecByID(tableID, k, partNum)
 		if err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				p.w.riMaster.readCount += WAREHOUSEWEIGHT
@@ -340,7 +340,7 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 		}
 	}
 
-	rec, err := p.s.GetRecByID(tableID, k, partNum)
+	rec, _, _, err := p.s.GetRecByID(tableID, k, partNum)
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +439,13 @@ type ReadKey struct {
 	padding2 [PADDING]byte
 }
 
+type ReadBucket struct {
+	padding1 [PADDING]byte
+	version  uint64
+	bucket   Bucket
+	padding2 [PADDING]byte
+}
+
 type TrackTable struct {
 	padding1 [PADDING]byte
 	tableID  int
@@ -446,6 +453,7 @@ type TrackTable struct {
 	wKeys    []WriteKey
 	iRecs    []InsertRec
 	dRecs    []DeleteRec
+	rBucket  []ReadBucket
 	padding2 [PADDING]byte
 }
 
@@ -489,6 +497,9 @@ func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 
 		t.dRecs = make([]DeleteRec, MAXTRACKINGKEY)
 		t.dRecs = t.dRecs[0:0]
+
+		t.rBucket = make([]ReadBucket, MAXTRACKINGKEY)
+		t.rBucket = t.rBucket[0:0]
 	}
 
 	//tx.tt = tx.tt[:0]
@@ -510,7 +521,7 @@ func (o *OTransaction) Reset(t Trans) {
 		t.wKeys = t.wKeys[:0]
 		t.iRecs = t.iRecs[:0]
 		t.dRecs = t.dRecs[:0]
-
+		t.rBucket = t.rBucket[:0]
 	}
 
 	//o.tt = o.tt[:0]
@@ -522,7 +533,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
@@ -597,9 +608,22 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	if r == nil {
-		r, err = o.s.GetRecByID(tableID, k, partNum)
+		var bucket Bucket
+		var version uint64
+		r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
 		if err != nil {
 			return nil, nil, true, ENOKEY
+		}
+		if bucket != nil {
+			if version&LOCKED != 0 { // Locked
+				o.Abort(req)
+				o.w.NStats[NINDEXABORTS]++
+				return nil, nil, true, EABORT
+			}
+			n := len(t.rBucket)
+			t.rBucket = t.rBucket[0 : n+1]
+			t.rBucket[n].bucket = bucket
+			t.rBucket[n].version = version
 		}
 	}
 
@@ -630,7 +654,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
@@ -703,9 +727,22 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 		if r == nil {
 			if inputRec == nil {
-				r, err = o.s.GetRecByID(tableID, k, partNum)
+				var bucket Bucket
+				var version uint64
+				r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
 				if err != nil {
 					return err
+				}
+				if bucket != nil {
+					if version&LOCKED != 0 { // Locked
+						o.Abort(req)
+						o.w.NStats[NINDEXABORTS]++
+						return EABORT
+					}
+					n := len(t.rBucket)
+					t.rBucket = t.rBucket[0 : n+1]
+					t.rBucket[n].bucket = bucket
+					t.rBucket[n].version = version
 				}
 			} else {
 				r = inputRec
@@ -779,7 +816,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
@@ -819,13 +856,27 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 
 	var ok bool
 	var tid TID
-	var t *TrackTable
+	var t *TrackTable = &o.tt[tableID]
 	var r Record
 	var err error
 
-	r, err = o.s.GetRecByID(tableID, k, partNum)
+	var bucket Bucket
+	var version uint64
+	r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
 	if err != nil {
 		return nil, err
+	}
+
+	if bucket != nil {
+		if version&LOCKED != 0 { // Locked
+			o.Abort(req)
+			o.w.NStats[NINDEXABORTS]++
+			return nil, EABORT
+		}
+		n := len(t.rBucket)
+		t.rBucket = t.rBucket[0 : n+1]
+		t.rBucket[n].bucket = bucket
+		t.rBucket[n].version = version
 	}
 
 	ok, tid = r.IsUnlocked()
@@ -839,7 +890,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 		return nil, EABORT
 	}
 
-	t = &o.tt[tableID]
+	//t = &o.tt[tableID]
 	n := len(t.rKeys)
 	t.rKeys = t.rKeys[0 : n+1]
 	t.rKeys[n].k = k
@@ -962,6 +1013,28 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 			if !ok1 && !ok2 {
 				o.w.NStats[NRWABORTS]++
 				return o.Abort(req)
+			}
+		}
+	}
+
+	for j := 0; j < len(o.tt); j++ {
+		t := &o.tt[j]
+		if len(t.rBucket) == 0 {
+			continue
+		}
+		for i := 0; i < len(t.rBucket); i++ {
+			if WLTYPE == TPCCWL && j == ORDER {
+				b := t.rBucket[i].bucket.(*OrderBucket)
+				if b.iLock.Read() != t.rBucket[i].version {
+					o.w.NStats[NINDEXABORTS]++
+					return o.Abort(req)
+				}
+			} else if WLTYPE == TPCCWL && j == ORDERLINE {
+				b := t.rBucket[i].bucket.(*OrderLineBucket)
+				if b.iLock.Read() != t.rBucket[i].version {
+					o.w.NStats[NINDEXABORTS]++
+					return o.Abort(req)
+				}
 			}
 		}
 	}
@@ -1098,7 +1171,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
@@ -1178,7 +1251,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	// Try RLock
-	rec, err = l.s.GetRecByID(tableID, k, partNum)
+	rec, _, _, err = l.s.GetRecByID(tableID, k, partNum)
 	if err != nil {
 		return nil, nil, true, err
 	}
@@ -1207,7 +1280,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
@@ -1314,7 +1387,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 	}
 
 	if inputRec == nil {
-		rec, err = l.s.GetRecByID(tableID, k, partNum)
+		rec, _, _, err = l.s.GetRecByID(tableID, k, partNum)
 		if err != nil {
 			return err
 		}
@@ -1396,7 +1469,7 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, req *LockReq) e
 		}
 	}
 
-	rec, err = l.s.GetRecByID(tableID, k, partNum)
+	rec, _, _, err = l.s.GetRecByID(tableID, k, partNum)
 	if err != nil {
 		return err
 	}
@@ -1461,7 +1534,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 	if *SysType == ADAPTIVE {
 		if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
-			_, _ = transExec.s.GetRecByID(tableID, k, partNum)
+			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
@@ -1504,7 +1577,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 	w := l.w
 
 	// Try RLock
-	rec, err = l.s.GetRecByID(tableID, k, partNum)
+	rec, _, _, err = l.s.GetRecByID(tableID, k, partNum)
 	if err != nil {
 		return nil, err
 	}
