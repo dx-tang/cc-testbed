@@ -119,29 +119,39 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			}
 			p.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &p.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+
+		if !*TopK {
+			if isHome {
+				sample := &p.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
-		}
 
-		if !p.st.isPartition {
-			sample := &p.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+			if !p.st.isPartition {
+				sample := &p.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
 					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+		} else {
+			sample := &p.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				p.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 	}
@@ -184,31 +194,41 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			}
 			p.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &p.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+		if !*TopK {
+			if isHome {
+				sample := &p.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+
+			if !p.st.isPartition {
+				sample := &p.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
+					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
+				}
+			}
+		} else {
+			sample := &p.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				p.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 
-		if !p.st.isPartition {
-			sample := &p.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
-					p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
-					sample.sampleAccess = 0
-				}
-			}
-		}
 	}
 
 	t := &p.tt[tableID]
@@ -313,31 +333,42 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			}
 			p.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &transExec.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+		if !*TopK {
+			if isHome {
+				sample := &transExec.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
+
+			if !transExec.st.isPartition {
+				sample := &transExec.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
+					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
+				}
+			}
+		} else {
+			sample := &p.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				p.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
+			}
+
 		}
 
-		if !transExec.st.isPartition {
-			sample := &transExec.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
-					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-					sample.sampleAccess = 0
-				}
-			}
-		}
 	}
 
 	rec, _, _, err := p.s.GetRecByID(tableID, k, partNum)
@@ -544,29 +575,38 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			}
 			transExec.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &transExec.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+		if !*TopK {
+			if isHome {
+				sample := &transExec.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
-		}
 
-		if !transExec.st.isPartition {
-			sample := &transExec.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+			if !transExec.st.isPartition {
+				sample := &transExec.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+		} else {
+			sample := &transExec.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				transExec.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 	}
@@ -665,29 +705,38 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			}
 			transExec.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &transExec.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+		if !*TopK {
+			if isHome {
+				sample := &transExec.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
-		}
 
-		if !transExec.st.isPartition {
-			sample := &transExec.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+			if !transExec.st.isPartition {
+				sample := &transExec.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+		} else {
+			sample := &transExec.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				transExec.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 	}
@@ -827,29 +876,38 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			}
 			transExec.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &transExec.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+		if !*TopK {
+			if isHome {
+				sample := &transExec.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
-		}
 
-		if !transExec.st.isPartition {
-			sample := &transExec.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+			if !transExec.st.isPartition {
+				sample := &transExec.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+		} else {
+			sample := &transExec.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				transExec.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 	}
@@ -1182,29 +1240,38 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			}
 			transExec.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &transExec.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+		if !*TopK {
+			if isHome {
+				sample := &transExec.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
-		}
 
-		if !transExec.st.isPartition {
-			sample := &transExec.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+			if !transExec.st.isPartition {
+				sample := &transExec.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+		} else {
+			sample := &transExec.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				transExec.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 	}
@@ -1291,29 +1358,38 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			}
 			transExec.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &transExec.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+		if !*TopK {
+			if isHome {
+				sample := &transExec.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
-		}
 
-		if !transExec.st.isPartition {
-			sample := &transExec.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+			if !transExec.st.isPartition {
+				sample := &transExec.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+		} else {
+			sample := &transExec.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				transExec.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 	}
@@ -1545,29 +1621,39 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			}
 			transExec.w.riMaster.totalCount++
 		}
-		if isHome {
-			sample := &transExec.st.homeSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+
+		if !*TopK {
+			if isHome {
+				sample := &transExec.st.homeSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
+						sample.sampleAccess = 0
+					}
 				}
 			}
-		}
 
-		if !transExec.st.isPartition {
-			sample := &transExec.st.allSample
-			if sample.state == 0 { // Not Enough locks acquired
-				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-			} else {
-				sample.sampleAccess++
-				if sample.sampleAccess >= sample.recRate {
+			if !transExec.st.isPartition {
+				sample := &transExec.st.allSample
+				if sample.state == 0 { // Not Enough locks acquired
 					transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
-					sample.sampleAccess = 0
+				} else {
+					sample.sampleAccess++
+					if sample.sampleAccess >= sample.recRate {
+						transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
+						sample.sampleAccess = 0
+					}
 				}
+			}
+		} else {
+			sample := &transExec.st.allSample
+			sample.sampleAccess++
+			if sample.sampleAccess >= sample.recRate {
+				transExec.w.riMaster.tc.InsertKey(k)
+				sample.sampleAccess = 0
 			}
 		}
 	}

@@ -13,8 +13,8 @@ const (
 	ORDER_INDEX_PER_ALLOC     = 200
 	ORDER_SECINDEX_PER_ALLOC  = 200
 	ORDERLINE_INDEX_PER_ALLOC = 200
-	HISTORY_INDEX_PER_ALLOC   = 100  // History Bucket Number 256
-	NEWORDER_INDEX_PER_ALLOC  = 10 // NewOrder Bucket Number warehouse*dist_count
+	HISTORY_INDEX_PER_ALLOC   = 100 // History Bucket Number 256
+	NEWORDER_INDEX_PER_ALLOC  = 10  // NewOrder Bucket Number warehouse*dist_count
 )
 
 // Index Pre-allocation for original data
@@ -60,7 +60,7 @@ const (
 	CACHESIZE    = 1000
 	BUFSIZE      = 5
 	TRIAL        = 20
-	RECSR        = 1000
+	RECSR        = 2000
 )
 
 // OCC waits on write locks or not

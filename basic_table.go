@@ -192,9 +192,9 @@ func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, er
 		//}
 		return nil, nil, 0, ENOKEY
 	} else {
-		if bt.mode != PARTITION {
-			shard.RUnlock()
-		}
+		//if bt.mode != PARTITION {
+		//	shard.RUnlock()
+		//}
 		return r, nil, 0, nil
 	}
 }

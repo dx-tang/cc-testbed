@@ -38,6 +38,9 @@ type ReportInfo struct {
 	partAccess      int64
 	partSuccess     int64
 	latency         int64
+	tc              *TopKCounter
+	keyAR           []Key
+	countAR         []int
 	padding1        [PADDING]byte
 }
 
@@ -79,6 +82,8 @@ func (ri *ReportInfo) Reset() {
 
 	ri.latency = 0
 
+	ri.tc = NewTopKCounter(ELEMSIZE)
+
 }
 
 func NewReportInfo(nParts int, tableCount int) *ReportInfo {
@@ -101,6 +106,10 @@ func NewReportInfo(nParts int, tableCount int) *ReportInfo {
 
 	ri.homeConflicts = make([]int64, 2*PADDINGINT64+tableCount)
 	ri.homeConflicts = ri.homeConflicts[PADDINGINT64 : PADDINGINT64+tableCount]
+
+	ri.tc = NewTopKCounter(ELEMSIZE)
+	ri.keyAR = make([]Key, BIGK)
+	ri.countAR = make([]int, BIGK)
 
 	return ri
 }

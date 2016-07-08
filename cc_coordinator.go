@@ -1104,6 +1104,34 @@ func (coord *Coordinator) GetFeature() *Feature {
 		summary.latency += master.latency
 	}
 
+	var topKTotal int
+	var topKConf int
+
+	if *TopK {
+		for i, _ := range coord.Workers {
+			A := coord.Workers[i].riMaster
+			A.tc.GetTopK(A.keyAR, A.countAR, BIGK)
+		}
+		for i, _ := range coord.Workers {
+			A := coord.Workers[i].riMaster
+			probe := make(map[Key]int)
+			for j, _ := range A.keyAR {
+				probe[A.keyAR[j]] = A.countAR[j]
+			}
+			for j := i + 1; j < len(coord.Workers); j++ {
+				B := coord.Workers[j].riMaster
+				for q := 0; q < BIGK; q++ {
+					tmpCount, ok := probe[B.keyAR[q]]
+					if ok {
+						topKConf += 2 * int(math.Min(float64(tmpCount), float64(B.countAR[q])))
+					}
+					topKTotal += tmpCount
+					topKTotal += B.countAR[q]
+				}
+			}
+		}
+	}
+
 	txn := summary.txnSample
 
 	var sum float64
@@ -1153,19 +1181,24 @@ func (coord *Coordinator) GetFeature() *Feature {
 	var confRate float64
 	var homeConfRate float64
 
-	for i, _ := range summary.homeConflicts {
-		if summary.accessHomeCount[i] != 0 {
-			homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
-		}
-	}
-	if coord.store.isPartition {
-		confRate = homeConfRate
-	} else {
-		for i, _ := range summary.conflicts {
-			if summary.accessCount[i] != 0 {
-				confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+	if !*TopK {
+		for i, _ := range summary.homeConflicts {
+			if summary.accessHomeCount[i] != 0 {
+				homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
 			}
 		}
+		if coord.store.isPartition {
+			confRate = homeConfRate
+		} else {
+			for i, _ := range summary.conflicts {
+				if summary.accessCount[i] != 0 {
+					confRate += float64(summary.conflicts[i]*100) / float64(summary.accessCount[i])
+				}
+			}
+		}
+	} else {
+		homeConfRate = float64(topKConf) / float64(topKTotal)
+		confRate = homeConfRate
 	}
 
 	latency := float64(summary.latency) / float64(summary.totalCount)
