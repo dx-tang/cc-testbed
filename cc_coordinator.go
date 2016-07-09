@@ -1104,32 +1104,39 @@ func (coord *Coordinator) GetFeature() *Feature {
 		summary.latency += master.latency
 	}
 
+	var topKConfRate float64
 	var topKTotal int
 	var topKConf int
 
 	if *TopK {
-		for i, _ := range coord.Workers {
-			A := coord.Workers[i].riMaster
-			A.tc.GetTopK(A.keyAR, A.countAR, BIGK)
-		}
-		for i, _ := range coord.Workers {
-			A := coord.Workers[i].riMaster
-			probe := make(map[Key]int)
-			for j, _ := range A.keyAR {
-				probe[A.keyAR[j]] = A.countAR[j]
+		for k := 0; k < len(coord.Workers[0].riMaster.tc); k++ {
+			for i, _ := range coord.Workers {
+				A := coord.Workers[i].riMaster.tc[k]
+				A.GetTopK(A.keyAR, A.countAR, BIGK)
 			}
-			for j := i + 1; j < len(coord.Workers); j++ {
-				B := coord.Workers[j].riMaster
-				for q := 0; q < BIGK; q++ {
-					tmpCount, ok := probe[B.keyAR[q]]
-					if ok {
-						topKConf += 2 * int(math.Min(float64(tmpCount), float64(B.countAR[q])))
+			for i, _ := range coord.Workers {
+				A := coord.Workers[i].riMaster.tc[k]
+				probe := make(map[Key]int)
+				for j, _ := range A.keyAR {
+					probe[A.keyAR[j]] = A.countAR[j]
+				}
+				for j := i + 1; j < len(coord.Workers); j++ {
+					B := coord.Workers[j].riMaster.tc[k]
+					for q := 0; q < BIGK; q++ {
+						tmpCount, ok := probe[B.keyAR[q]]
+						if ok {
+							topKConf += 2 * int(math.Min(float64(tmpCount), float64(B.countAR[q])))
+						}
+						topKTotal += tmpCount
+						topKTotal += B.countAR[q]
 					}
-					topKTotal += tmpCount
-					topKTotal += B.countAR[q]
 				}
 			}
+			topKConfRate += float64(topKConf) / float64(topKTotal)
+			topKConf = 0
+			topKTotal = 0
 		}
+
 	}
 
 	txn := summary.txnSample
@@ -1197,7 +1204,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 			}
 		}
 	} else {
-		homeConfRate = float64(topKConf) / float64(topKTotal)
+		homeConfRate = topKConfRate
 		confRate = homeConfRate
 	}
 

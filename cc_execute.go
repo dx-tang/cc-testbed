@@ -150,7 +150,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			sample := &p.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				p.w.riMaster.tc.InsertKey(k)
+				p.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}
@@ -224,7 +224,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			sample := &p.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				p.w.riMaster.tc.InsertKey(k)
+				p.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}
@@ -363,7 +363,7 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			sample := &p.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				p.w.riMaster.tc.InsertKey(k)
+				p.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 
@@ -605,7 +605,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			sample := &transExec.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				transExec.w.riMaster.tc.InsertKey(k)
+				transExec.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}
@@ -735,7 +735,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			sample := &transExec.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				transExec.w.riMaster.tc.InsertKey(k)
+				transExec.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}
@@ -906,7 +906,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			sample := &transExec.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				transExec.w.riMaster.tc.InsertKey(k)
+				transExec.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}
@@ -1270,7 +1270,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			sample := &transExec.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				transExec.w.riMaster.tc.InsertKey(k)
+				transExec.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}
@@ -1388,7 +1388,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			sample := &transExec.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				transExec.w.riMaster.tc.InsertKey(k)
+				transExec.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}
@@ -1652,7 +1652,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			sample := &transExec.st.allSample
 			sample.sampleAccess++
 			if sample.sampleAccess >= sample.recRate {
-				transExec.w.riMaster.tc.InsertKey(k)
+				transExec.w.riMaster.tc[tableID].InsertKey(k)
 				sample.sampleAccess = 0
 			}
 		}

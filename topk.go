@@ -23,6 +23,8 @@ type TopKCounter struct {
 	buckBuf   []CounterBucket
 	buckIndex int
 	elemBuf   []CounterElem
+	keyAR     []Key
+	countAR   []int
 	padding2  [PADDING]byte
 }
 
@@ -44,7 +46,7 @@ type CounterBucket struct {
 	padding2 [PADDING]byte
 }
 
-func NewTopKCounter(m int) *TopKCounter {
+func NewTopKCounter(m int, k int) *TopKCounter {
 	tc := &TopKCounter{}
 	tc.m = m
 	tc.numElem = 0
@@ -62,6 +64,8 @@ func NewTopKCounter(m int) *TopKCounter {
 	tc.max.prev = nil
 	tc.min.value = 1
 	tc.min.elemHead = nil
+	tc.keyAR = make([]Key, k)
+	tc.countAR = make([]int, k)
 	return tc
 }
 
