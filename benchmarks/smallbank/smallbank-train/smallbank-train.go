@@ -405,7 +405,7 @@ func main() {
 				typeNum := len(typeAR)
 				typeAR = typeAR[:typeNum+1]
 				typeAR[typeNum] = ft[0][1].TrainType
-				if (ft[0][1].Txn-ft[testbed.OCCSHARE][1].Txn)/ft[0][1].Txn < PERFDIFF {
+				if tm == testbed.TRAININDEX && (ft[0][1].Txn-ft[testbed.OCCSHARE][1].Txn)/ft[0][1].Txn < PERFDIFF {
 					typeNum := len(typeAR)
 					typeAR = typeAR[:typeNum+1]
 					typeAR[typeNum] = ft[testbed.OCCSHARE][1].TrainType
@@ -418,7 +418,7 @@ func main() {
 				typeNum := len(typeAR)
 				typeAR = typeAR[:typeNum+1]
 				typeAR[typeNum] = ft[testbed.OCCSHARE][1].TrainType
-				if (ft[testbed.OCCSHARE][1].Txn-ft[0][1].Txn)/ft[testbed.OCCSHARE][1].Txn < PERFDIFF {
+				if tm == testbed.TRAININDEX && (ft[testbed.OCCSHARE][1].Txn-ft[0][1].Txn)/ft[testbed.OCCSHARE][1].Txn < PERFDIFF {
 					typeNum := len(typeAR)
 					typeAR = typeAR[:typeNum+1]
 					typeAR[typeNum] = ft[0][1].TrainType

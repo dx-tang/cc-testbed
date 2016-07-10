@@ -393,7 +393,7 @@ func main() {
 					ft[0][1].Avg(float64(9))
 				} else if tm == testbed.TRAINOCCPURE {
 					ft[testbed.OCCSHARE][1].Avg(float64(6))
-				} else {
+				} else { // TRAININDEX
 					if ft[0][1].Txn > ft[testbed.OCCSHARE][1].Txn {
 						ft[0][1].Add(ft[testbed.OCCSHARE][1])
 						ft[0][1].Avg(15)
@@ -406,11 +406,11 @@ func main() {
 			}
 
 			// Find the train type with similar performance difference
-			if ft[0][1].Txn > ft[testbed.OCCSHARE][1].Txn {
+			if ft[0][1].Txn > ft[testbed.OCCSHARE][1].Txn { // Use Partitioned Index
 				typeNum := len(typeAR)
 				typeAR = typeAR[:typeNum+1]
 				typeAR[typeNum] = ft[0][1].TrainType
-				if (ft[0][1].Txn-ft[testbed.OCCSHARE][1].Txn)/ft[0][1].Txn < PERFDIFF {
+				if tm == testbed.TRAININDEX && (ft[0][1].Txn-ft[testbed.OCCSHARE][1].Txn)/ft[0][1].Txn < PERFDIFF {
 					typeNum := len(typeAR)
 					typeAR = typeAR[:typeNum+1]
 					typeAR[typeNum] = ft[testbed.OCCSHARE][1].TrainType
@@ -423,7 +423,7 @@ func main() {
 				typeNum := len(typeAR)
 				typeAR = typeAR[:typeNum+1]
 				typeAR[typeNum] = ft[testbed.OCCSHARE][1].TrainType
-				if (ft[testbed.OCCSHARE][1].Txn-ft[0][1].Txn)/ft[testbed.OCCSHARE][1].Txn < PERFDIFF {
+				if tm == testbed.TRAININDEX && (ft[testbed.OCCSHARE][1].Txn-ft[0][1].Txn)/ft[testbed.OCCSHARE][1].Txn < PERFDIFF {
 					typeNum := len(typeAR)
 					typeAR = typeAR[:typeNum+1]
 					typeAR[typeNum] = ft[0][1].TrainType

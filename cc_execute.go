@@ -608,23 +608,31 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	if r == nil {
-		var bucket Bucket
-		var version uint64
-		r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
-		if err != nil {
-			return nil, nil, true, ENOKEY
-		}
-		if bucket != nil {
-			if version&LOCKED != 0 { // Locked
-				o.Abort(req)
-				o.w.NStats[NINDEXABORTS]++
-				return nil, nil, true, EABORT
+		if WLTYPE != TPCCWL {
+			r, _, _, err = o.s.GetRecByID(tableID, k, partNum)
+			if err != nil {
+				return nil, nil, true, ENOKEY
 			}
-			n := len(t.rBucket)
-			t.rBucket = t.rBucket[0 : n+1]
-			t.rBucket[n].bucket = bucket
-			t.rBucket[n].version = version
+		} else {
+			var bucket Bucket
+			var version uint64
+			r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
+			if err != nil {
+				return nil, nil, true, ENOKEY
+			}
+			if bucket != nil {
+				if version&LOCKED != 0 { // Locked
+					o.Abort(req)
+					o.w.NStats[NINDEXABORTS]++
+					return nil, nil, true, EABORT
+				}
+				n := len(t.rBucket)
+				t.rBucket = t.rBucket[0 : n+1]
+				t.rBucket[n].bucket = bucket
+				t.rBucket[n].version = version
+			}
 		}
+
 	}
 
 	ok, tid = r.IsUnlocked()
@@ -1017,23 +1025,25 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 		}
 	}
 
-	for j := 0; j < len(o.tt); j++ {
-		t := &o.tt[j]
-		if len(t.rBucket) == 0 {
-			continue
-		}
-		for i := 0; i < len(t.rBucket); i++ {
-			if WLTYPE == TPCCWL && j == ORDER {
-				b := t.rBucket[i].bucket.(*OrderBucket)
-				if b.iLock.Read() != t.rBucket[i].version {
-					o.w.NStats[NINDEXABORTS]++
-					return o.Abort(req)
-				}
-			} else if WLTYPE == TPCCWL && j == ORDERLINE {
-				b := t.rBucket[i].bucket.(*OrderLineBucket)
-				if b.iLock.Read() != t.rBucket[i].version {
-					o.w.NStats[NINDEXABORTS]++
-					return o.Abort(req)
+	if WLTYPE == TPCCWL {
+		for j := ORDER; j <= ORDERLINE; j++ {
+			t := &o.tt[j]
+			if len(t.rBucket) == 0 {
+				continue
+			}
+			for i := 0; i < len(t.rBucket); i++ {
+				if j == ORDER {
+					b := t.rBucket[i].bucket.(*OrderBucket)
+					if b.iLock.Read() != t.rBucket[i].version {
+						o.w.NStats[NINDEXABORTS]++
+						return o.Abort(req)
+					}
+				} else if j == ORDERLINE {
+					b := t.rBucket[i].bucket.(*OrderLineBucket)
+					if b.iLock.Read() != t.rBucket[i].version {
+						o.w.NStats[NINDEXABORTS]++
+						return o.Abort(req)
+					}
 				}
 			}
 		}
