@@ -25,7 +25,7 @@ const (
 	PERFDIFF   = 0.03
 )
 
-var NOTP = []int{100, 100, 100, 100, 100, 100}
+var NOTP = [6]int{100, 100, 100, 100, 100, 100}
 var PAYTP = "0:50:50:0:0:0"
 var WARMCONTENTION = 1.5
 
