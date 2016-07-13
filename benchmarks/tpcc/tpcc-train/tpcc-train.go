@@ -25,6 +25,10 @@ const (
 	PERFDIFF   = 0.03
 )
 
+var NOTP = []int{100, 100, 100, 100, 100, 100}
+var PAYTP = "0:50:50:0:0:0"
+var WARMCONTENTION = 1.5
+
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
 var wl = flag.String("wl", "../tpcc.txt", "workload to be used")
 var out = flag.String("out", "data.out", "output file path")
@@ -241,8 +245,16 @@ func main() {
 			}
 
 			if tpccWL == nil {
-				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, tmpContention, tpccTranPer, float64(curCR), curPS, *dataDir, testbed.PARTITION, double)
+				// Warm up
+				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.PARTITION, double)
 				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpccWL)
+
+				clog.Info("Begin warming up")
+				oneTest(tpccWL, coord, ft, nWorkers, tm, 0, partGenPool)
+				tpccWL.ResetConf(PAYTP, float64(0), coord, true, testbed.NOPARTSKEW, false)
+				oneTest(tpccWL, coord, ft, nWorkers, tm, 0, partGenPool)
+				clog.Info("End warming up")
+
 				if *prof {
 					f, err := os.Create("tpcc.prof")
 					if err != nil {
@@ -251,26 +263,27 @@ func main() {
 					pprof.StartCPUProfile(f)
 					defer pprof.StopCPUProfile()
 				}
-			} else {
-				keyGens, ok := keyGenPool[tmpContention]
-				if !ok {
-					keyGens = tpccWL.NewKeyGen(tmpContention)
-					keyGenPool[tmpContention] = keyGens
-				}
-				tpccWL.SetKeyGens(keyGens)
-
-				if isPartition {
-					tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, curPS)
-				} else {
-					partGens, ok1 := partGenPool[curPS]
-					if !ok1 {
-						partGens = tpccWL.NewPartGen(curPS)
-						partGenPool[curPS] = partGens
-					}
-					tpccWL.SetPartGens(partGens)
-					tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, testbed.NOPARTSKEW)
-				}
 			}
+
+			keyGens, ok := keyGenPool[tmpContention]
+			if !ok {
+				keyGens = tpccWL.NewKeyGen(tmpContention)
+				keyGenPool[tmpContention] = keyGens
+			}
+			tpccWL.SetKeyGens(keyGens)
+
+			if isPartition {
+				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, curPS, true)
+			} else {
+				partGens, ok1 := partGenPool[curPS]
+				if !ok1 {
+					partGens = tpccWL.NewPartGen(curPS)
+					partGenPool[curPS] = partGens
+				}
+				tpccWL.SetPartGens(partGens)
+				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, testbed.NOPARTSKEW, true)
+			}
+
 			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, curPS, tmpContention, tmpTP)
 
 			typeAR = typeAR[0:0]

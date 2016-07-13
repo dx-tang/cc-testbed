@@ -855,7 +855,7 @@ func (tpccWL *TPCCWorkload) NewPartGen(ps float64) []KeyGen {
 	return keygens
 }
 
-func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord *Coordinator, isTrain bool, ps float64) {
+func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord *Coordinator, isTrain bool, ps float64, gc bool) {
 	tp := strings.Split(transPercentage, ":")
 	if len(tp) != TPCCTRANSNUM {
 		clog.Error("Wrong format of transaction percentage string %s\n", transPercentage)
@@ -912,9 +912,11 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		w.iaAR[NEWORDER].Reset()
 	}
 
-	debug.SetGCPercent(1)
-	debug.FreeOSMemory()
-	debug.SetGCPercent(-1)
+	if gc {
+		debug.SetGCPercent(1)
+		debug.FreeOSMemory()
+		debug.SetGCPercent(-1)
+	}
 
 }
 
