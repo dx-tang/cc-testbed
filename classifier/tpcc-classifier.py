@@ -17,7 +17,8 @@ READRATE = 4
 HOMECONF = 5
 CONFRATE = 6
 
-threshold = 0
+threshold = 0.8
+threshold_index = 1.0
 
 class TPCC(object):
 
@@ -78,12 +79,12 @@ class TPCC(object):
 			X.append(tmp)
 			if (columns[FEATURELEN] == 3):
 				Y.extend([3])
-				if len(columns[FEATURELEN:]) == 2:
-					if columns[FEATURELEN+1] == 4:
-						X.append(tmp)
-						Y.extend([4])
 			elif (columns[FEATURELEN] == 4):
 				Y.extend([4])
+				if len(columns[FEATURELEN:]) == 2:
+					if columns[FEATURELEN+1] == 3:
+						X.append(tmp)
+						Y.extend([3])
 		pureclf = tree.DecisionTreeClassifier(max_depth=4)
 		pureclf = pureclf.fit(np.array(X), np.array(Y))
 		return pureclf
@@ -99,16 +100,6 @@ class TPCC(object):
 			tmp.extend(columns[PARTAVG:RECAVG])
 			tmp.extend(columns[LATENCY:READRATE])
 			tmp.extend(columns[HOMECONF:CONFRATE])
-			ok1 = 0
-			ok2 = 0
-			for _, y in enumerate(columns[FEATURELEN:]):
-				if y <= 2:
-					ok1 = 1
-				if y > 2:
-					ok2 = 1
-			#if ok1 == 1:
-			#	X.append(tmp)
-			#	Y.extend([0])
 			if columns[FEATURELEN] > 2:
 				X.append(tmp)
 				Y.extend([1])
@@ -129,7 +120,7 @@ class TPCC(object):
 		cur = 0
 		if curType > 2:
 			cur = 1
-		if self.indexprob > threshold:
+		if self.indexprob >= threshold_index:
 			cur = result[0]
 
 		if cur == 0: # Switch within partitioned index
@@ -151,7 +142,8 @@ class TPCC(object):
 					curType = curType - 2
 				testOCC = [[recAvg, latency, readRate, homeconf]]
 				result = self.occclf.predict(testOCC)
-				self.occprob = self.occclf.predict_proba(testOCC)[0][result[0] - 1]
+				#self.occprob = self.occclf.predict_proba(testOCC)[0][result[0] - 1]
+				self.occprob = 1.0
 				self.totalprob = self.occprob * self.totalprob
 				if self.occprob > threshold:
 					return result[0]

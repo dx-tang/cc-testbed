@@ -452,6 +452,8 @@ func (coord *Coordinator) process() {
 
 			coord.justReconfig = true
 
+			coord.store.secTables = coord.store.backTables
+
 			timeFile.WriteString(fmt.Sprintf("%.4f\n", time.Since(coord.indexChangeStart).Seconds()))
 			if coord.isMerge {
 				clog.Info("Done with Index Merging: %.3f", time.Since(coord.indexChangeStart).Seconds())

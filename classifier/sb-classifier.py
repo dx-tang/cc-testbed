@@ -17,7 +17,8 @@ READRATE = 4
 HOMECONF = 5
 CONFRATE = 6
 
-threshold = 0
+threshold = 0.8
+threshold_index = 0.95
 
 class Smallbank(object):
 
@@ -58,12 +59,14 @@ class Smallbank(object):
 			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
 			tmp = []
 			tmp.extend(columns[RECAVG:CONFRATE])
-			X.append(tmp)
-			if (columns[FEATURELEN] == 1):
-				Y.extend([1])
-			elif (columns[FEATURELEN] == 2):
-				Y.extend([2])
-		occclf = tree.DecisionTreeClassifier(max_depth=6)
+			for _, y in enumerate(columns[FEATURELEN:]):
+				if y == 1:
+					X.append(tmp)
+					Y.extend([1])
+				if y == 2:
+					X.append(tmp)
+					Y.extend([2])
+		occclf = tree.DecisionTreeClassifier(max_depth=4)
 		occclf = occclf.fit(np.array(X), np.array(Y))
 		return occclf
 
@@ -78,12 +81,12 @@ class Smallbank(object):
 			X.append(tmp)
 			if (columns[FEATURELEN] == 3):
 				Y.extend([3])
-				if len(columns[FEATURELEN:]) == 2:
-					if columns[FEATURELEN+1] == 4:
-						X.append(tmp)
-						Y.extend([4])
 			elif (columns[FEATURELEN] == 4):
 				Y.extend([4])
+				if len(columns[FEATURELEN:]) == 2:
+					if columns[FEATURELEN+1] == 3:
+						X.append(tmp)
+						Y.extend([3])
 		pureclf = tree.DecisionTreeClassifier(max_depth=4)
 		pureclf = pureclf.fit(np.array(X), np.array(Y))
 		return pureclf
@@ -126,10 +129,11 @@ class Smallbank(object):
 		result = self.indexclf.predict(testIndex)
 		self.indexprob = self.indexclf.predict_proba(testIndex)[0][result[0]]
 		self.totalprob = self.indexprob
+		print self.indexprob, result
 		cur = 0
 		if curType > 2:
 			cur = 1
-		if self.indexprob > threshold:
+		if self.indexprob >= threshold_index:
 			cur = result[0]
 
 		if cur == 0: # Switch within partitioned index

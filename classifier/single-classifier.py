@@ -17,7 +17,8 @@ READRATE = 4
 HOMECONF = 5
 CONFRATE = 6
 
-threshold = 0
+threshold_index = 1
+threshold = 0.7
 
 class Single(object):
 
@@ -46,7 +47,7 @@ class Single(object):
 				Y.extend([0])
 			else:
 				Y.extend([1])
-		partclf = tree.DecisionTreeClassifier(max_depth=6)
+		partclf = tree.DecisionTreeClassifier(max_depth=4)
 		partclf = partclf.fit(np.array(X), np.array(Y))
 		return partclf
 
@@ -63,7 +64,11 @@ class Single(object):
 				Y.extend([1])
 			elif (columns[FEATURELEN] == 2):
 				Y.extend([2])
-		occclf = tree.DecisionTreeClassifier(max_depth=6)
+				if len(columns[FEATURELEN:]) == 2:
+					if columns[FEATURELEN+1] == 1:
+						X.append(tmp)
+						Y.extend([1])
+		occclf = tree.DecisionTreeClassifier(max_depth=4)
 		occclf = occclf.fit(np.array(X), np.array(Y))
 		return occclf
 
@@ -78,12 +83,12 @@ class Single(object):
 			X.append(tmp)
 			if (columns[FEATURELEN] == 3):
 				Y.extend([3])
-				if len(columns[FEATURELEN:]) == 2:
-					if columns[FEATURELEN+1] == 4:
-						X.append(tmp)
-						Y.extend([4])
 			elif (columns[FEATURELEN] == 4):
 				Y.extend([4])
+				if len(columns[FEATURELEN:]) == 2:
+					if columns[FEATURELEN+1] == 3:
+						X.append(tmp)
+						Y.extend([3])
 		pureclf = tree.DecisionTreeClassifier(max_depth=4)
 		pureclf = pureclf.fit(np.array(X), np.array(Y))
 		return pureclf
@@ -114,10 +119,11 @@ class Single(object):
 		result = self.indexclf.predict(testIndex)
 		self.indexprob = self.indexclf.predict_proba(testIndex)[0][result[0]]
 		self.totalprob = self.indexprob
+		print result, self.indexprob
 		cur = 0
 		if curType > 2:
 			cur = 1
-		if self.indexprob > threshold:
+		if self.indexprob >= threshold_index:
 			cur = result[0]
 
 		if cur == 0: # Switch within partitioned index
@@ -125,6 +131,7 @@ class Single(object):
 			result = self.partclf.predict(testPart)
 			self.partprob = self.partclf.predict_proba(testPart)[0][result[0]]
 			self.totalprob = self.partprob * self.totalprob
+			print result, self.partprob
 			# cur represent PCC or not
 			cur = 0
 			if curType > 0:

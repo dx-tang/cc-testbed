@@ -114,6 +114,7 @@ type Store struct {
 	padding1     [PADDING]byte
 	priTables    []Table
 	secTables    []Table
+	backTables   []Table
 	state        int
 	spinLock     []SpinLockPad
 	wfLock       []WFMuTexPad
@@ -165,6 +166,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 	s := &Store{
 		priTables:    make([]Table, tableCount),
 		secTables:    make([]Table, tableCount),
+		backTables:   make([]Table, tableCount),
 		tableToIndex: make(map[string]int),
 		wfLock:       make([]WFMuTexPad, *NumPart),
 		confLock:     make([]NoWaitLockPad, *NumPart),
@@ -194,6 +196,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			start := time.Now()
 			s.priTables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
 			s.secTables[i] = MakeNewOrderTable(*NumPart, !isPartition, mode)
+			s.backTables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
 			clog.Info("Making NewOrder %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDER") == 0 {
 			start := time.Now()
@@ -203,6 +206,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			} else {
 				s.secTables[i] = MakeOrderTable(*NumPart, *NumPart, !isPartition, mode)
 			}
+			s.backTables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
 			clog.Info("Making Order %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "CUSTOMER") == 0 {
 			start := time.Now()
@@ -212,11 +216,13 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			} else {
 				s.secTables[i] = MakeCustomerTable(*NumPart, *NumPart, !isPartition, mode)
 			}
+			s.backTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
 			clog.Info("Making Customer %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
 			start := time.Now()
 			s.priTables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
 			s.secTables[i] = s.priTables[i]
+			s.backTables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
 			clog.Info("Making History %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDERLINE") == 0 {
 			start := time.Now()
@@ -226,11 +232,13 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			} else {
 				s.secTables[i] = MakeOrderLineTable(*NumPart, *NumPart, !isPartition, mode)
 			}
+			s.backTables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
 			clog.Info("Making OrderLine %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ITEM") == 0 {
 			start := time.Now()
 			s.priTables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
 			s.secTables[i] = s.priTables[i]
+			s.backTables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
 			clog.Info("Making ITEM %.2f", time.Since(start).Seconds())
 		} else {
 			start := time.Now()
@@ -240,6 +248,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			} else {
 				s.secTables[i] = NewBasicTable(schemaStrs, *NumPart, !isPartition, mode, i)
 			}
+			s.backTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)
 			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		}
 
