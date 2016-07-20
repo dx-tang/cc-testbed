@@ -238,7 +238,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			start := time.Now()
 			s.priTables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
 			s.secTables[i] = s.priTables[i]
-			s.backTables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
+			s.backTables[i] = s.priTables[i]
 			clog.Info("Making ITEM %.2f", time.Since(start).Seconds())
 		} else {
 			start := time.Now()

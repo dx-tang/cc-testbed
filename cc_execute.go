@@ -915,6 +915,7 @@ func (o *OTransaction) Abort(req *LockReq) TID {
 		for j := 0; j < len(t.wKeys); j++ {
 			wk := &t.wKeys[j]
 			if wk.locked {
+				wk.locked = false
 				wk.rec.Unlock(o.maxSeen)
 			}
 		}
@@ -928,6 +929,21 @@ func (o *OTransaction) Abort(req *LockReq) TID {
 	}
 
 	return 0
+}
+
+func (o *OTransaction) ReleaseWLocks() {
+	for i := 0; i < len(o.tt); i++ {
+		t := &o.tt[i]
+		for j := 0; j < len(t.wKeys); j++ {
+			wk := &t.wKeys[j]
+			if wk.locked {
+				wk.locked = false
+				wk.rec.Unlock(o.maxSeen)
+			} else {
+				return
+			}
+		}
+	}
 }
 
 func Compare(k1 Key, k2 Key) int {
@@ -946,9 +962,9 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 	// Phase 1: Lock all write keys
 	//for _, wk := range o.wKeys {
 
-	for j := 0; j < len(o.tt); j++ {
-		t := &o.tt[j]
-		if occ_wait { // If wait on writes, sort by keys
+	if occ_wait { // If wait on writes, sort by keys
+		for j := 0; j < len(o.tt); j++ {
+			t := &o.tt[j]
 			for i := 1; i < len(t.wKeys); i++ {
 				wk := t.wKeys[i]
 				p := i - 1
@@ -959,6 +975,12 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 				t.wKeys[p+1] = wk
 			}
 		}
+	}
+
+Restart:
+
+	for j := 0; j < len(o.tt); j++ {
+		t := &o.tt[j]
 
 		for i := 0; i < len(t.wKeys); i++ {
 			wk := &t.wKeys[i]
@@ -966,9 +988,13 @@ func (o *OTransaction) Commit(req *LockReq) TID {
 			var ok bool
 
 			if occ_wait {
-				for !ok {
-					ok, former = wk.rec.Lock()
+				//for !ok {
+				ok, former = wk.rec.Lock()
+				if !ok {
+					o.ReleaseWLocks()
+					goto Restart
 				}
+				//}
 			} else {
 				ok, former = wk.rec.Lock()
 				if !ok {
