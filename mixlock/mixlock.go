@@ -13,6 +13,7 @@ type MixLock struct {
 const (
 	LOCKMASK   = 1<<63 - 1<<7 + 1<<63
 	TIDMASK    = (1<<7 - 1)
+	READERMASK = 1<<63 - 1<<6 + 1<<63
 	MAXREADERS = 1<<6 - 1
 	LOCKBITS   = 7
 	LOCKED     = 1 << 6
@@ -25,11 +26,14 @@ func (l *MixLock) RLock() (bool, uint64) {
 		return false, 0
 	}
 
-	if atomic.CompareAndSwapUint64(&l.w, w, w+1) {
-		return true, w >> LOCKBITS
-	} else {
+	w = atomic.AddUint64(&l.w, 1)
+
+	if w&LOCKED != 0 {
+		atomic.AddUint64(&l.w, ^uint64(0))
 		return false, 0
 	}
+
+	return true, w >> LOCKBITS
 }
 
 func (l *MixLock) Read() uint64 {
@@ -74,7 +78,8 @@ func (l *MixLock) Lock() (bool, uint64) {
 
 func (l *MixLock) Unlock(t uint64) {
 	newWord := t << LOCKBITS
-	atomic.StoreUint64(&l.w, newWord)
+	oldWord := atomic.LoadUint64(&l.w) & READERMASK
+	atomic.AddUint64(&l.w, newWord-oldWord)
 }
 
 func (l *MixLock) Upgrade() bool {
