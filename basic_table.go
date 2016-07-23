@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	SHARDCOUNT = 256
+	//SHARDCOUNT = 256
+	SHARDCOUNT = 1000
 	KEY0       = 0
 	KEY1       = 1
 	KEY2       = 2
@@ -181,20 +182,20 @@ func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, er
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	//if bt.mode != PARTITION {
-	//	shard.RLock()
-	//}
+	if bt.mode != PARTITION {
+		shard.RLock()
+	}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		//if bt.mode != PARTITION {
-		//	shard.RUnlock()
-		//}
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return nil, nil, 0, ENOKEY
 	} else {
-		//if bt.mode != PARTITION {
-		//	shard.RUnlock()
-		//}
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return r, nil, 0, nil
 	}
 }
@@ -208,22 +209,22 @@ func (bt *BasicTable) SetValueByID(k Key, partNum int, value Value, colNum int) 
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	//if bt.mode != PARTITION {
-	//	shard.RLock()
-	//}
+	if bt.mode != PARTITION {
+		shard.RLock()
+	}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		//if bt.mode != PARTITION {
-		//	shard.RUnlock()
-		//}
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return ENOKEY
 	}
 
 	r.SetValue(value, colNum)
-	//if bt.mode != PARTITION {
-	//	shard.RUnlock()
-	//}
+	if bt.mode != PARTITION {
+		shard.RUnlock()
+	}
 	return nil
 }
 
@@ -236,23 +237,23 @@ func (bt *BasicTable) GetValueByID(k Key, partNum int, value Value, colNum int) 
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	//if bt.mode != PARTITION {
-	//	shard.RLock()
-	//}
+	if bt.mode != PARTITION {
+		shard.RLock()
+	}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		//if bt.mode != PARTITION {
-		//	shard.RUnlock()
-		//}
+		if bt.mode != PARTITION {
+			shard.RUnlock()
+		}
 		return ENOKEY
 	}
 
 	r.GetValue(value, colNum)
 
-	//if bt.mode != PARTITION {
-	//	shard.RUnlock()
-	//}
+	if bt.mode != PARTITION {
+		shard.RUnlock()
+	}
 	return nil
 }
 

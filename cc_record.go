@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+	"github.com/totemtang/cc-testbed/mixlock"
 	"github.com/totemtang/cc-testbed/nowaitlock"
 	"github.com/totemtang/cc-testbed/spinlock"
 	"github.com/totemtang/cc-testbed/wfmutex"
@@ -50,9 +51,9 @@ type Record interface {
 	SetValue(val Value, colNum int)
 	GetTID() TID
 	SetTID(tid TID)
-	WLock(req *LockReq) bool
-	WUnlock(req *LockReq)
-	RLock(req *LockReq) bool
+	WLock(req *LockReq) (bool, TID)
+	WUnlock(req *LockReq, tid TID)
+	RLock(req *LockReq) (bool, TID)
 	RUnlock(req *LockReq)
 	Upgrade(req *LockReq) bool
 	GetTuple() Tuple
@@ -95,7 +96,7 @@ func MakeRecord(table Table, k Key, tuple Tuple) Record {
 			tuple: tuple,
 		}
 
-		ar.wdLock.Initialize()
+		//ar.wdLock.Initialize()
 
 		return ar
 	} else {
@@ -151,18 +152,18 @@ func (pr *PRecord) SetTID(tid TID) {
 	clog.Error("Partition mode does not support SetTID Operation")
 }
 
-func (pr *PRecord) WLock(req *LockReq) bool {
+func (pr *PRecord) WLock(req *LockReq) (bool, TID) {
 	clog.Error("Partition mode does not support WLock Operation")
-	return false
+	return false, 0
 }
 
-func (pr *PRecord) WUnlock(req *LockReq) {
+func (pr *PRecord) WUnlock(req *LockReq, tid TID) {
 	clog.Error("Partition mode does not support WUnlock Operation")
 }
 
-func (pr *PRecord) RLock(req *LockReq) bool {
+func (pr *PRecord) RLock(req *LockReq) (bool, TID) {
 	clog.Error("Partition mode does not support RLock Operation")
-	return false
+	return false, 0
 }
 
 func (pr *PRecord) RUnlock(req *LockReq) {
@@ -236,19 +237,19 @@ func (or *ORecord) SetTID(tid TID) {
 	clog.Error("OCC mode does not support SetTID Operation")
 }
 
-func (or *ORecord) WLock(req *LockReq) bool {
+func (or *ORecord) WLock(req *LockReq) (bool, TID) {
 	clog.Error("OCC mode does not support WLock Operation")
-	return false
+	return false, 0
 }
 
-func (or *ORecord) WUnlock(req *LockReq) {
+func (or *ORecord) WUnlock(req *LockReq, tid TID) {
 	clog.Error("OCC mode does not support WUnlock Operation")
 }
 
-func (or *ORecord) RLock(req *LockReq) bool {
+func (or *ORecord) RLock(req *LockReq) (bool, TID) {
 	debug.PrintStack()
 	clog.Error("OCC mode does not support RLock Operation")
-	return false
+	return false, 0
 }
 
 func (or *ORecord) RUnlock(req *LockReq) {
@@ -324,18 +325,18 @@ func (dr *DRecord) SetTID(tid TID) {
 	clog.Error("Dummy Record does not support SetTID Operation")
 }
 
-func (dr *DRecord) WLock(req *LockReq) bool {
+func (dr *DRecord) WLock(req *LockReq) (bool, TID) {
 	dr.lock.Lock()
-	return true
+	return true, 0
 }
 
-func (dr *DRecord) WUnlock(req *LockReq) {
+func (dr *DRecord) WUnlock(req *LockReq, tid TID) {
 	dr.lock.Unlock()
 }
 
-func (dr *DRecord) RLock(req *LockReq) bool {
+func (dr *DRecord) RLock(req *LockReq) (bool, TID) {
 	clog.Error("Dummy mode does not support RLock Operation")
-	return false
+	return false, 0
 }
 
 func (dr *DRecord) RUnlock(req *LockReq) {
@@ -408,29 +409,29 @@ func (lr *LRecord) SetTID(tid TID) {
 	clog.Error("Lock mode does not support SetTID Operation")
 }
 
-func (lr *LRecord) WLock(req *LockReq) bool {
+func (lr *LRecord) WLock(req *LockReq) (bool, TID) {
 	if *NoWait {
-		return lr.nwLock.Lock()
+		return lr.nwLock.Lock(), 0
 	} else {
 		req.reqType = LOCK_EX
 		retState := lr.wdLock.Lock(req)
 		if retState == LOCK_OK {
-			return true
+			return true, 0
 		} else if retState == LOCK_ABORT {
-			return false
+			return false, 0
 		} else { // Wait
 			retState = <-req.state
 			if retState == LOCK_OK {
-				return true
+				return true, 0
 			} else {
 				clog.Error("Wait-Die: Unsuccessful Wait\n")
-				return false
+				return false, 0
 			}
 		}
 	}
 }
 
-func (lr *LRecord) WUnlock(req *LockReq) {
+func (lr *LRecord) WUnlock(req *LockReq, tid TID) {
 	if *NoWait {
 		lr.nwLock.Unlock()
 	} else {
@@ -439,23 +440,23 @@ func (lr *LRecord) WUnlock(req *LockReq) {
 	}
 }
 
-func (lr *LRecord) RLock(req *LockReq) bool {
+func (lr *LRecord) RLock(req *LockReq) (bool, TID) {
 	if *NoWait {
-		return lr.nwLock.RLock()
+		return lr.nwLock.RLock(), 0
 	} else {
 		req.reqType = LOCK_SH
 		retState := lr.wdLock.Lock(req)
 		if retState == LOCK_OK {
-			return true
+			return true, 0
 		} else if retState == LOCK_ABORT {
-			return false
+			return false, 0
 		} else { // Wait
 			retState = <-req.state
 			if retState == LOCK_OK {
-				return true
+				return true, 0
 			} else {
 				clog.Error("Wait-Die: Unsuccessful Wait\n")
-				return false
+				return false, 0
 			}
 		}
 	}
@@ -510,29 +511,33 @@ type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	tuple    Tuple
-	wdLock   WDLock
-	nwLock   nowaitlock.NoWaitLock
-	last     wfmutex.WFMutex
+	mixLock  mixlock.MixLock
 	cd       ConfDetector
 	table    Table
 	padding2 [PADDING]byte
 }
 
 func (ar *ARecord) Lock() (bool, TID) {
-	b, x := ar.last.Lock()
+	b, x := ar.mixLock.Lock()
+	//b, x := ar.last.Lock()
 	return b, TID(x)
 }
 
 func (ar *ARecord) Unlock(tid TID) {
-	ar.last.Unlock(uint64(tid))
+	//ar.last.Unlock(uint64(tid))
+	ar.mixLock.Unlock(uint64(tid))
 }
 
 func (ar *ARecord) IsUnlocked() (bool, TID) {
-	x := ar.last.Read()
-	if x&wfmutex.LOCKED != 0 {
-		return false, TID(x & wfmutex.TIDMASK)
+	//x := ar.last.Read()
+	//if x&wfmutex.LOCKED != 0 {
+	//	return false, TID(x & wfmutex.TIDMASK)
+	//}
+	x := ar.mixLock.Read()
+	if x&mixlock.LOCKED != 0 {
+		return false, TID(x >> mixlock.LOCKBITS)
 	}
-	return true, TID(x)
+	return true, TID(x >> mixlock.LOCKBITS)
 }
 
 func (ar *ARecord) GetValue(val Value, colNum int) {
@@ -552,14 +557,15 @@ func (ar *ARecord) SetValue(val Value, colNum int) {
 }
 
 func (ar *ARecord) GetTID() TID {
-	return TID(ar.last.Read())
+	//return TID(ar.last.Read())
+	return TID(ar.mixLock.Read() >> mixlock.LOCKBITS)
 }
 func (ar *ARecord) SetTID(tid TID) {
 	clog.Error("Adaptive mode does not support SetTID Operation")
 }
 
-func (ar *ARecord) WLock(req *LockReq) bool {
-	if *NoWait {
+func (ar *ARecord) WLock(req *LockReq) (bool, TID) {
+	/*if *NoWait {
 		return ar.nwLock.Lock()
 	} else {
 		req.reqType = LOCK_EX
@@ -577,71 +583,83 @@ func (ar *ARecord) WLock(req *LockReq) bool {
 				return false
 			}
 		}
-	}
+	}*/
+	b, x := ar.mixLock.Lock()
+	return b, TID(x)
 }
 
-func (ar *ARecord) WUnlock(req *LockReq) {
-	if *NoWait {
-		ar.nwLock.Unlock()
-	} else {
-		req.reqType = LOCK_EX
-		ar.wdLock.Unlock(req)
-	}
+func (ar *ARecord) WUnlock(req *LockReq, tid TID) {
+	/*
+		if *NoWait {
+			ar.nwLock.Unlock()
+		} else {
+			req.reqType = LOCK_EX
+			ar.wdLock.Unlock(req)
+		}*/
+	ar.Unlock(tid)
 }
 
-func (ar *ARecord) RLock(req *LockReq) bool {
-	if *NoWait {
-		return ar.nwLock.RLock()
-	} else {
-		//return ar.wd.RLock(uint64(tid))
-		req.reqType = LOCK_SH
-		retState := ar.wdLock.Lock(req)
-		if retState == LOCK_OK {
-			return true
-		} else if retState == LOCK_ABORT {
-			return false
-		} else { // Wait
-			retState = <-req.state
+func (ar *ARecord) RLock(req *LockReq) (bool, TID) {
+	/*
+		if *NoWait {
+			return ar.nwLock.RLock()
+		} else {
+			//return ar.wd.RLock(uint64(tid))
+			req.reqType = LOCK_SH
+			retState := ar.wdLock.Lock(req)
 			if retState == LOCK_OK {
 				return true
-			} else {
-				clog.Error("Wait-Die: Unsuccessful Wait\n")
+			} else if retState == LOCK_ABORT {
 				return false
+			} else { // Wait
+				retState = <-req.state
+				if retState == LOCK_OK {
+					return true
+				} else {
+					clog.Error("Wait-Die: Unsuccessful Wait\n")
+					return false
+				}
 			}
 		}
-	}
+	*/
+	b, x := ar.mixLock.RLock()
+	return b, TID(x)
 }
 
 func (ar *ARecord) RUnlock(req *LockReq) {
-	if *NoWait {
+	/*if *NoWait {
 		ar.nwLock.RUnlock()
 	} else {
 		req.reqType = LOCK_SH
 		ar.wdLock.Unlock(req)
-	}
+	}*/
+	ar.mixLock.RUnlock()
 }
 
 func (ar *ARecord) Upgrade(req *LockReq) bool {
-	if *NoWait {
-		return ar.nwLock.Upgrade()
-	} else {
-		//return ar.wd.Upgrade(uint64(tid))
-		req.reqType = LOCK_EX
-		retState := ar.wdLock.Lock(req)
-		if retState == LOCK_OK {
-			return true
-		} else if retState == LOCK_ABORT {
-			return false
-		} else { // Wait
-			retState = <-req.state
+	/*
+		if *NoWait {
+			return ar.nwLock.Upgrade()
+		} else {
+			//return ar.wd.Upgrade(uint64(tid))
+			req.reqType = LOCK_EX
+			retState := ar.wdLock.Lock(req)
 			if retState == LOCK_OK {
 				return true
-			} else {
-				clog.Error("Wait-Die: Unsuccessful Wait\n")
+			} else if retState == LOCK_ABORT {
 				return false
+			} else { // Wait
+				retState = <-req.state
+				if retState == LOCK_OK {
+					return true
+				} else {
+					clog.Error("Wait-Die: Unsuccessful Wait\n")
+					return false
+				}
 			}
 		}
-	}
+	*/
+	return ar.mixLock.Upgrade()
 }
 
 func (ar *ARecord) GetTuple() Tuple {

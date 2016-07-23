@@ -195,7 +195,7 @@ func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
 		return entry.rec, nil
 	} else {
 		if !no.isPartition {
-			entry.rec.WUnlock(nil)
+			entry.rec.WUnlock(nil, 0)
 			no.delLock[index].Unlock()
 		}
 		return nil, ENODEL
@@ -205,7 +205,7 @@ func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
 func (no *NewOrderTable) ReleaseDelete(k Key, partNum int) {
 	if !no.isPartition {
 		index := k[KEY0]*DIST_COUNT + k[KEY1]
-		no.head[index].rec.WUnlock(nil)
+		no.head[index].rec.WUnlock(nil, 0)
 		no.delLock[index].Unlock()
 	}
 }
@@ -220,7 +220,7 @@ func (no *NewOrderTable) DeleteRecord(k Key, partNum int) error {
 	}
 
 	if !no.isPartition {
-		entry.rec.WUnlock(nil)
+		entry.rec.WUnlock(nil, 0)
 		no.delLock[index].Unlock()
 	}
 

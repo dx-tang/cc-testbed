@@ -399,6 +399,11 @@ func (coord *Coordinator) process() {
 				}
 				return
 			} else if coord.rc%coord.perTest == 0 {
+				if *SysType != ADAPTIVE {
+					clog.Info("False Switch")
+					coord.switchCC(coord.mode)
+				}
+
 				coord.curTest++
 				tc := &coord.testCases[coord.curTest]
 				if coord.workload == SINGLEWL {
@@ -664,8 +669,10 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 }
 
 func (coord *Coordinator) switchCC(mode int) {
-	if mode == coord.mode {
-		return
+	if *SysType == ADAPTIVE {
+		if mode == coord.mode {
+			return
+		}
 	}
 	coord.mode = mode
 	for i := 0; i < len(coord.Workers); i++ {

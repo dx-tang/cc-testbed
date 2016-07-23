@@ -509,6 +509,8 @@ func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 
 func (o *OTransaction) Reset(t Trans) {
 
+	o.maxSeen = TID(0)
+
 	for j := 0; j < len(o.tt); j++ {
 		t := &o.tt[j]
 		t.rKeys = t.rKeys[:0]
@@ -608,12 +610,12 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 	}
 
 	if r == nil {
-		if WLTYPE != TPCCWL {
-			r, _, _, err = o.s.GetRecByID(tableID, k, partNum)
-			if err != nil {
-				return nil, nil, true, ENOKEY
-			}
-		} else {
+		//if WLTYPE != TPCCWL {
+		r, _, _, err = o.s.GetRecByID(tableID, k, partNum)
+		if err != nil {
+			return nil, nil, true, ENOKEY
+		}
+		/*} else {
 			var bucket Bucket
 			var version uint64
 			r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
@@ -631,7 +633,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 				t.rBucket[n].bucket = bucket
 				t.rBucket[n].version = version
 			}
-		}
+		}*/
 
 	}
 
@@ -735,13 +737,13 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 
 		if r == nil {
 			if inputRec == nil {
-				var bucket Bucket
-				var version uint64
-				r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
+				//var bucket Bucket
+				//var version uint64
+				r, _, _, err = o.s.GetRecByID(tableID, k, partNum)
 				if err != nil {
 					return err
 				}
-				if bucket != nil {
+				/*if bucket != nil {
 					if version&LOCKED != 0 { // Locked
 						o.Abort(req)
 						o.w.NStats[NINDEXABORTS]++
@@ -751,7 +753,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 					t.rBucket = t.rBucket[0 : n+1]
 					t.rBucket[n].bucket = bucket
 					t.rBucket[n].version = version
-				}
+				}*/
 			} else {
 				r = inputRec
 			}
@@ -868,25 +870,27 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 	var r Record
 	var err error
 
-	var bucket Bucket
-	var version uint64
-	r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
+	//var bucket Bucket
+	//var version uint64
+	//r, bucket, version, err = o.s.GetRecByID(tableID, k, partNum)
+	r, _, _, err = o.s.GetRecByID(tableID, k, partNum)
 	if err != nil {
 		return nil, err
 	}
 
-	if bucket != nil {
-		if version&LOCKED != 0 { // Locked
-			o.Abort(req)
-			o.w.NStats[NINDEXABORTS]++
-			return nil, EABORT
+	/*
+		if bucket != nil {
+			if version&LOCKED != 0 { // Locked
+				o.Abort(req)
+				o.w.NStats[NINDEXABORTS]++
+				return nil, EABORT
+			}
+			n := len(t.rBucket)
+			t.rBucket = t.rBucket[0 : n+1]
+			t.rBucket[n].bucket = bucket
+			t.rBucket[n].version = version
 		}
-		n := len(t.rBucket)
-		t.rBucket = t.rBucket[0 : n+1]
-		t.rBucket[n].bucket = bucket
-		t.rBucket[n].version = version
-	}
-
+	*/
 	ok, tid = r.IsUnlocked()
 
 	if tid > o.maxSeen {
@@ -1133,6 +1137,7 @@ type LTransaction struct {
 	s        *Store
 	st       *SampleTool
 	rt       []RecTable
+	maxSeen  TID
 	padding  [PADDING]byte
 }
 
@@ -1174,6 +1179,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 }
 
 func (l *LTransaction) Reset(t Trans) {
+	l.maxSeen = TID(0)
 }
 
 func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
@@ -1266,7 +1272,14 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 		return nil, nil, true, err
 	}
 
-	if !rec.RLock(req) {
+	var tid TID
+	ok, tid = rec.RLock(req)
+
+	if tid > l.maxSeen {
+		l.maxSeen = tid
+	}
+
+	if !ok {
 		w.NStats[NRLOCKABORTS]++
 		l.Abort(req)
 		return nil, nil, true, EABORT
@@ -1405,7 +1418,14 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		rec = inputRec
 	}
 
-	if rec.WLock(req) {
+	var tid TID
+	ok, tid = rec.WLock(req)
+
+	if tid > l.maxSeen {
+		l.maxSeen = tid
+	}
+
+	if ok {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -1484,7 +1504,14 @@ func (l *LTransaction) MayWrite(tableID int, k Key, partNum int, req *LockReq) e
 		return err
 	}
 
-	if rec.WLock(req) {
+	var tid TID
+	ok, tid = rec.WLock(req)
+
+	if tid > l.maxSeen {
+		l.maxSeen = tid
+	}
+
+	if ok {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
 		wr := &rt.wRecs[n]
@@ -1592,7 +1619,13 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 		return nil, err
 	}
 
-	if !rec.RLock(req) {
+	ok, tid := rec.RLock(req)
+
+	if tid > l.maxSeen {
+		l.maxSeen = tid
+	}
+
+	if !ok {
 		l.Abort(req)
 		w.NStats[NRLOCKABORTS]++
 		return nil, EABORT
@@ -1643,7 +1676,7 @@ func (l *LTransaction) Abort(req *LockReq) TID {
 			wr.cols = wr.cols[:0]
 			wr.isDelta = wr.isDelta[:0]
 			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
-			wr.rec.WUnlock(req)
+			wr.rec.WUnlock(req, l.maxSeen)
 		}
 		t.wRecs = t.wRecs[:0]
 
@@ -1698,7 +1731,7 @@ func (l *LTransaction) Commit(req *LockReq) TID {
 			wr.cols = wr.cols[:0]
 			wr.isDelta = wr.isDelta[:0]
 			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
-			wr.rec.WUnlock(req)
+			wr.rec.WUnlock(req, l.maxSeen)
 		}
 		t.wRecs = t.wRecs[:0]
 

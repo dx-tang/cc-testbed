@@ -117,17 +117,18 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.riMaster = NewReportInfo(*NumPart, tableCount)
 	w.riReplica = NewReportInfo(*NumPart, tableCount)
 
+	w.ExecPool = make([]ETransaction, ADAPTIVE-PARTITION)
+	w.ExecPool[PARTITION] = StartPTransaction(w, tableCount)
+	w.ExecPool[OCC] = StartOTransaction(w, tableCount)
+	w.ExecPool[LOCKING] = StartLTransaction(w, tableCount)
+
 	if *SysType == PARTITION {
-		w.E = StartPTransaction(w, tableCount)
+		w.E = w.ExecPool[mode]
 	} else if *SysType == OCC {
-		w.E = StartOTransaction(w, tableCount)
+		w.E = w.ExecPool[mode]
 	} else if *SysType == LOCKING {
-		w.E = StartLTransaction(w, tableCount)
+		w.E = w.ExecPool[mode]
 	} else if *SysType == ADAPTIVE {
-		w.ExecPool = make([]ETransaction, ADAPTIVE-PARTITION)
-		w.ExecPool[PARTITION] = StartPTransaction(w, tableCount)
-		w.ExecPool[OCC] = StartOTransaction(w, tableCount)
-		w.ExecPool[LOCKING] = StartLTransaction(w, tableCount)
 		w.E = w.ExecPool[mode]
 	} else {
 		clog.Error("System Type %v Not Supported Yet\n", *SysType)

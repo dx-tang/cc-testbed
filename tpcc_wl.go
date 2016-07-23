@@ -730,7 +730,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 				noRec = &PRecord{}
 			} else if *SysType == ADAPTIVE {
 				tmpRec := &ARecord{}
-				tmpRec.wdLock.Initialize()
+				//tmpRec.wdLock.Initialize()
 				noRec = tmpRec
 			} else {
 				clog.Info("System Type %v Not Support", *SysType)
