@@ -29,7 +29,7 @@ type Table interface {
 	InsertRecord(recs []InsertRec, ia IndexAlloc) error
 	ReleaseInsert(k Key, partNum int)
 	GetValueBySec(k Key, partNum int, val Value) error
-	SetMode(mode int)
+	SetLatch(useLatch bool)
 	BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	Reset()
@@ -58,12 +58,12 @@ type BasicTable struct {
 	isPartition bool
 	nParts      int
 	shardHash   func(Key) int
-	mode        int
+	useLatch    bool
 	tableID     int
 	padding2    [PADDING]byte
 }
 
-func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, tableID int) *BasicTable {
+func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, useLatch bool, tableID int) *BasicTable {
 
 	// We allocate more space to make the array algined to cache line
 	bt := &BasicTable{
@@ -72,7 +72,7 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, mode int, 
 		//name:        schemaStrs[0],
 		isPartition: isPartition,
 		nParts:      nParts,
-		mode:        mode,
+		useLatch:    useLatch,
 		tableID:     tableID,
 	}
 
@@ -182,18 +182,18 @@ func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, er
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	if bt.mode != PARTITION {
+	if bt.useLatch {
 		shard.RLock()
 	}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		if bt.mode != PARTITION {
+		if bt.useLatch {
 			shard.RUnlock()
 		}
 		return nil, nil, 0, ENOKEY
 	} else {
-		if bt.mode != PARTITION {
+		if bt.useLatch {
 			shard.RUnlock()
 		}
 		return r, nil, 0, nil
@@ -209,20 +209,20 @@ func (bt *BasicTable) SetValueByID(k Key, partNum int, value Value, colNum int) 
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	if bt.mode != PARTITION {
+	if bt.useLatch {
 		shard.RLock()
 	}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		if bt.mode != PARTITION {
+		if bt.useLatch {
 			shard.RUnlock()
 		}
 		return ENOKEY
 	}
 
 	r.SetValue(value, colNum)
-	if bt.mode != PARTITION {
+	if bt.useLatch {
 		shard.RUnlock()
 	}
 	return nil
@@ -237,13 +237,13 @@ func (bt *BasicTable) GetValueByID(k Key, partNum int, value Value, colNum int) 
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	if bt.mode != PARTITION {
+	if bt.useLatch {
 		shard.RLock()
 	}
 
 	r, ok := shard.rows[k]
 	if !ok {
-		if bt.mode != PARTITION {
+		if bt.useLatch {
 			shard.RUnlock()
 		}
 		return ENOKEY
@@ -251,7 +251,7 @@ func (bt *BasicTable) GetValueByID(k Key, partNum int, value Value, colNum int) 
 
 	r.GetValue(value, colNum)
 
-	if bt.mode != PARTITION {
+	if bt.useLatch {
 		shard.RUnlock()
 	}
 	return nil
@@ -286,7 +286,7 @@ func (bt *BasicTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		shardNum := bt.shardHash(iRec.k)
 		shard := &bt.data[partNum].shardedMap[shardNum]
 
-		if bt.mode != PARTITION {
+		if bt.useLatch {
 			shard.Lock()
 		}
 
@@ -296,7 +296,7 @@ func (bt *BasicTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		}
 
 		shard.rows[iRec.k] = iRec.rec
-		if bt.mode != PARTITION {
+		if bt.useLatch {
 			shard.Unlock()
 		}
 	}
@@ -312,8 +312,8 @@ func (bt *BasicTable) GetValueBySec(k Key, partNum int, val Value) error {
 	return nil
 }
 
-func (bt *BasicTable) SetMode(mode int) {
-	bt.mode = mode
+func (bt *BasicTable) SetLatch(useLatch bool) {
+	bt.useLatch = useLatch
 }
 
 func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
@@ -324,7 +324,7 @@ func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int
 	shardNum := bt.shardHash(k)
 	shard := &bt.data[partNum].shardedMap[shardNum]
 
-	if bt.mode != PARTITION {
+	if bt.useLatch {
 		shard.RLock()
 		defer shard.RUnlock()
 	}
@@ -392,7 +392,6 @@ func (bt *BasicTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, 
 		}
 	}
 	clog.Debug("Basic Table Merging Takes %.2fs", time.Since(start).Seconds())
-
 }
 
 func (bt *BasicTable) Reset() {

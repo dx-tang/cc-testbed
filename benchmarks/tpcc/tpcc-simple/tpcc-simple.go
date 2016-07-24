@@ -97,9 +97,11 @@ func main() {
 		clog.Error("Wrong format of transaction percentage string %s; Sum should be 100\n", transtr)
 	}
 
-	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, tpccTranPer, *cr, *ps, *dataDir, *testbed.SysType)
+	tpcc := testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, *contention, tpccTranPer, *cr, *ps, *dataDir, *testbed.SysType, false)
 
 	coord := testbed.NewCoordinator(nWorkers, tpcc.GetStore(), tpcc.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpcc)
+
+	tpcc.SetWorkers(coord)
 
 	clog.Info("Done with Populating Store\n")
 

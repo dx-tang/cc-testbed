@@ -250,6 +250,7 @@ func main() {
 					pprof.StartCPUProfile(f)
 					defer pprof.StopCPUProfile()
 				}
+				sb.SetWorkers(coord)
 			} else {
 				basic := sb.GetBasicWL()
 				keyGens, ok := keyGenPool[tmpContention]

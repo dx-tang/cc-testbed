@@ -328,12 +328,13 @@ type SingleTransGen struct {
 	endTime         time.Time
 	timeInit        bool
 	dt              DummyTrans
+	w               *Worker
 	padding2        [PADDING]byte
 }
 
 func (s *SingleTransGen) GenOneTrans(mode int) Trans {
-	s.Lock()
-	defer s.Unlock()
+	s.w.Lock()
+	defer s.w.Unlock()
 
 	start := time.Now()
 
@@ -764,5 +765,12 @@ func (singleWL *SingelWorkload) Switch(nParts int, isPartition bool, tmpPS float
 		tg := singleWL.transGen[i]
 		tg.validProb = singleWL.zp.GetProb(i)
 		tg.timeInit = false
+	}
+}
+
+func (singleWL *SingelWorkload) SetWorkers(coord *Coordinator) {
+	Workers := coord.Workers
+	for i, w := range Workers {
+		singleWL.transGen[i].w = w
 	}
 }

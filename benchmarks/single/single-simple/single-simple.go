@@ -88,6 +88,8 @@ func main() {
 	single := testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, *contention, *tp, *cr, *tlen, *rr, *mp, *ps, testbed.PARTITION, false)
 	coord := testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SINGLEWL, single)
 
+	single.SetWorkers(coord)
+
 	clog.Info("Done with Populating Store\n")
 
 	coord.Start()

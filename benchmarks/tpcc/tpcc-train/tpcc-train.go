@@ -249,6 +249,8 @@ func main() {
 				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.PARTITION, double)
 				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpccWL)
 
+				tpccWL.SetWorkers(coord)
+
 				clog.Info("Begin warming up")
 				oneTest(tpccWL, coord, ft, nWorkers, tm, 0, partGenPool)
 				tpccWL.ResetConf(PAYTP, float64(0), coord, true, testbed.NOPARTSKEW, false)

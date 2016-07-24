@@ -113,6 +113,8 @@ func main() {
 	sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tc.Contention, tc.SBTransper, tc.CR, tc.PS, initMode, false)
 	coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, testCases, *nsecs, testbed.SMALLBANKWL, sb)
 
+	sb.SetWorkers(coord)
+
 	if *prof {
 		f, err := os.Create("smallbank.prof")
 		if err != nil {

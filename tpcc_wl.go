@@ -201,12 +201,13 @@ type TPCCTransGen struct {
 	endTime         time.Time
 	timeInit        bool
 	dt              DummyTrans
+	w               *Worker
 	padding2        [PADDING]byte
 }
 
 func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
-	tg.Lock()
-	defer tg.Unlock()
+	tg.w.Lock()
+	defer tg.w.Unlock()
 
 	start := time.Now()
 
@@ -963,6 +964,13 @@ func (tpccWL *TPCCWorkload) ResetPart(nParts int, isPartition bool) {
 		tg := &tpccWL.transGen[i]
 		//tg.nParts = nParts
 		tg.isPartition = isPartition
+	}
+}
+
+func (tpccWL *TPCCWorkload) SetWorkers(coord *Coordinator) {
+	Workers := coord.Workers
+	for i, w := range Workers {
+		tpccWL.transGen[i].w = w
 	}
 }
 

@@ -249,12 +249,13 @@ type SBTransGen struct {
 	endTime         time.Time
 	timeInit        bool
 	dt              DummyTrans
+	w               *Worker
 	padding2        [PADDING]byte
 }
 
 func (s *SBTransGen) GenOneTrans(mode int) Trans {
-	s.Lock()
-	defer s.Unlock()
+	s.w.Lock()
+	defer s.w.Unlock()
 
 	start := time.Now()
 
@@ -715,5 +716,12 @@ func (sb *SBWorkload) Switch(nParts int, isPartition bool, tmpPS float64) {
 		tg := sb.transGen[i]
 		tg.validProb = sb.zp.GetProb(i)
 		tg.timeInit = false
+	}
+}
+
+func (sb *SBWorkload) SetWorkers(coord *Coordinator) {
+	Workers := coord.Workers
+	for i, w := range Workers {
+		sb.transGen[i].w = w
 	}
 }

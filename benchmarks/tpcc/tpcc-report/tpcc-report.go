@@ -71,7 +71,15 @@ func main() {
 			clog.Info("Using 2PL\n")
 		}
 	} else if *testbed.SysType == testbed.ADAPTIVE {
-		clog.Info("Using Adaptive CC\n")
+		if *isPart {
+			initMode = testbed.PARTITION
+			clog.Info("Using Adaptive CC: Starting from PCC")
+		} else {
+			nParts = 1
+			isPartition = false
+			initMode = testbed.LOCKING
+			clog.Info("Using Adaptive CC: Starting from 2PL")
+		}
 	} else {
 		clog.Error("Not supported type %v CC\n", *testbed.SysType)
 	}
@@ -108,6 +116,8 @@ func main() {
 	clog.Info("Populating Whole Store\n")
 	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode, false)
 	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL)
+
+	tpccWL.SetWorkers(coord)
 
 	// Populate Key Gen and Part Gen
 	clog.Info("Populating Key Generators and Part Generators\n")

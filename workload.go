@@ -246,7 +246,6 @@ func (basic *BasicWorkload) NewPartGen(ps float64) []PartGen {
 
 func (basic *BasicWorkload) ResetPart(nParts int, isPartition bool) {
 	//basic.nParts = nParts
-	basic.store.isPartition = isPartition
 	basic.isPartition = isPartition
 	/*for i, gen := range basic.generators {
 		if isPartition {

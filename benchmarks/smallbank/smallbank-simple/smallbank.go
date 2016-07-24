@@ -108,6 +108,8 @@ func main() {
 	sb := testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, *contention, sbTranPer, *cr, *ps, testbed.PARTITION)
 	coord := testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SMALLBANKWL, sb)
 
+	sb.SetWorkers(coord)
+
 	clog.Info("Done with Populating Store\n")
 
 	coord.Start()

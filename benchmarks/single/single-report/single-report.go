@@ -117,6 +117,8 @@ func main() {
 	single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tc.Contention, *tp, tc.CR, tc.Tlen, tc.RR, tc.MP, tc.PS, initMode, false)
 	coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.SINGLEWL, single)
 
+	single.SetWorkers(coord)
+
 	if *prof {
 		f, err := os.Create("single.prof")
 		if err != nil {

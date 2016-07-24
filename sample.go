@@ -119,6 +119,7 @@ type SampleTool struct {
 	cur         int
 	partTrial   int
 	s           *Store
+	w           *Worker
 	homeSample  ConfSample
 	allSample   ConfSample
 	padding1    [PADDING]byte
@@ -133,7 +134,7 @@ type ConfSample struct {
 	recRate      int
 }
 
-func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
+func NewSampleTool(nParts int, sampleRate int, s *Store, w *Worker) *SampleTool {
 	st := &SampleTool{
 		nParts:      nParts,
 		isPartition: s.isPartition,
@@ -174,6 +175,8 @@ func NewSampleTool(nParts int, sampleRate int, s *Store) *SampleTool {
 	st.homeSample.recBuf = st.homeSample.recBuf[PADDINGINT64:PADDINGINT64]
 	st.homeSample.tableBuf = make([]int, BUFSIZE+2*PADDINGINT)
 	st.homeSample.tableBuf = st.homeSample.tableBuf[PADDINGINT:PADDINGINT]
+
+	st.w = w
 
 	return st
 }
@@ -231,6 +234,9 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 	if err != nil {
 		clog.Error("Error No Key in Sample")
 	}
+
+	st.w.Unlock()
+
 	//ri.latency += time.Since(tm).Nanoseconds()
 	tmpRec := rec.(*ARecord)
 	var x int32
@@ -261,6 +267,8 @@ func (st *SampleTool) oneSampleConf(tableID int, key Key, partNum int, s *Store,
 		sample.recBuf = sample.recBuf[0:0]
 		sample.tableBuf = sample.tableBuf[0:0]
 	}
+
+	st.w.Lock()
 
 	if isHome {
 		ri.accessHomeCount[tableID]++

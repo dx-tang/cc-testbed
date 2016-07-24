@@ -190,6 +190,7 @@ type Coordinator struct {
 	indexChangeStart time.Time
 	potentialType    int
 	startWorker      int
+	numIndexWorker   int
 	justReconfig     bool
 	padding1         [PADDING]byte
 }
@@ -213,8 +214,8 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		indexActionACK: make([]chan bool, nWorkers),
 		indexDoneACK:   make([]chan bool, nWorkers),
 		indexActions:   make([]*IndexAction, nWorkers),
-		startLoader:    nWorkers - *NLOADERS,
-		startMerger:    nWorkers - *NMERGERS,
+		startLoader:    0,
+		startMerger:    0,
 		summary:        NewReportInfo(*NumPart, tableCount),
 		indexpart:      false,
 		testCases:      testCases,
@@ -442,15 +443,14 @@ func (coord *Coordinator) process() {
 				}
 			}
 		case <-coord.indexActionACK[coord.startWorker]:
-			for i := coord.startWorker + 1; i < len(coord.indexActionACK); i++ {
+
+			for i := coord.startWorker + 1; i < coord.startWorker+coord.numIndexWorker; i++ {
 				<-coord.indexActionACK[i]
 			}
-			// Now All Loaders done; Confirm this to all workers
+
+			// Stop all workers
 			for i := 0; i < len(coord.Workers); i++ {
-				coord.Workers[i].indexDone <- true
-			}
-			for i := 0; i < len(coord.indexDoneACK); i++ {
-				<-coord.indexDoneACK[i]
+				coord.Workers[i].Lock()
 			}
 
 			coord.store.state = INDEX_NONE
@@ -548,12 +548,33 @@ func (coord *Coordinator) process() {
 			}
 
 			for i := 0; i < len(coord.Workers); i++ {
-				coord.Workers[i].indexConfirm <- true
+				coord.Workers[i].Unlock()
 			}
 
-			if !coord.isMerge && coord.potentialType == PARTITION {
-				coord.switchCC(PARTITION)
+			if !coord.isMerge {
+				// UseLocks
+				for i := 0; i < len(coord.Workers); i++ {
+					coord.Workers[i].modeChange <- true
+				}
+				for i := 0; i < len(coord.Workers); i++ {
+					<-coord.changeACK[i]
+					coord.Workers[i].needLock = true
+					coord.Workers[i].modeChan <- coord.mode
+				}
+
+				coord.store.SetLatch(false)
+
+				// Change CC
+				coord.mode = PARTITION
+				for i := 0; i < len(coord.Workers); i++ {
+					coord.Workers[i].modeChange <- true
+				}
+				for i := 0; i < len(coord.Workers); i++ {
+					<-coord.changeACK[i]
+					coord.Workers[i].modeChan <- coord.mode
+				}
 			}
+
 		}
 	}
 }
@@ -648,41 +669,78 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
 	clog.Info("Switching from %v to %v, Conf %.4f, Home %.4f, Latency %.4f, PConf %.4f, PVar %.4f\n", curType, execType, confRate, homeConfRate, latency, partConf, partVar)
 
-	if execType > 2 { // Use Shared Index
-		if coord.store.isPartition { // Start Merging
-			coord.switchCC(execType - 2)
-			coord.indexReorganize(true)
-		} else {
-			coord.switchCC(execType - 2)
-		}
-	} else { // Use Partitioned Index
-		if !coord.store.isPartition { // Start Partitioning
-			coord.indexReorganize(false)
-			if execType != 0 {
-				coord.switchCC(execType)
+	if curType != execType {
+		if execType > 2 { // Use Shared Index
+			if coord.mode == PCC { // Start Merging
+				coord.PCCtoOthers(execType - 2)
+			} else {
+				coord.switchCC(execType - 2)
 			}
-			coord.potentialType = execType
-		} else {
-			coord.switchCC(execType)
+		} else { // Use Partitioned Index
+			coord.OtherstoPCC()
 		}
 	}
+
+}
+
+func (coord *Coordinator) OtherstoPCC() {
+	store := coord.store
+	// Stop all workers; change meta data
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].Lock()
+	}
+
+	store.state = INDEX_CHANGING
+	tmpTables := store.priTables
+	store.priTables = store.secTables
+	store.secTables = tmpTables
+	store.isPartition = true
+
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].Unlock()
+	}
+
+	coord.indexReorganize(false)
+}
+
+func (coord *Coordinator) PCCtoOthers(mode int) {
+	store := coord.store
+	// Stop all workers; change meta data
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].Lock()
+	}
+
+	store.SetLatch(true)
+
+	store.state = INDEX_CHANGING
+	tmpTables := store.priTables
+	store.priTables = store.secTables
+	store.secTables = tmpTables
+	store.isPartition = false
+
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].Unlock()
+	}
+
+	coord.switchCC(mode)
+
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].Lock()
+		coord.Workers[i].needLock = false
+		coord.Workers[i].Unlock()
+	}
+
+	coord.indexReorganize(true)
+
 }
 
 func (coord *Coordinator) switchCC(mode int) {
-	if *SysType == ADAPTIVE {
-		if mode == coord.mode {
-			return
-		}
-	}
 	coord.mode = mode
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].modeChange <- true
 	}
 	for i := 0; i < len(coord.Workers); i++ {
 		<-coord.changeACK[i]
-	}
-	coord.store.SetMode(mode)
-	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].modeChan <- coord.mode
 	}
 }
@@ -698,49 +756,44 @@ func (coord *Coordinator) indexReorganize(isMerge bool) {
 		coord.startWorker = coord.startMerger
 		perWorker = *NumPart / *NMERGERS
 		residue = *NumPart % *NMERGERS
+		coord.numIndexWorker = *NMERGERS
 	} else {
 		clog.Info("Starting Index Partitioning")
 		actionType = INDEX_ACTION_PARTITION
 		coord.startWorker = coord.startLoader
 		perWorker = *NumPart / *NLOADERS
 		residue = *NumPart % *NLOADERS
+		coord.numIndexWorker = *NLOADERS
 	}
 	coord.indexChangeStart = time.Now()
-	store := coord.store
 	// Begin Index Partitioning
-	for i := 0; i < len(coord.Workers); i++ {
+	for i := coord.startWorker; i < coord.startWorker+coord.numIndexWorker; i++ {
 		coord.Workers[i].indexStart <- true
 	}
-	for i := 0; i < len(coord.indexStartACK); i++ {
+	for i := coord.startWorker; i < coord.startWorker+coord.numIndexWorker; i++ {
 		<-coord.indexStartACK[i]
 	}
-	// Get All ACK; All workers stop; Change State and switch pri/sec tables
-	store.state = INDEX_CHANGING
-	tmpTables := store.priTables
-	store.priTables = store.secTables
-	store.secTables = tmpTables
-	store.isPartition = !store.isPartition
 
-	for i := 0; i < len(coord.Workers); i++ {
+	// Get All ACK; All index workers stop;
+
+	for i := coord.startWorker; i < coord.startWorker+coord.numIndexWorker; i++ {
 		action := coord.indexActions[i]
-		if i < coord.startWorker {
-			action.actionType = INDEX_ACTION_NONE
+
+		iWorker := (i - coord.startWorker)
+		action.actionType = actionType
+		begin := iWorker * perWorker
+		if iWorker < residue {
+			begin += iWorker
 		} else {
-			iWorker := (i - coord.startWorker)
-			action.actionType = actionType
-			begin := iWorker * perWorker
-			if iWorker < residue {
-				begin += iWorker
-			} else {
-				begin += residue
-			}
-			end := begin + perWorker
-			if iWorker < residue {
-				end++
-			}
-			action.start = begin
-			action.end = end
+			begin += residue
 		}
+		end := begin + perWorker
+		if iWorker < residue {
+			end++
+		}
+		action.start = begin
+		action.end = end
+
 		coord.Workers[i].indexAction <- action
 	}
 }
@@ -882,7 +935,11 @@ func (coord *Coordinator) Reset() {
 }
 
 func (coord *Coordinator) SetMode(mode int) {
-	coord.store.SetMode(mode)
+	if mode == PARTITION {
+		coord.store.SetLatch(false)
+	} else {
+		coord.store.SetLatch(true)
+	}
 	coord.mode = mode
 	for _, w := range coord.Workers {
 		w.SetMode(mode)

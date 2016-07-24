@@ -115,14 +115,14 @@ type Store struct {
 	priTables    []Table
 	secTables    []Table
 	backTables   []Table
-	state        int
+	state        int32
 	spinLock     []SpinLockPad
 	wfLock       []WFMuTexPad
 	confLock     []NoWaitLockPad
 	mutexLock    []RWMutexPad
 	tableToIndex map[string]int
 	nParts       int
-	mode         int
+	useLatch     bool
 	isPartition  bool
 	double       bool
 	padding2     [PADDING]byte
@@ -132,6 +132,13 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 
 	if nParts == 1 {
 		isPartition = false
+	}
+
+	var useLatch bool
+	if mode == PARTITION {
+		useLatch = true
+	} else {
+		useLatch = false
 	}
 
 	// Open Schema File and Read Configuration
@@ -173,7 +180,7 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 		mutexLock:    make([]RWMutexPad, *NumPart),
 		spinLock:     make([]SpinLockPad, *NumPart),
 		nParts:       nParts,
-		mode:         mode,
+		useLatch:     useLatch,
 		isPartition:  isPartition,
 		double:       double,
 	}
@@ -194,61 +201,61 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 
 		if strings.Compare(schemaStrs[0], "NEWORDER") == 0 {
 			start := time.Now()
-			s.priTables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
-			s.secTables[i] = MakeNewOrderTable(*NumPart, !isPartition, mode)
-			s.backTables[i] = MakeNewOrderTable(*NumPart, isPartition, mode)
+			s.priTables[i] = MakeNewOrderTable(*NumPart, isPartition, useLatch)
+			s.secTables[i] = MakeNewOrderTable(*NumPart, !isPartition, useLatch)
+			s.backTables[i] = MakeNewOrderTable(*NumPart, isPartition, useLatch)
 			clog.Info("Making NewOrder %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDER") == 0 {
 			start := time.Now()
-			s.priTables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeOrderTable(nParts, *NumPart, isPartition, useLatch)
 			if isPartition {
-				s.secTables[i] = MakeOrderTable(1, *NumPart, !isPartition, mode)
+				s.secTables[i] = MakeOrderTable(1, *NumPart, !isPartition, useLatch)
 			} else {
-				s.secTables[i] = MakeOrderTable(*NumPart, *NumPart, !isPartition, mode)
+				s.secTables[i] = MakeOrderTable(*NumPart, *NumPart, !isPartition, useLatch)
 			}
-			s.backTables[i] = MakeOrderTable(nParts, *NumPart, isPartition, mode)
+			s.backTables[i] = MakeOrderTable(nParts, *NumPart, isPartition, useLatch)
 			clog.Info("Making Order %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "CUSTOMER") == 0 {
 			start := time.Now()
-			s.priTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, useLatch)
 			if isPartition {
-				s.secTables[i] = MakeCustomerTable(1, *NumPart, !isPartition, mode)
+				s.secTables[i] = MakeCustomerTable(1, *NumPart, !isPartition, useLatch)
 			} else {
-				s.secTables[i] = MakeCustomerTable(*NumPart, *NumPart, !isPartition, mode)
+				s.secTables[i] = MakeCustomerTable(*NumPart, *NumPart, !isPartition, useLatch)
 			}
-			s.backTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, mode)
+			s.backTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, useLatch)
 			clog.Info("Making Customer %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
 			start := time.Now()
-			s.priTables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, useLatch)
 			s.secTables[i] = s.priTables[i]
-			s.backTables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, mode)
+			s.backTables[i] = MakeHistoryTable(nParts, *NumPart, isPartition, useLatch)
 			clog.Info("Making History %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ORDERLINE") == 0 {
 			start := time.Now()
-			s.priTables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
+			s.priTables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, useLatch)
 			if isPartition {
-				s.secTables[i] = MakeOrderLineTable(1, *NumPart, !isPartition, mode)
+				s.secTables[i] = MakeOrderLineTable(1, *NumPart, !isPartition, useLatch)
 			} else {
-				s.secTables[i] = MakeOrderLineTable(*NumPart, *NumPart, !isPartition, mode)
+				s.secTables[i] = MakeOrderLineTable(*NumPart, *NumPart, !isPartition, useLatch)
 			}
-			s.backTables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, mode)
+			s.backTables[i] = MakeOrderLineTable(nParts, *NumPart, isPartition, useLatch)
 			clog.Info("Making OrderLine %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ITEM") == 0 {
 			start := time.Now()
-			s.priTables[i] = NewBasicTable(schemaStrs, 1, false, mode, ITEM)
+			s.priTables[i] = NewBasicTable(schemaStrs, 1, false, useLatch, ITEM)
 			s.secTables[i] = s.priTables[i]
 			s.backTables[i] = s.priTables[i]
 			clog.Info("Making ITEM %.2f", time.Since(start).Seconds())
 		} else {
 			start := time.Now()
-			s.priTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)
+			s.priTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, useLatch, i)
 			if isPartition {
-				s.secTables[i] = NewBasicTable(schemaStrs, 1, !isPartition, mode, i)
+				s.secTables[i] = NewBasicTable(schemaStrs, 1, !isPartition, useLatch, i)
 			} else {
-				s.secTables[i] = NewBasicTable(schemaStrs, *NumPart, !isPartition, mode, i)
+				s.secTables[i] = NewBasicTable(schemaStrs, *NumPart, !isPartition, useLatch, i)
 			}
-			s.backTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, mode, i)
+			s.backTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, useLatch, i)
 			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		}
 
@@ -293,11 +300,11 @@ func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, Bucket, uin
 		return table.GetRecByID(k, partNum)
 	} else { // INDEX_CHANGING
 		table := s.secTables[tableID]
-		rec, bucket, version, err := table.GetRecByID(k, partNum)
+		rec, _, _, err := table.GetRecByID(k, partNum)
 		if err == ENOKEY {
 			return s.priTables[tableID].GetRecByID(k, partNum)
 		}
-		return rec, bucket, version, err
+		return rec, nil, 0, err
 	}
 }
 
@@ -407,11 +414,11 @@ func (s *Store) GetValueBySec(tableID int, k Key, partNum int, val Value) error 
 	}
 }
 
-func (s *Store) SetMode(mode int) {
-	s.mode = mode
+func (s *Store) SetLatch(useLatch bool) {
+	s.useLatch = useLatch
 	for i, t := range s.priTables {
-		t.SetMode(mode)
-		s.secTables[i].SetMode(mode)
+		t.SetLatch(useLatch)
+		s.secTables[i].SetLatch(useLatch)
 	}
 }
 

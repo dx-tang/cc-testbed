@@ -69,6 +69,7 @@ type Worker struct {
 	end          time.Time
 	finished     bool
 	mode         int
+	needLock     bool
 	done         chan bool
 	modeChange   chan bool
 	modeChan     chan int
@@ -113,9 +114,15 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.riMaster = NewReportInfo(s.nParts, tableCount)
 	w.riReplica = NewReportInfo(s.nParts, tableCount)*/
 
-	w.st = NewSampleTool(*NumPart, sampleRate, s)
+	w.st = NewSampleTool(*NumPart, sampleRate, s, w)
 	w.riMaster = NewReportInfo(*NumPart, tableCount)
 	w.riReplica = NewReportInfo(*NumPart, tableCount)
+
+	if mode == PARTITION {
+		w.needLock = true
+	} else {
+		w.needLock = false
+	}
 
 	w.ExecPool = make([]ETransaction, ADAPTIVE-PARTITION)
 	w.ExecPool[PARTITION] = StartPTransaction(w, tableCount)
@@ -270,6 +277,11 @@ func (w *Worker) SetMode(mode int) {
 	}
 	w.mode = mode
 	w.E = w.ExecPool[mode]
+	if mode == PARTITION {
+		w.needLock = true
+	} else {
+		w.needLock = false
+	}
 }
 
 func (w *Worker) doTxn(t Trans) (Value, error) {
@@ -326,13 +338,10 @@ func (w *Worker) One(t Trans) (Value, error) {
 	}
 
 	if t.GetTXN() == -1 { // Dummy Trans
-		//if *SysType == ADAPTIVE {
-		//	w.st.Reset()
-		//}
 		return nil, nil
 	}
 
-	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
+	if w.needLock {
 		// Acquire all locks
 		s := w.store
 
@@ -377,7 +386,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	w.Unlock()
 
-	if (*SysType == ADAPTIVE && w.mode == PARTITION) || *SysType == PARTITION {
+	if w.needLock {
 		s := w.store
 		for _, p := range ap {
 			s.spinLock[p].Unlock()
