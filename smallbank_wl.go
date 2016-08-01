@@ -486,19 +486,19 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 				for p := 0; p < CAP_ACCT_NAME; p++ {
 					at.name[p] = "name"[p]
 				}
-				store.CreateRecByID(i, key, partNum, at)
+				store.CreateRecByID(i, key, partNum, at, nil)
 			} else if i == SAVINGS {
 				st := &SavingsTuple{
 					accoutID: key[0],
 					balance:  BAL,
 				}
-				store.CreateRecByID(i, key, partNum, st)
+				store.CreateRecByID(i, key, partNum, st, nil)
 			} else { // CHECKING
 				ct := &CheckingTuple{
 					accoutID: key[0],
 					balance:  BAL,
 				}
-				store.CreateRecByID(i, key, partNum, ct)
+				store.CreateRecByID(i, key, partNum, ct, nil)
 			}
 
 			for key[k]+1 >= keyRange[k] {
@@ -634,15 +634,15 @@ func (s *SBWorkload) PrintChecking() {
 	//compKey := make([]int, keyLen)
 	var key Key
 	store := s.basic.store
-	floatRB := &FloatValue{}
 
-	var val Value
+	//var val Value
 	var k int = 0
 	for i := 0; i < nKeys; i++ {
 		//key := CKey(compKey)
 		partNum := gen.GetPart(CHECKING, key)
-		val = store.GetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
-		total += val.(*FloatValue).floatVal
+		//val = store.GetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
+		rec, _, _, _ := store.GetRecByID(CHECKING, key, partNum)
+		total += rec.GetTuple().(*CheckingTuple).balance
 
 		for key[k]+1 >= keyRange[k] {
 			key[k] = 0
@@ -676,8 +676,11 @@ func (s *SBWorkload) ResetData() {
 		partNum := gen.GetPart(CHECKING, key)
 
 		floatRB.floatVal = BAL
-		store.SetValueByID(CHECKING, key, partNum, floatRB, CHECK_BAL)
-		store.SetValueByID(SAVINGS, key, partNum, floatRB, SAVING_BAL)
+		var rec Record
+		rec, _, _, _ = store.GetRecByID(CHECKING, key, partNum)
+		rec.SetValue(floatRB, CHECK_BAL)
+		rec, _, _, _ = store.GetRecByID(SAVINGS, key, partNum)
+		rec.SetValue(floatRB, SAVING_BAL)
 
 		for key[k]+1 >= keyRange[k] {
 			key[k] = 0
@@ -697,14 +700,14 @@ func (sb *SBWorkload) OnlineReconf(keygens [][]KeyGen, partGens []PartGen, cr fl
 	sb.zp.Reconf(ps)
 	for i := 0; i < len(sb.transGen); i++ {
 		tg := sb.transGen[i]
-		tg.Lock()
+		tg.w.Lock()
 		tg.gen.keyGens = keygens[i]
 		tg.gen.partGen = partGens[i]
 		tg.cr = cr
 		tg.transPercentage = transper
 		tg.validProb = sb.zp.GetProb(i)
 		tg.timeInit = false
-		tg.Unlock()
+		tg.w.Unlock()
 	}
 }
 

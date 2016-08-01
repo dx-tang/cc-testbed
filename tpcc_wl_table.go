@@ -69,7 +69,7 @@ func MakeNewOrderTable(warehouse int, isPartition bool, useLatch bool) *NewOrder
 	return noTable
 }
 
-func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple, ia IndexAlloc) (Record, error) {
 	w_id := k[KEY0]
 	d_id := k[KEY1]
 	index := w_id*DIST_COUNT + d_id
@@ -82,35 +82,25 @@ func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record,
 		entry.t++
 		retRec = entry.rec
 		if entry.t == CAP_NEWORDER_ENTRY {
-			dRec := &DRecord{}
-			dRec.tuple = &NewOrderTuple{
-				no_w_id: w_id,
-				no_d_id: d_id,
-			}
-			newEntry := &NoEntry{}
-			newEntry.rec = dRec
-			newEntry.h = 0
-			newEntry.t = 0
+			newEntry := ia.GetEntry().(*NoEntry)
+			tuple := newEntry.rec.GetTuple().(*NewOrderTuple)
+			tuple.no_w_id = k[KEY0]
+			tuple.no_d_id = k[KEY1]
 			entry.next = newEntry
 			no.tail[index] = newEntry
 		}
 	} else {
 		// New a Entry
-		dRec := &DRecord{}
-		dRec.tuple = &NewOrderTuple{
-			no_w_id: w_id,
-			no_d_id: d_id,
-		}
-		newEntry := &NoEntry{}
-		newEntry.rec = dRec
-		newEntry.h = 0
-		newEntry.t = 0
+		newEntry := ia.GetEntry().(*NoEntry)
+		tuple := newEntry.rec.GetTuple().(*NewOrderTuple)
+		tuple.no_w_id = k[KEY0]
+		tuple.no_d_id = k[KEY1]
 		entry.next = newEntry
 		no.tail[index] = newEntry
 		// Add into new entry
 		newEntry.o_id_array[newEntry.t] = noTuple.no_o_id
 		newEntry.t++
-		retRec = dRec
+		retRec = newEntry.rec
 	}
 
 	return retRec, nil
@@ -119,16 +109,6 @@ func (no *NewOrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record,
 func (no *NewOrderTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 	clog.Error("New Order Table Not Support GetRecByID")
 	return nil, nil, 0, nil
-}
-
-func (no *NewOrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-	clog.Error("New Order Table Not Support SetValueByID")
-	return nil
-}
-
-func (no *NewOrderTable) GetValueByID(k Key, partNum int, val Value, colNum int) error {
-	clog.Error("New Order Table Not Support GetValueByID")
-	return nil
 }
 
 func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -246,11 +226,6 @@ func (no *NewOrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (no *NewOrderTable) SetLatch(useLatch bool) {
 	no.useLatch = useLatch
-}
-
-func (no *NewOrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
-	clog.Error("New Order Table Not Support DeltaValueByID")
-	return nil
 }
 
 func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
@@ -420,7 +395,7 @@ func MakeOrderTable(nParts int, warehouse int, isPartition bool, useLatch bool) 
 
 }
 
-func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple, ia IndexAlloc) (Record, error) {
 
 	if !o.isPartition {
 		partNum = 0
@@ -441,10 +416,8 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 
 	cur := bucket.tail.t
 	if cur == CAP_ORDER_BUCKET_ENTRY {
-		obe := &OrderBucketEntry{
-			next:   nil,
-			before: bucket.tail,
-		}
+		obe := ia.GetEntry().(*OrderBucketEntry)
+		obe.before = bucket.tail
 		bucket.tail.next = obe
 		bucket.tail = obe
 		cur = bucket.tail.t
@@ -476,11 +449,7 @@ func (o *OrderTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, err
 	} else {
 
 		if oEntry.t == CAP_ORDER_SEC_ENTRY {
-			nextEntry := &OrderSecEntry{
-				next:   nil,
-				before: nil,
-				t:      0,
-			}
+			nextEntry := ia.GetSecEntry().(*OrderSecEntry)
 			nextEntry.o_id_array[nextEntry.t] = oTuple.o_id
 			nextEntry.t++
 			nextEntry.before = oEntry
@@ -544,73 +513,6 @@ func (o *OrderTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, err
 
 	return nil, nil, 0, ENOKEY
 
-}
-
-func (o *OrderTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !o.isPartition {
-		partNum = 0
-	}
-
-	bucketNum := o.bucketHash(k, o.orderbucketcount)
-	bucket := &o.data[partNum].buckets[bucketNum]
-
-	if o.useLatch {
-		bucket.RLock()
-	}
-
-	tail := bucket.tail
-	for tail != nil {
-		for i := tail.t - 1; i >= 0; i-- {
-			if tail.keys[i] == k {
-				tail.oRecs[i].SetValue(value, colNum)
-				if o.useLatch {
-					bucket.RUnlock()
-				}
-				return nil
-			}
-		}
-		tail = tail.before
-	}
-
-	if o.useLatch {
-		bucket.RUnlock()
-	}
-
-	return ENOKEY
-}
-
-func (o *OrderTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
-	if !o.isPartition {
-		partNum = 0
-	}
-
-	bucketNum := o.bucketHash(k, o.orderbucketcount)
-	bucket := &o.data[partNum].buckets[bucketNum]
-
-	if o.useLatch {
-		bucket.RLock()
-	}
-
-	tail := bucket.tail
-	for tail != nil {
-		for i := tail.t - 1; i >= 0; i-- {
-			if tail.keys[i] == k {
-				tail.oRecs[i].GetValue(value, colNum)
-				if o.useLatch {
-					bucket.RUnlock()
-				}
-				return nil
-			}
-		}
-		tail = tail.before
-	}
-
-	if o.useLatch {
-		bucket.RUnlock()
-	}
-
-	return ENOKEY
 }
 
 func (o *OrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -748,41 +650,6 @@ func (o *OrderTable) GetValueBySec(k Key, partNum int, val Value) error {
 func (o *OrderTable) SetLatch(useLatch bool) {
 	o.useLatch = useLatch
 }
-
-func (o *OrderTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !o.isPartition {
-		partNum = 0
-	}
-
-	bucketNum := o.bucketHash(k, o.orderbucketcount)
-	bucket := &o.data[partNum].buckets[bucketNum]
-
-	if o.useLatch {
-		bucket.RLock()
-	}
-
-	tail := bucket.tail
-	for tail != nil {
-		for i := tail.t; i >= 0; i-- {
-			if tail.keys[i] == k {
-				tail.oRecs[i].DeltaValue(value, colNum)
-				if o.useLatch {
-					bucket.RUnlock()
-				}
-				return nil
-			}
-		}
-		tail = tail.before
-	}
-
-	if o.useLatch {
-		bucket.RUnlock()
-	}
-
-	return ENOKEY
-}
-
 func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
@@ -902,7 +769,7 @@ type CustomerTable struct {
 	padding2    [PADDING]byte
 }
 
-func MakeCustomerTable(nParts int, warehouse int, isPartition bool, useLatch bool) *CustomerTable {
+func MakeCustomerTable(numEntries int, nParts int, warehouse int, isPartition bool, useLatch bool) *CustomerTable {
 	cTable := &CustomerTable{
 		nKeys:       0,
 		isPartition: isPartition,
@@ -916,10 +783,7 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, useLatch boo
 	for k := 0; k < nParts; k++ {
 		cTable.secIndex[k].c_id_map = make(map[Key]*CustomerEntry)
 
-		cTable.data[k].shardedMap = make([]Shard, SHARDCOUNT)
-		for i := 0; i < SHARDCOUNT; i++ {
-			cTable.data[k].shardedMap[i].rows = make(map[Key]Record)
-		}
+		cTable.data[k].ht = NewHashTable(numEntries, isPartition, useLatch, CUSTOMER)
 	}
 
 	var cKey [KEYLENTH]int
@@ -937,7 +801,7 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, useLatch boo
 		}
 	}
 
-	if isPartition {
+	/*if isPartition {
 		cTable.shardHash = func(k Key) int {
 			hash := int64(k[KEY2]*DIST_COUNT) + int64(k[KEY1])
 			return int(hash % SHARDCOUNT)
@@ -947,20 +811,18 @@ func MakeCustomerTable(nParts int, warehouse int, isPartition bool, useLatch boo
 			hash := int64(k[KEY2]*(*NumPart)*DIST_COUNT) + int64(k[KEY0]*DIST_COUNT+k[KEY1])
 			return int(hash % SHARDCOUNT)
 		}
-	}
+	}*/
 
 	return cTable
 
 }
 
-func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple, iaAR IndexAlloc) (Record, error) {
 
 	if !c.isPartition {
 		partNum = 0
 	}
 
-	shardNum := c.shardHash(k)
-	shard := &c.data[partNum].shardedMap[shardNum]
 	cPart := &c.secIndex[partNum]
 
 	if !c.isPartition {
@@ -969,7 +831,7 @@ func (c *CustomerTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, 
 	}
 
 	rec := MakeRecord(c, k, tuple)
-	shard.rows[k] = rec
+	c.data[partNum].ht.Put(k, rec, iaAR)
 
 	// Insert CustomerPart
 	var cKey Key
@@ -1021,66 +883,13 @@ func (c *CustomerTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, 
 		partNum = 0
 	}
 
-	shardNum := c.shardHash(k)
-	shard := &c.data[partNum].shardedMap[shardNum]
+	rec, ok := c.data[partNum].ht.Get(k)
 
-	if c.useLatch {
-		shard.RLock()
-		defer shard.RUnlock()
-	}
-
-	r, ok := shard.rows[k]
 	if !ok {
 		return nil, nil, 0, ENOKEY
 	} else {
-		return r, nil, 0, nil
+		return rec, nil, 0, nil
 	}
-}
-
-func (c *CustomerTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !c.isPartition {
-		partNum = 0
-	}
-
-	shardNum := c.shardHash(k)
-	shard := &c.data[partNum].shardedMap[shardNum]
-
-	if c.useLatch {
-		shard.RLock()
-		defer shard.RUnlock()
-	}
-
-	r, ok := shard.rows[k]
-	if !ok {
-		return ENOKEY
-	}
-
-	r.SetValue(value, colNum)
-	return nil
-}
-
-func (c *CustomerTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !c.isPartition {
-		partNum = 0
-	}
-
-	shardNum := c.shardHash(k)
-	shard := &c.data[partNum].shardedMap[shardNum]
-
-	if c.useLatch {
-		shard.RLock()
-		defer shard.RUnlock()
-	}
-
-	r, ok := shard.rows[k]
-	if !ok {
-		return ENOKEY
-	}
-
-	r.GetValue(value, colNum)
-	return nil
 }
 
 func (c *CustomerTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -1119,18 +928,7 @@ func (c *CustomerTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 			partNum = 0
 		}
 
-		shardNum := c.shardHash(k)
-		shard := &c.data[partNum].shardedMap[shardNum]
-
-		if c.useLatch {
-			shard.Lock()
-		}
-
-		shard.rows[k] = rec
-
-		if c.useLatch {
-			shard.Unlock()
-		}
+		c.data[partNum].ht.Put(k, rec, ia)
 
 		// Insert CustomerPart
 		var cKey Key
@@ -1204,41 +1002,30 @@ func (c *CustomerTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (c *CustomerTable) SetLatch(useLatch bool) {
 	c.useLatch = useLatch
-}
-
-func (c *CustomerTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !c.isPartition {
-		partNum = 0
+	for i, _ := range c.data {
+		c.data[i].ht.SetLatch(useLatch)
 	}
-
-	shardNum := c.shardHash(k)
-	shard := &c.data[partNum].shardedMap[shardNum]
-
-	r, ok := shard.rows[k]
-	if !ok {
-		return ENOKEY
-	}
-
-	r.DeltaValue(value, colNum)
-	return nil
 }
 
 func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
-	iRecs := make([]InsertRec, 1)
+	recs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range c.data {
 		part := &c.data[i]
-		for j, _ := range part.shardedMap {
-			shard := &part.shardedMap[j]
-			for k, v := range shard.rows {
-				if k[0] < begin || k[0] >= end {
-					continue
+		for j, _ := range part.ht.bucket {
+			bucket := &part.ht.bucket[j]
+			for bucket != nil {
+				for p := 0; p < bucket.cur; p++ {
+					k := bucket.keyArray[p]
+					if k[0] < begin || k[0] >= end {
+						continue
+					}
+					recs[0].k = k
+					recs[0].rec = bucket.recArray[p]
+					recs[0].partNum = k[0]
+					table.InsertRecord(recs, ia)
 				}
-				iRecs[0].k = k
-				iRecs[0].rec = v
-				iRecs[0].partNum = k[0]
-				table.InsertRecord(iRecs, ia)
+				bucket = bucket.next
 			}
 		}
 	}
@@ -1246,17 +1033,21 @@ func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int,
 }
 
 func (c *CustomerTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
-	iRecs := make([]InsertRec, 1)
+	recs := make([]InsertRec, 1)
 	start := time.Now()
 	for i := begin; i < end; i++ {
 		part := &c.data[i]
-		for j, _ := range part.shardedMap {
-			shard := &part.shardedMap[j]
-			for k, v := range shard.rows {
-				iRecs[0].k = k
-				iRecs[0].rec = v
-				iRecs[0].partNum = 0
-				table.InsertRecord(iRecs, ia)
+		for j, _ := range part.ht.bucket {
+			bucket := &part.ht.bucket[j]
+			for bucket != nil {
+				for p := 0; p < bucket.cur; p++ {
+					k := bucket.keyArray[p]
+					recs[0].k = k
+					recs[0].rec = bucket.recArray[p]
+					recs[0].partNum = 0
+					table.InsertRecord(recs, ia)
+				}
+				bucket = bucket.next
 			}
 		}
 	}
@@ -1316,7 +1107,7 @@ func MakeHistoryTable(nParts int, warehouse int, isPartition bool, useLatch bool
 	return ht
 }
 
-func (h *HistoryTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+func (h *HistoryTable) CreateRecByID(k Key, partNum int, tuple Tuple, ia IndexAlloc) (Record, error) {
 
 	shard := &h.shards[h.shardHash(k)]
 	shard.latch.Lock()
@@ -1343,16 +1134,6 @@ func (h *HistoryTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, e
 func (h *HistoryTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
 	clog.Error("HistoryTable Table Not Support GetRecByID")
 	return nil, nil, 0, nil
-}
-
-func (h *HistoryTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-	clog.Error("HistoryTable Table Not Support SetValueByID")
-	return nil
-}
-
-func (h *HistoryTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
-	clog.Error("HistoryTable Table Not Support GetValueByID")
-	return nil
 }
 
 func (h *HistoryTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -1405,11 +1186,6 @@ func (h *HistoryTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (h *HistoryTable) SetLatch(useLatch bool) {
 	return
-}
-
-func (h *HistoryTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
-	clog.Error("HistoryTable Table Not Support SetValueByID")
-	return nil
 }
 
 func (h *HistoryTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
@@ -1516,7 +1292,7 @@ func MakeOrderLineTable(nParts int, warehouse int, isPartition bool, useLatch bo
 	return olTable
 
 }
-func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple, ia IndexAlloc) (Record, error) {
 
 	if !ol.isPartition {
 		partNum = 0
@@ -1537,9 +1313,8 @@ func (ol *OrderLineTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record
 
 	cur := bucket.tail.t
 	if cur == CAP_ORDERLINE_BUCKET_ENTRY {
-		obe := &OrderLineBucketEntry{
-			before: bucket.tail,
-		}
+		obe := ia.GetEntry().(*OrderLineBucketEntry)
+		obe.before = bucket.tail
 		bucket.tail.next = obe
 		bucket.tail = obe
 		cur = bucket.tail.t
@@ -1585,61 +1360,6 @@ func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64
 
 	return nil, nil, 0, ENOKEY
 
-}
-
-func (ol *OrderLineTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !ol.isPartition {
-		partNum = 0
-	}
-
-	bucketNum := ol.bucketHash(k, ol.olbucketcount)
-	bucket := &ol.data[partNum].buckets[bucketNum]
-
-	if ol.useLatch {
-		bucket.RLock()
-		defer bucket.RUnlock()
-	}
-
-	tail := bucket.tail
-	for tail != nil {
-		for i := tail.t - 1; i >= 0; i-- {
-			if tail.keys[i] == k {
-				tail.oRecs[i].SetValue(value, colNum)
-				return nil
-			}
-		}
-		tail = tail.before
-	}
-
-	return ENOKEY
-}
-
-func (ol *OrderLineTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
-	if !ol.isPartition {
-		partNum = 0
-	}
-
-	bucketNum := ol.bucketHash(k, ol.olbucketcount)
-	bucket := &ol.data[partNum].buckets[bucketNum]
-
-	if ol.useLatch {
-		bucket.RLock()
-		defer bucket.RUnlock()
-	}
-
-	tail := bucket.tail
-	for tail != nil {
-		for i := tail.t - 1; i >= 0; i-- {
-			if tail.keys[i] == k {
-				tail.oRecs[i].GetValue(value, colNum)
-				return nil
-			}
-		}
-		tail = tail.before
-	}
-
-	return ENOKEY
 }
 
 func (ol *OrderLineTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -1708,34 +1428,6 @@ func (ol *OrderLineTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (ol *OrderLineTable) SetLatch(useLatch bool) {
 	ol.useLatch = useLatch
-}
-
-func (ol *OrderLineTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !ol.isPartition {
-		partNum = 0
-	}
-
-	bucketNum := ol.bucketHash(k, ol.olbucketcount)
-	bucket := &ol.data[partNum].buckets[bucketNum]
-
-	if ol.useLatch {
-		bucket.RLock()
-		defer bucket.RUnlock()
-	}
-
-	tail := bucket.tail
-	for tail != nil {
-		for i := tail.t - 1; i >= 0; i-- {
-			if tail.keys[i] == k {
-				tail.oRecs[i].DeltaValue(value, colNum)
-				return nil
-			}
-		}
-		tail = tail.before
-	}
-
-	return ENOKEY
 }
 
 func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {

@@ -17,11 +17,12 @@ func (l *NoWaitLock) RLock() bool {
 		return false
 	}
 
-	if atomic.CompareAndSwapInt32(&l.readerCount, r, r+1) {
-		return true
-	} else {
+	if atomic.AddInt32(&l.readerCount, 1) < 0 {
+		atomic.AddInt32(&l.readerCount, -1)
 		return false
 	}
+
+	return true
 }
 
 func (l *NoWaitLock) RUnlock() {

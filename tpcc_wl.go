@@ -181,6 +181,7 @@ type TPCCTransGen struct {
 	padding1 [PADDING]byte
 	spinlock.Spinlock
 	i_id_gen        KeyGen
+	d_id_gen        KeyGen
 	w_id_gen        KeyGen
 	c_id_gen        KeyGen
 	c_last_gen      KeyGen
@@ -554,6 +555,7 @@ type TPCCWorkload struct {
 	nParts          int
 	isPartition     bool
 	zp              ZipfProb
+	nKeys           []int
 	isGC            bool
 	padding2        [PADDING]byte
 }
@@ -575,8 +577,15 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 
 	tpccWL.transPercentage = transPercentage
 
+	tpccWL.nKeys = make([]int, TPCCTABLENUM)
+	tpccWL.nKeys[WAREHOUSE] = WAREHOUSESIZE_PER_WAREHOUSE * (*NumPart) * 10
+	tpccWL.nKeys[DISTRICT] = DISTRICTSIZE_PER_WAREHOUSE * (*NumPart) * 10
+	tpccWL.nKeys[CUSTOMER] = CUSTOMERSIZE_PER_WAREHOUSE * (*NumPart)
+	tpccWL.nKeys[STOCK] = STOCKSIZE_PER_WAREHOUSE * (*NumPart)
+	tpccWL.nKeys[ITEM] = ITEMSIZE
+
 	start := time.Now()
-	tpccWL.store = NewStore(workload, nParts, isPartition, initMode, double)
+	tpccWL.store = NewStore(workload, tpccWL.nKeys, nParts, isPartition, initMode, double)
 	clog.Info("Building Store %.2fs \n", time.Since(start).Seconds())
 
 	tpccWL.nWorkers = nWorkers
@@ -610,7 +619,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 			return nil
 		}
 		k, partNum, tuple = parseItem(string(rowBytes))
-		store.CreateRecByID(ITEM, k, partNum, tuple)
+		store.CreateRecByID(ITEM, k, partNum, tuple, nil)
 
 		tpccWL.i_id_range++
 	}
@@ -625,6 +634,13 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 			var k Key
 			var partNum int
 			var tuple Tuple
+			preIAAR := make([]IndexAlloc, TPCCTABLENUM)
+			preIAAR[NEWORDER] = &NewOrderIndexAlloc{}
+			preIAAR[NEWORDER].OneAllocateSize(NEWORDER_INDEX_LOADING)
+			preIAAR[ORDER] = &OrderIndexAlloc{}
+			preIAAR[ORDER].OneAllocateSize(ORDER_INDEX_LOADING)
+			preIAAR[ORDERLINE] = &OrderLineIndexAlloc{}
+			preIAAR[ORDERLINE].OneAllocateSize(ORDERLINE_INDEX_LOADING)
 			//iRecs := make([]InsertRec, 1)
 			//noTuple := &NewOrderTuple{}
 			//noRec := MakeRecord(store.tables[NEWORDER], k, noTuple)
@@ -660,7 +676,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 						store.tables[i].InsertRecord(iRecs)
 					}*/
 					//store.priTables[i].CreateRecByID(k, partNum, tuple)
-					store.CreateRecByID(i, k, partNum, tuple)
+					store.CreateRecByID(i, k, partNum, tuple, preIAAR[i])
 				}
 				df.Close()
 			}
@@ -944,14 +960,14 @@ func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, 
 	tpccWL.transPercentage = transper
 	for i := 0; i < tpccWL.nWorkers; i++ {
 		tg := &tpccWL.transGen[i]
-		tg.Lock()
+		tg.w.Lock()
 		tg.c_id_gen = keygens[i][0]
 		tg.c_last_gen = keygens[i][1]
 		tg.i_id_gen = keygens[i][2]
 		tg.w_id_gen = partGens[i]
 		tg.cr = cr
 		tg.transPercentage = transper
-		tg.Unlock()
+		tg.w.Unlock()
 		tg.validProb = tpccWL.zp.GetProb(i)
 		tg.timeInit = false
 	}

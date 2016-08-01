@@ -535,7 +535,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			val: int(INITVAL),
 		}
 
-		store.CreateRecByID(SINGLE, key, partNum, st)
+		store.CreateRecByID(SINGLE, key, partNum, st, nil)
 
 		for key[k]+1 >= keyRange[k] {
 			key[k] = 0
@@ -669,7 +669,8 @@ func (singleWL *SingelWorkload) ResetData() {
 	for i := int(0); i < nKeys; i++ {
 
 		partNum := gen.GetPart(SINGLE, key)
-		store.SetValueByID(SINGLE, key, partNum, iv, SINGLE_VAL)
+		rec, _, _, _ := store.GetRecByID(SINGLE, key, partNum)
+		rec.SetValue(iv, SINGLE_VAL)
 
 		for key[k]+1 >= keyRange[k] {
 			key[k] = 0
@@ -697,7 +698,7 @@ func (singleWL *SingelWorkload) OnlineReconf(keygens [][]KeyGen, partGens []Part
 	singleWL.zp.Reconf(ps)
 	for i := 0; i < len(singleWL.transGen); i++ {
 		tg := singleWL.transGen[i]
-		tg.Lock()
+		tg.w.Lock()
 		tg.gen.keyGens = keygens[i]
 		tg.gen.partGen = partGens[i]
 		tg.cr = cr
@@ -706,7 +707,7 @@ func (singleWL *SingelWorkload) OnlineReconf(keygens [][]KeyGen, partGens []Part
 		tg.mp = mp
 		tg.validProb = singleWL.zp.GetProb(i)
 		tg.timeInit = false
-		tg.Unlock()
+		tg.w.Unlock()
 	}
 }
 
@@ -727,10 +728,11 @@ func (s *SingelWorkload) PrintSum() {
 	var k int = 0
 	for i := 0; i < nKeys; i++ {
 		partNum := gen.GetPart(SINGLE, key)
-		err := store.GetValueByID(SINGLE, key, partNum, intRB, SINGLE_VAL)
+		rec, _, _, err := store.GetRecByID(SINGLE, key, partNum)
 		if err != nil {
 			clog.Info("Get Value Error")
 		}
+		rec.GetValue(intRB, SINGLE_VAL)
 		total += intRB.intVal
 
 		for key[k]+1 >= keyRange[k] {

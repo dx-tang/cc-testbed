@@ -153,7 +153,7 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.iaAR[ORDERLINE].OneAllocate()
 
 		loaders := *NLOADERS
-		if id >= *NumPart-loaders {
+		if id < loaders {
 			perWorker := *NumPart / loaders
 			residue := *NumPart % loaders
 			numWorkers := perWorker

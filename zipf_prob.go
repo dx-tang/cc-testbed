@@ -30,7 +30,7 @@ func (zp *ZipfProb) GetProb(k int) float64 {
 	if k >= zp.n || k < 0 {
 		clog.Error("Not Valid Rank %v", k)
 	}
-	e := 1 / math.Pow(float64(k+1), zp.s)
+	e := 1 / math.Pow(float64(zp.n-k), zp.s)
 	f := 1 / math.Pow(1, zp.s)
 	return e / f
 }

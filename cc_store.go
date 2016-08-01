@@ -128,7 +128,7 @@ type Store struct {
 	padding2     [PADDING]byte
 }
 
-func NewStore(schema string, nParts int, isPartition bool, mode int, double bool) *Store {
+func NewStore(schema string, tableSize []int, nParts int, isPartition bool, mode int, double bool) *Store {
 
 	if nParts == 1 {
 		isPartition = false
@@ -217,13 +217,15 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			clog.Info("Making Order %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "CUSTOMER") == 0 {
 			start := time.Now()
-			s.priTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, useLatch)
 			if isPartition {
-				s.secTables[i] = MakeCustomerTable(1, *NumPart, !isPartition, useLatch)
+				s.priTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE, nParts, *NumPart, isPartition, useLatch)
+				s.secTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE*(*NumPart), 1, *NumPart, !isPartition, useLatch)
+				s.backTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE, nParts, *NumPart, isPartition, useLatch)
 			} else {
-				s.secTables[i] = MakeCustomerTable(*NumPart, *NumPart, !isPartition, useLatch)
+				s.priTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE*(*NumPart), nParts, *NumPart, isPartition, useLatch)
+				s.secTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE, nParts, *NumPart, !isPartition, useLatch)
+				s.backTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE*(*NumPart), nParts, *NumPart, isPartition, useLatch)
 			}
-			s.backTables[i] = MakeCustomerTable(nParts, *NumPart, isPartition, useLatch)
 			clog.Info("Making Customer %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "HISTORY") == 0 {
 			start := time.Now()
@@ -243,19 +245,21 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 			clog.Info("Making OrderLine %.2f", time.Since(start).Seconds())
 		} else if strings.Compare(schemaStrs[0], "ITEM") == 0 {
 			start := time.Now()
-			s.priTables[i] = NewBasicTable(schemaStrs, 1, false, useLatch, ITEM)
+			s.priTables[i] = NewBasicTable(ITEMSIZE, 1, false, useLatch, ITEM)
 			s.secTables[i] = s.priTables[i]
 			s.backTables[i] = s.priTables[i]
 			clog.Info("Making ITEM %.2f", time.Since(start).Seconds())
 		} else {
 			start := time.Now()
-			s.priTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, useLatch, i)
 			if isPartition {
-				s.secTables[i] = NewBasicTable(schemaStrs, 1, !isPartition, useLatch, i)
+				s.priTables[i] = NewBasicTable(tableSize[i]/(*NumPart), nParts, isPartition, useLatch, i)
+				s.secTables[i] = NewBasicTable(tableSize[i], 1, !isPartition, useLatch, i)
+				s.backTables[i] = NewBasicTable(tableSize[i]/(*NumPart), nParts, isPartition, useLatch, i)
 			} else {
-				s.secTables[i] = NewBasicTable(schemaStrs, *NumPart, !isPartition, useLatch, i)
+				s.priTables[i] = NewBasicTable(tableSize[i], nParts, isPartition, useLatch, i)
+				s.secTables[i] = NewBasicTable(tableSize[i]/(*NumPart), *NumPart, !isPartition, useLatch, i)
+				s.backTables[i] = NewBasicTable(tableSize[i], nParts, isPartition, useLatch, i)
 			}
-			s.backTables[i] = NewBasicTable(schemaStrs, nParts, isPartition, useLatch, i)
 			clog.Info("Making BasicTable %.2f", time.Since(start).Seconds())
 		}
 
@@ -263,22 +267,9 @@ func NewStore(schema string, nParts int, isPartition bool, mode int, double bool
 	return s
 }
 
-func (s *Store) CreateRecByName(tableName string, k Key, partNum int, tuple Tuple) (Record, error) {
-	if partNum >= s.nParts {
-		clog.Error("Partition Number %v Out of Index", partNum)
-	}
-
-	tableID, ok1 := s.tableToIndex[tableName]
-	if !ok1 {
-		clog.Error("Table %s, Not Recognized \n", tableName)
-	}
-
-	return s.CreateRecByID(tableID, k, partNum, tuple)
-}
-
-func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Record, error) {
+func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple, ia IndexAlloc) (Record, error) {
 	table := s.priTables[tableID]
-	rec, err := table.CreateRecByID(k, partNum, tuple)
+	rec, err := table.CreateRecByID(k, partNum, tuple, ia)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +277,7 @@ func (s *Store) CreateRecByID(tableID int, k Key, partNum int, tuple Tuple) (Rec
 		if WLTYPE == TPCCWL && (tableID == ITEM || tableID == HISTORY) {
 			return rec, err
 		}
-		_, err1 := s.secTables[tableID].CreateRecByID(k, partNum, tuple)
+		_, err1 := s.secTables[tableID].CreateRecByID(k, partNum, tuple, ia)
 		if err1 != nil {
 			return nil, err1
 		}
@@ -305,62 +296,6 @@ func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, Bucket, uin
 			return s.priTables[tableID].GetRecByID(k, partNum)
 		}
 		return rec, nil, 0, err
-	}
-}
-
-func (s *Store) GetValueByName(tableName string, k Key, partNum int, val Value, colNum int) error {
-	if partNum >= s.nParts {
-		clog.Error("Partition Number %v Out of Index", partNum)
-	}
-
-	tableID, ok1 := s.tableToIndex[tableName]
-	if !ok1 {
-		clog.Error("Table %s, Not Exist \n", tableName)
-	}
-
-	return s.GetValueByID(tableID, k, partNum, val, colNum)
-}
-
-func (s *Store) GetValueByID(tableID int, k Key, partNum int, val Value, colNum int) error {
-	if s.state == INDEX_NONE {
-		table := s.priTables[tableID]
-		return table.GetValueByID(k, partNum, val, colNum)
-	} else { // INDEX_CHANGING
-		table := s.secTables[tableID]
-		err := table.GetValueByID(k, partNum, val, colNum)
-		if err == ENOKEY {
-			return s.priTables[tableID].GetValueByID(k, partNum, val, colNum)
-		}
-		return err
-	}
-}
-
-func (s *Store) SetValueByName(tableName string, k Key, partNum int, value Value, colNum int) error {
-	if partNum >= s.nParts {
-		clog.Error("Partition Number %v Out of Index", partNum)
-	}
-
-	tableID, ok1 := s.tableToIndex[tableName]
-	if !ok1 {
-		clog.Error("Table %s, Not Recognized \n", tableName)
-	}
-
-	return s.SetValueByID(tableID, k, partNum, value, colNum)
-}
-
-func (s *Store) SetValueByID(tableID int, k Key, partNum int, value Value, colNum int) error {
-	//table := s.tables[tableID]
-	//return table.SetValueByID(k, partNum, value, colNum)
-	if s.state == INDEX_NONE {
-		table := s.priTables[tableID]
-		return table.SetValueByID(k, partNum, value, colNum)
-	} else { // INDEX_CHANGING
-		table := s.secTables[tableID]
-		err := table.SetValueByID(k, partNum, value, colNum)
-		if err == ENOKEY {
-			return s.priTables[tableID].SetValueByID(k, partNum, value, colNum)
-		}
-		return err
 	}
 }
 
@@ -419,20 +354,6 @@ func (s *Store) SetLatch(useLatch bool) {
 	for i, t := range s.priTables {
 		t.SetLatch(useLatch)
 		s.secTables[i].SetLatch(useLatch)
-	}
-}
-
-func (s *Store) DeltaValueByID(tableID int, k Key, partNum int, value Value, colNum int) error {
-	if s.state == INDEX_NONE {
-		table := s.priTables[tableID]
-		return table.DeltaValueByID(k, partNum, value, colNum)
-	} else { // INDEX_CHANGING
-		table := s.secTables[tableID]
-		err := table.DeltaValueByID(k, partNum, value, colNum)
-		if err == ENOKEY {
-			return s.priTables[tableID].DeltaValueByID(k, partNum, value, colNum)
-		}
-		return err
 	}
 }
 

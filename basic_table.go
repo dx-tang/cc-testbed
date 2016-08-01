@@ -17,18 +17,15 @@ const (
 )
 
 type Table interface {
-	CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error)
+	CreateRecByID(k Key, partNum int, tuple Tuple, iaAR IndexAlloc) (Record, error)
 	GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error)
-	SetValueByID(k Key, partNum int, value Value, colNum int) error
-	GetValueByID(k Key, partNum int, value Value, colNum int) error
-	DeltaValueByID(k Key, partNum int, value Value, colNum int) error
+	GetValueBySec(k Key, partNum int, val Value) error
 	PrepareDelete(k Key, partNum int) (Record, error)
 	DeleteRecord(k Key, partNum int) error
 	ReleaseDelete(k Key, partNum int)
 	PrepareInsert(k Key, partNum int) error
 	InsertRecord(recs []InsertRec, ia IndexAlloc) error
 	ReleaseInsert(k Key, partNum int)
-	GetValueBySec(k Key, partNum int, val Value) error
 	SetLatch(useLatch bool)
 	BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
@@ -38,15 +35,15 @@ type Table interface {
 type Shard struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
-	rows        map[Key]Record
-	init_orders map[Key]int
-	padding2    [PADDING]byte
+	rows     map[Key]Record
+	padding2 [PADDING]byte
 }
 
 type Partition struct {
-	padding1   [PADDING]byte
-	shardedMap []Shard
-	padding2   [PADDING]byte
+	padding1    [PADDING]byte
+	ht          *HashTable
+	init_orders map[Key]int
+	padding2    [PADDING]byte
 }
 
 type BasicTable struct {
@@ -63,7 +60,7 @@ type BasicTable struct {
 	padding2    [PADDING]byte
 }
 
-func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, useLatch bool, tableID int) *BasicTable {
+func NewBasicTable(numEntries int, nParts int, isPartition bool, useLatch bool, tableID int) *BasicTable {
 
 	// We allocate more space to make the array algined to cache line
 	bt := &BasicTable{
@@ -76,101 +73,35 @@ func NewBasicTable(schemaStrs []string, nParts int, isPartition bool, useLatch b
 		tableID:     tableID,
 	}
 
-	if WLTYPE == TPCCWL {
-		if isPartition {
-			bt.shardHash = func(k Key) int {
-				return k[KEY1] % SHARDCOUNT
-			}
-		} else {
-			bt.shardHash = func(k Key) int {
-				hash := k[KEY1]*(*NumPart) + k[KEY0]
-				return hash % SHARDCOUNT
-			}
-		}
-		if tableID == ITEM {
-			bt.shardHash = func(k Key) int {
-				return k[KEY0] % SHARDCOUNT
-			}
-		} else if tableID == STOCK {
-			if isPartition {
-				bt.shardHash = func(k Key) int {
-					return k[KEY1] % SHARDCOUNT
-				}
-			} else {
-				bt.shardHash = func(k Key) int {
-					return (k[KEY1]*(*NumPart) + k[KEY0]) % SHARDCOUNT
-				}
-			}
-		}
-	} else {
-		bt.shardHash = func(k Key) int {
-			return k[KEY0] % SHARDCOUNT
-		}
-	}
-
-	/*
-		for j := 0; j < len(schemaStrs)-1; j++ {
-			switch schemaStrs[j+1] {
-			case "int":
-				bt.valueSchema[j] = INTEGER
-			case "string":
-				bt.valueSchema[j] = STRING
-			case "float":
-				bt.valueSchema[j] = FLOAT
-			case "date":
-				bt.valueSchema[j] = DATE
-			default:
-				clog.Error("Wrong Value Type %s", schemaStrs[j+1])
-			}
-		}
-	*/
-
 	bt.data = make([]Partition, nParts)
 	for k := 0; k < nParts; k++ {
-		bt.data[k].shardedMap = make([]Shard, SHARDCOUNT)
-		for i := 0; i < SHARDCOUNT; i++ {
-			bt.data[k].shardedMap[i].rows = make(map[Key]Record)
-			bt.data[k].shardedMap[i].init_orders = make(map[Key]int)
-		}
+		bt.data[k].ht = NewHashTable(numEntries, isPartition, useLatch, tableID)
+		bt.data[k].init_orders = make(map[Key]int)
 	}
 
 	return bt
 
 }
 
-func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple) (Record, error) {
+func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple, iaAR IndexAlloc) (Record, error) {
 
 	if !bt.isPartition {
 		partNum = 0
 	}
 
-	shardNum := bt.shardHash(k)
+	rec := MakeRecord(bt, k, tuple)
 
-	shard := &bt.data[partNum].shardedMap[shardNum]
+	ok := bt.data[partNum].ht.Put(k, rec, iaAR)
 
-	if !bt.isPartition {
-		shard.Lock()
+	if !ok {
+		return nil, EDUPKEY
 	}
-
-	if _, ok := shard.rows[k]; ok {
-		if !bt.isPartition {
-			shard.Unlock()
-		}
-		return nil, EDUPKEY //One record with that key has existed;
-	}
-
-	r := MakeRecord(bt, k, tuple)
-	shard.rows[k] = r
 
 	if WLTYPE == TPCCWL && bt.tableID == DISTRICT {
-		shard.init_orders[k] = tuple.(*DistrictTuple).d_next_o_id
+		bt.data[partNum].init_orders[k] = tuple.(*DistrictTuple).d_next_o_id
 	}
 
-	if !bt.isPartition {
-		shard.Unlock()
-	}
-
-	return r, nil
+	return rec, nil
 }
 
 func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, error) {
@@ -179,82 +110,14 @@ func (bt *BasicTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64, er
 		partNum = 0
 	}
 
-	shardNum := bt.shardHash(k)
-	shard := &bt.data[partNum].shardedMap[shardNum]
+	rec, ok := bt.data[partNum].ht.Get(k)
 
-	if bt.useLatch {
-		shard.RLock()
-	}
-
-	r, ok := shard.rows[k]
 	if !ok {
-		if bt.useLatch {
-			shard.RUnlock()
-		}
 		return nil, nil, 0, ENOKEY
 	} else {
-		if bt.useLatch {
-			shard.RUnlock()
-		}
-		return r, nil, 0, nil
-	}
-}
-
-func (bt *BasicTable) SetValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !bt.isPartition {
-		partNum = 0
+		return rec, nil, 0, nil
 	}
 
-	shardNum := bt.shardHash(k)
-	shard := &bt.data[partNum].shardedMap[shardNum]
-
-	if bt.useLatch {
-		shard.RLock()
-	}
-
-	r, ok := shard.rows[k]
-	if !ok {
-		if bt.useLatch {
-			shard.RUnlock()
-		}
-		return ENOKEY
-	}
-
-	r.SetValue(value, colNum)
-	if bt.useLatch {
-		shard.RUnlock()
-	}
-	return nil
-}
-
-func (bt *BasicTable) GetValueByID(k Key, partNum int, value Value, colNum int) error {
-
-	if !bt.isPartition {
-		partNum = 0
-	}
-
-	shardNum := bt.shardHash(k)
-	shard := &bt.data[partNum].shardedMap[shardNum]
-
-	if bt.useLatch {
-		shard.RLock()
-	}
-
-	r, ok := shard.rows[k]
-	if !ok {
-		if bt.useLatch {
-			shard.RUnlock()
-		}
-		return ENOKEY
-	}
-
-	r.GetValue(value, colNum)
-
-	if bt.useLatch {
-		shard.RUnlock()
-	}
-	return nil
 }
 
 func (bt *BasicTable) PrepareDelete(k Key, partNum int) (Record, error) {
@@ -283,21 +146,10 @@ func (bt *BasicTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 			partNum = 0
 		}
 
-		shardNum := bt.shardHash(iRec.k)
-		shard := &bt.data[partNum].shardedMap[shardNum]
+		ok := bt.data[partNum].ht.Put(iRec.k, iRec.rec, ia)
 
-		if bt.useLatch {
-			shard.Lock()
-		}
-
-		_, ok := shard.rows[iRec.k]
-		if ok {
+		if !ok {
 			return EDUPKEY
-		}
-
-		shard.rows[iRec.k] = iRec.rec
-		if bt.useLatch {
-			shard.Unlock()
 		}
 	}
 
@@ -314,55 +166,41 @@ func (bt *BasicTable) GetValueBySec(k Key, partNum int, val Value) error {
 
 func (bt *BasicTable) SetLatch(useLatch bool) {
 	bt.useLatch = useLatch
+	for i, _ := range bt.data {
+		bt.data[i].ht.SetLatch(useLatch)
+	}
 }
 
-func (bt *BasicTable) DeltaValueByID(k Key, partNum int, value Value, colNum int) error {
-	if !bt.isPartition {
-		partNum = 0
-	}
-
-	shardNum := bt.shardHash(k)
-	shard := &bt.data[partNum].shardedMap[shardNum]
-
-	if bt.useLatch {
-		shard.RLock()
-		defer shard.RUnlock()
-	}
-
-	r, ok := shard.rows[k]
-	if !ok {
-		return ENOKEY
-	}
-
-	r.DeltaValue(value, colNum)
-	return nil
-}
 func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	recs := make([]InsertRec, 1)
 	start := time.Now()
 	for i, _ := range bt.data {
 		part := &bt.data[i]
-		for j, _ := range part.shardedMap {
-			shard := &part.shardedMap[j]
-			for k, v := range shard.rows {
-				if WLTYPE == TPCCWL {
-					if k[0] < begin || k[0] >= end {
-						continue
+		for j, _ := range part.ht.bucket {
+			bucket := &part.ht.bucket[j]
+			for bucket != nil {
+				for p := 0; p < bucket.cur; p++ {
+					k := bucket.keyArray[p]
+					if WLTYPE == TPCCWL {
+						if k[0] < begin || k[0] >= end {
+							continue
+						}
+						recs[0].k = k
+						recs[0].rec = bucket.recArray[p]
+						recs[0].partNum = k[0]
+						table.InsertRecord(recs, ia)
+					} else {
+						partNum := partitioner.GetPart(k)
+						if partNum < begin || partNum >= end {
+							continue
+						}
+						recs[0].k = k
+						recs[0].rec = bucket.recArray[p]
+						recs[0].partNum = partNum
+						table.InsertRecord(recs, ia)
 					}
-					recs[0].k = k
-					recs[0].rec = v
-					recs[0].partNum = k[0]
-					table.InsertRecord(recs, ia)
-				} else {
-					partNum := partitioner.GetPart(k)
-					if partNum < begin || partNum >= end {
-						continue
-					}
-					recs[0].k = k
-					recs[0].rec = v
-					recs[0].partNum = partNum
-					table.InsertRecord(recs, ia)
 				}
+				bucket = bucket.next
 			}
 		}
 	}
@@ -374,20 +212,24 @@ func (bt *BasicTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int, 
 	start := time.Now()
 	for i := begin; i < end; i++ {
 		part := &bt.data[i]
-		for j, _ := range part.shardedMap {
-			shard := &part.shardedMap[j]
-			for k, v := range shard.rows {
-				if WLTYPE == TPCCWL {
-					recs[0].k = k
-					recs[0].rec = v
-					recs[0].partNum = 0
-					table.InsertRecord(recs, ia)
-				} else {
-					recs[0].k = k
-					recs[0].rec = v
-					recs[0].partNum = 0
-					table.InsertRecord(recs, ia)
+		for j, _ := range part.ht.bucket {
+			bucket := &part.ht.bucket[j]
+			for bucket != nil {
+				for p := 0; p < bucket.cur; p++ {
+					k := bucket.keyArray[p]
+					if WLTYPE == TPCCWL {
+						recs[0].k = k
+						recs[0].rec = bucket.recArray[p]
+						recs[0].partNum = 0
+						table.InsertRecord(recs, ia)
+					} else {
+						recs[0].k = k
+						recs[0].rec = bucket.recArray[p]
+						recs[0].partNum = 0
+						table.InsertRecord(recs, ia)
+					}
 				}
+				bucket = bucket.next
 			}
 		}
 	}
@@ -398,11 +240,9 @@ func (bt *BasicTable) Reset() {
 	if WLTYPE == TPCCWL && bt.tableID == DISTRICT {
 		for i, _ := range bt.data {
 			part := &bt.data[i]
-			for j, _ := range part.shardedMap {
-				shard := &part.shardedMap[j]
-				for k, rec := range shard.rows {
-					rec.GetTuple().(*DistrictTuple).d_next_o_id = shard.init_orders[k]
-				}
+			for k, init_order := range part.init_orders {
+				rec, _ := part.ht.Get(k)
+				rec.GetTuple().(*DistrictTuple).d_next_o_id = init_order
 			}
 
 		}

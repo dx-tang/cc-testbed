@@ -279,8 +279,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	for i := 0; i < int(noTrans.ol_cnt); i++ {
 		k[0] = noTrans.ol_i_id[i]
-		shard := table.data[0].shardedMap[table.shardHash(k)]
-		rec = shard.rows[k]
+		rec, _ = table.data[0].ht.Get(k)
 		iTuple = rec.GetTuple().(*ItemTuple)
 
 		sKey[0] = noTrans.ol_supply_w_id[i]

@@ -1,5 +1,22 @@
 package testbed
 
+// TPCC Table Size
+const (
+	WAREHOUSESIZE_PER_WAREHOUSE = 1
+	DISTRICTSIZE_PER_WAREHOUSE  = 10
+	CUSTOMERSIZE_PER_WAREHOUSE  = 30000
+	STOCKSIZE_PER_WAREHOUSE     = 100000
+	ITEMSIZE                    = 100000
+)
+
+// Index allocation for loading
+const (
+	ORDER_INDEX_LOADING        = 200
+	ORDER_SECINDEX_PER_LOADING = 200
+	ORDERLINE_INDEX_LOADING    = 200
+	NEWORDER_INDEX_LOADING     = 200
+)
+
 // TPCC Pre-allocation
 // Records Pre-allocated
 const (
@@ -13,8 +30,8 @@ const (
 	ORDER_INDEX_PER_ALLOC     = 200
 	ORDER_SECINDEX_PER_ALLOC  = 200
 	ORDERLINE_INDEX_PER_ALLOC = 200
-	HISTORY_INDEX_PER_ALLOC   = 100  // History Bucket Number 256
-	NEWORDER_INDEX_PER_ALLOC  = 10 // NewOrder Bucket Number warehouse*dist_count
+	HISTORY_INDEX_PER_ALLOC   = 100 // History Bucket Number 256
+	NEWORDER_INDEX_PER_ALLOC  = 10  // NewOrder Bucket Number warehouse*dist_count
 )
 
 // Index Pre-allocation for original data
@@ -31,7 +48,7 @@ const (
 	CAP_HISTORY_ENTRY  = 1000
 	CAP_CUSTOMER_ENTRY = 5
 
-	CAP_BUCKET_COUNT           = 2000
+	CAP_BUCKET_COUNT           = 1999
 	CAP_ORDER_SEC_ENTRY        = 5
 	CAP_ORDER_BUCKET_ENTRY     = 5
 	CAP_ORDERLINE_BUCKET_ENTRY = 50

@@ -63,7 +63,6 @@ type BasicWorkload struct {
 
 func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers int, s float64, ps float64, initMode int, double bool) *BasicWorkload {
 	basic := &BasicWorkload{
-		store:       NewStore(workload, nParts, isPartition, initMode, double),
 		nParts:      *NumPart,
 		isPartition: isPartition,
 		nWorkers:    nWorkers,
@@ -139,6 +138,8 @@ func NewBasicWorkload(workload string, nParts int, isPartition bool, nWorkers in
 	}
 
 	basic.NewGenerators(s, ps)
+
+	basic.store = NewStore(workload, basic.nKeys, nParts, isPartition, initMode, double)
 
 	return basic
 }
