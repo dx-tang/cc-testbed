@@ -119,7 +119,7 @@ class Single(object):
 		result = self.indexclf.predict(testIndex)
 		self.indexprob = self.indexclf.predict_proba(testIndex)[0][result[0]]
 		self.totalprob = self.indexprob
-		print result, self.indexprob
+		#print result, self.indexprob
 		cur = 0
 		if curType > 2:
 			cur = 1
@@ -131,7 +131,7 @@ class Single(object):
 			result = self.partclf.predict(testPart)
 			self.partprob = self.partclf.predict_proba(testPart)[0][result[0]]
 			self.totalprob = self.partprob * self.totalprob
-			print result, self.partprob
+			#print result, self.partprob
 			# cur represent PCC or not
 			cur = 0
 			if curType > 0:

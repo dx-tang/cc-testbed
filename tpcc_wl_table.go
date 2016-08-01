@@ -1345,17 +1345,23 @@ func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64
 
 	if ol.useLatch {
 		bucket.RLock()
-		defer bucket.RUnlock()
 	}
 
 	tail := bucket.tail
 	for tail != nil {
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
+				if ol.useLatch {
+					bucket.RUnlock()
+				}
 				return tail.oRecs[i], nil, 0, nil
 			}
 		}
 		tail = tail.before
+	}
+
+	if ol.useLatch {
+		bucket.RUnlock()
 	}
 
 	return nil, nil, 0, ENOKEY
@@ -1393,7 +1399,6 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 
 	if ol.useLatch {
 		bucket.Lock()
-		defer bucket.Unlock()
 	}
 
 	for i, _ := range recs {
@@ -1413,6 +1418,10 @@ func (ol *OrderLineTable) InsertRecord(recs []InsertRec, ia IndexAlloc) error {
 		bucket.tail.oRecs[cur] = rec
 		bucket.tail.t++
 
+	}
+
+	if ol.useLatch {
+		bucket.Unlock()
 	}
 
 	return nil

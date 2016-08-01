@@ -2,8 +2,8 @@ package testbed
 
 const (
 	LOADFACTOR    = 0.75 // numEntries/numBuckets
-	PERHASHBUCKET = 5
-	LATCHNUM      = 64
+	PERHASHBUCKET = 10
+	LATCHNUM      = 256
 )
 
 type HashBucket struct {
@@ -120,15 +120,20 @@ func (ht *HashTable) Get(k Key) (Record, bool) {
 	bucket := &ht.bucket[bucketIndex]
 	if ht.useLatch {
 		ht.latches[bucketIndex%LATCHNUM].RLock()
-		defer ht.latches[bucketIndex%LATCHNUM].RUnlock()
 	}
 	for bucket != nil {
 		for i := 0; i < bucket.cur; i++ {
 			if k == bucket.keyArray[i] {
+				if ht.useLatch {
+					ht.latches[bucketIndex%LATCHNUM].RUnlock()
+				}
 				return bucket.recArray[i], true
 			}
 		}
 		bucket = bucket.next
+	}
+	if ht.useLatch {
+		ht.latches[bucketIndex%LATCHNUM].RUnlock()
 	}
 	return nil, false
 }

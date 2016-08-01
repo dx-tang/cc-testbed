@@ -7,7 +7,7 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-const (
+const (2666667
 	PENALTY = 1000 // Microseconds
 )
 
@@ -1131,11 +1131,20 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 	var val Value
 	var col int
 	col = singleTrans.rnd.Intn(25) + SINGLE_VAL + 1
+	var isRead bool
 	for i := 0; i < len(singleTrans.keys); i++ {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
 
-		if singleTrans.rnd.Intn(100) < singleTrans.rr {
+		if i % 5 == 0 {
+			if singleTrans.rnd.Intn(100) < singleTrans.rr {
+				isRead = true
+			} else {
+				isRead = false
+			}
+		}
+
+		if isRead {
 			_, val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req, t.isHome())
 			if err != nil {
 				return nil, err
