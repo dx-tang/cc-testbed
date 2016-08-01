@@ -7,6 +7,7 @@ import (
 const (
 	LOADFACTOR    = 0.75 // numEntries/numBuckets
 	PERHASHBUCKET = 5
+	LATCHNUM      = 64
 )
 
 type HashBucket struct {
@@ -15,13 +16,13 @@ type HashBucket struct {
 	recArray [PERHASHBUCKET]Record
 	keyArray [PERHASHBUCKET]Key
 	next     *HashBucket
-	spinlock.RWSpinlock
 	padding2 [PADDING]byte
 }
 
 type HashTable struct {
 	padding1  [PADDING]byte
 	bucket    []HashBucket
+	latches   [LATCHNUM]RWSpinLockPad
 	bucketNum int
 	hashCode  func(Key) int
 	useLatch  bool
@@ -89,8 +90,8 @@ func (ht *HashTable) Put(k Key, rec Record, ia IndexAlloc) bool {
 	bucketIndex := ht.hashCode(k) % ht.bucketNum
 	bucket := &ht.bucket[bucketIndex]
 	if ht.useLatch {
-		bucket.Lock()
-		defer bucket.Unlock()
+		ht.latches[bucketIndex%LATCHNUM].Lock()
+		defer ht.latches[bucketIndex%LATCHNUM].Unlock()
 	}
 	for {
 		for i := 0; i < bucket.cur; i++ {
@@ -122,8 +123,8 @@ func (ht *HashTable) Get(k Key) (Record, bool) {
 	bucketIndex := ht.hashCode(k) % ht.bucketNum
 	bucket := &ht.bucket[bucketIndex]
 	if ht.useLatch {
-		bucket.RLock()
-		defer bucket.RUnlock()
+		ht.latches[bucketIndex%LATCHNUM].RLock()
+		defer ht.latches[bucketIndex%LATCHNUM].RUnlock()
 	}
 	for bucket != nil {
 		for i := 0; i < bucket.cur; i++ {

@@ -272,9 +272,9 @@ func (w *Worker) Reset() {
 }
 
 func (w *Worker) SetMode(mode int) {
-	if *SysType != ADAPTIVE {
-		return
-	}
+	//if *SysType != ADAPTIVE {
+	//	return
+	//}
 	w.mode = mode
 	w.E = w.ExecPool[mode]
 	if mode == PARTITION {
