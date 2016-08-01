@@ -712,12 +712,6 @@ func (coord *Coordinator) PCCtoOthers(mode int) {
 
 	store.SetLatch(true)
 
-	store.state = INDEX_CHANGING
-	tmpTables := store.priTables
-	store.priTables = store.secTables
-	store.secTables = tmpTables
-	store.isPartition = false
-
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Unlock()
 	}
@@ -727,6 +721,15 @@ func (coord *Coordinator) PCCtoOthers(mode int) {
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Lock()
 		coord.Workers[i].needLock = false
+	}
+
+	store.state = INDEX_CHANGING
+	tmpTables := store.priTables
+	store.priTables = store.secTables
+	store.secTables = tmpTables
+	store.isPartition = false
+
+	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Unlock()
 	}
 
