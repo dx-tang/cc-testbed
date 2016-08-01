@@ -1,9 +1,5 @@
 package testbed
 
-import (
-	"github.com/totemtang/cc-testbed/spinlock"
-)
-
 const (
 	LOADFACTOR    = 0.75 // numEntries/numBuckets
 	PERHASHBUCKET = 5
