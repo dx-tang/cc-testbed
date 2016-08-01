@@ -7,7 +7,7 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
-const (2666667
+const (
 	PENALTY = 1000 // Microseconds
 )
 
@@ -1136,7 +1136,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
 
-		if i % 5 == 0 {
+		if i%5 == 0 {
 			if singleTrans.rnd.Intn(100) < singleTrans.rr {
 				isRead = true
 			} else {
