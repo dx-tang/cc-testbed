@@ -49,7 +49,7 @@ type IndexAction struct {
 
 type Worker struct {
 	padding [PADDING]byte
-	spinlock.RWSpinlock
+	spinlock.Spinlock
 	ID           int
 	next         TID
 	epoch        TID

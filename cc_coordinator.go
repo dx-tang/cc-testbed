@@ -331,7 +331,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		}
 
 		for i := range coordinator.Workers {
-			coordinator.reports[i] = make(chan *ReportInfo, 1)
+			coordinator.reports[i] = make(chan *ReportInfo, 10)
 			coordinator.changeACK[i] = make(chan bool, 1)
 			coordinator.indexStartACK[i] = make(chan bool, 1)
 			coordinator.indexActionACK[i] = make(chan bool, 1)
