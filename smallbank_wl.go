@@ -515,6 +515,34 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 		}
 	}
 
+	if isPartition && *Report && *SysType == ADAPTIVE {
+		store := sbWorkload.basic.store
+
+		for i, table := range store.priTables {
+			table.MergeLoad(store.secTables[i], nil, 0, *NumPart, nil)
+		}
+		for i, table := range store.secTables {
+			table.BulkLoad(store.backTables[i], nil, 0, 1, hp.partitioner[i])
+		}
+		for i, _ := range store.secTables {
+			store.secTables[i].Clean()
+			store.backTables[i].Clean()
+		}
+	} else if !isPartition && *Report && *SysType == ADAPTIVE {
+		store := sbWorkload.basic.store
+
+		for i, table := range store.priTables {
+			table.BulkLoad(store.secTables[i], nil, 0, 1, hp.partitioner[i])
+		}
+		for i, table := range store.secTables {
+			table.MergeLoad(store.backTables[i], nil, 0, *NumPart, nil)
+		}
+		for i, _ := range store.secTables {
+			store.secTables[i].Clean()
+			store.backTables[i].Clean()
+		}
+	}
+
 	// Prepare for generating transactions
 	sbWorkload.transGen = make([]*SBTransGen, nWorkers)
 	for i := 0; i < nWorkers; i++ {

@@ -30,6 +30,7 @@ type Table interface {
 	BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	Reset()
+	Clean()
 }
 
 type Shard struct {
@@ -245,6 +246,20 @@ func (bt *BasicTable) Reset() {
 				rec.GetTuple().(*DistrictTuple).d_next_o_id = init_order
 			}
 
+		}
+	}
+}
+
+func (bt *BasicTable) Clean() {
+	for i := 0; i < 1; i++ {
+		part := &bt.data[i]
+		for j, _ := range part.ht.bucket {
+			if j%100000 == 0 {
+				clog.Info("Bucket %v", j)
+			}
+			bucket := &part.ht.bucket[j]
+			bucket.cur = 0
+			bucket.next = nil
 		}
 	}
 }

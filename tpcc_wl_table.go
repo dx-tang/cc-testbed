@@ -279,6 +279,10 @@ func (no *NewOrderTable) Reset() {
 	}
 }
 
+func (no *NewOrderTable) Clean() {
+
+}
+
 type OrderSecPart struct {
 	padding1 [PADDING]byte
 	spinlock.RWSpinlock
@@ -739,6 +743,10 @@ func (o *OrderTable) Reset() {
 	}
 }
 
+func (o *OrderTable) Clean() {
+
+}
+
 type CustomerPart struct {
 	padding1 [PADDING]byte
 	spinlock.Spinlock
@@ -1056,6 +1064,9 @@ func (c *CustomerTable) MergeLoad(table Table, ia IndexAlloc, begin int, end int
 }
 
 func (c *CustomerTable) Reset() {
+}
+
+func (c *CustomerTable) Clean() {
 
 }
 
@@ -1213,6 +1224,10 @@ func (h *HistoryTable) Reset() {
 			head = head.next
 		}
 	}
+}
+
+func (h *HistoryTable) Clean() {
+
 }
 
 type OrderLinePart struct {
@@ -1508,4 +1523,8 @@ func (ol *OrderLineTable) Reset() {
 			}
 		}
 	}
+}
+
+func (ol *OrderLineTable) Clean() {
+
 }

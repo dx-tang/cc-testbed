@@ -550,6 +550,30 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 		}
 	}
 
+	if isPartition && *Report && *SysType == ADAPTIVE {
+		for i, table := range store.priTables {
+			table.MergeLoad(store.secTables[i], nil, 0, *NumPart, nil)
+		}
+		for i, table := range store.secTables {
+			table.BulkLoad(store.backTables[i], nil, 0, 1, hp.partitioner[i])
+		}
+		for i, _ := range store.secTables {
+			store.secTables[i].Clean()
+			store.backTables[i].Clean()
+		}
+	} else if !isPartition && *Report && *SysType == ADAPTIVE {
+		for i, table := range store.priTables {
+			table.BulkLoad(store.secTables[i], nil, 0, 1, hp.partitioner[i])
+		}
+		for i, table := range store.secTables {
+			table.MergeLoad(store.backTables[i], nil, 0, *NumPart, nil)
+		}
+		for i, _ := range store.secTables {
+			store.secTables[i].Clean()
+			store.backTables[i].Clean()
+		}
+	}
+
 	// Prepare for generating transactions
 	singleWL.transGen = make([]*SingleTransGen, nWorkers)
 	for i := 0; i < nWorkers; i++ {
