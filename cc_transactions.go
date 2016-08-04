@@ -1142,19 +1142,16 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 			isRead = false
 		}
 
-		if isRead {
-			_, val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req, t.isHome())
-			if err != nil {
-				return nil, err
-			}
-			if val == nil {
-				return nil, ENOKEY
-			}
-		} else {
+		_, val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req, t.isHome())
+		if err != nil {
+			return nil, err
+		}
+		if val == nil {
+			return nil, ENOKEY
+		}
+
+		if !isRead {
 			sv[i].stringVal = sv[i].stringVal[:CAP_SINGLE_STR]
-			//for p, b := range CONST_STR_SINGLE {
-			//	sv[i].stringVal[p] = byte(b)
-			//}
 			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, req, false, t.isHome(), nil)
 			if err != nil {
 				return nil, err

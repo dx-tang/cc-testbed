@@ -368,12 +368,13 @@ func main() {
 			// One Test Finished
 			if tm == testbed.TRAINPCC {
 				if searchState == PCONF_BEGIN {
-					if endCR-startCR > 7 {
+					if curCR-startCR > 14 {
 						if win == testbed.PCC {
 							startCR = curCR
 						} else {
 							endCR = curCR
 						}
+						curCR = (startCR + endCR) / 2
 					} else {
 						searchState = PSKEW
 						if win == testbed.PCC {
@@ -404,12 +405,13 @@ func main() {
 						curPS = 0
 					}
 				} else {
-					if endPS-startPS > 0.03 {
+					if curPS-startPS > 0.06 {
 						if win == testbed.PCC {
 							startPS = curPS
 						} else {
 							endPS = curPS
 						}
+						curPS = (startPS + endPS) / 2
 					} else {
 						crIndex++
 						if crIndex >= len(crArray) {
