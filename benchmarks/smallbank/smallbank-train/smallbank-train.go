@@ -364,7 +364,7 @@ func main() {
 
 			if tm == testbed.TRAINPCC {
 				if searchState == PCONF_BEGIN {
-					if curCR-startCR > 14 {
+					if endCR-startCR > 14 {
 						if win == testbed.PCC {
 							startCR = curCR
 						} else {
@@ -401,7 +401,7 @@ func main() {
 						curPS = 0
 					}
 				} else {
-					if curPS-startPS > 0.06 {
+					if endPS-startPS > 0.06 {
 						if win == testbed.PCC {
 							startPS = curPS
 						} else {
