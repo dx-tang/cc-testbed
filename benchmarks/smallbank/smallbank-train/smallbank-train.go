@@ -31,7 +31,7 @@ var out = flag.String("out", "data.out", "output file path")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var tc = flag.String("tc", "train.conf", "configuration for training")
-var trainMode = flag.Int("tm", 0, "Training Mode: 0 for Part; 1 for OCC-Part; 2 for OCC-NoPart; 3 for Index Merge/Partition; 4 for Testing")
+var trainMode = flag.Int("tm", 0, "Training Mode: 0 for PCC; 1 for OCC-2PL; 3 for Testing")
 
 var cr []float64
 var ps []float64
@@ -41,6 +41,13 @@ var transper []string
 const (
 	TRIALS  = 3
 	BUFSIZE = 3
+)
+
+// PCC Search State
+const (
+	PCONF_BEGIN = iota
+	PCONF_END
+	PSKEW
 )
 
 var (
@@ -72,34 +79,39 @@ func main() {
 
 	testbed.InitGlobalBuffer()
 
-	var fPart, fMerge, fWhole *os.File
+	var fOut *os.File
 	var err error
 
 	tm := *trainMode
 
-	if tm == testbed.TRAINPART || tm == testbed.TRAINOCCPART {
-		fPart, err = os.OpenFile("train-part.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if tm == testbed.TRAINPCC {
+		fOut, err = os.OpenFile("train-pcc.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			clog.Error("Open File Error %s\n", err.Error())
 		}
-		defer fPart.Close()
-	} else if tm == testbed.TRAINOCCPURE {
-		fMerge, err = os.OpenFile("train-merge.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	} else if tm == testbed.TRAINOCC {
+		fOut, err = os.OpenFile("train-occ.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			clog.Error("Open File Error %s\n", err.Error())
 		}
 	} else {
-		fWhole, err = os.OpenFile("train-whole.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		fOut, err = os.OpenFile("test.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			clog.Error("Open File Error %s\n", err.Error())
 		}
 	}
+	defer fOut.Close()
 
 	outDetail := false
 
-	var occFile, lockFile, pccFile, occPureFile, lockPureFile *os.File
+	var pccFile, occFile, lockFile *os.File
 
 	if outDetail {
+		pccFile, err = os.OpenFile("pcc.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			clog.Error("Open File Error %s\n", err.Error())
+		}
+
 		occFile, err = os.OpenFile("occ.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			clog.Error("Open File Error %s\n", err.Error())
@@ -110,50 +122,27 @@ func main() {
 			clog.Error("Open File Error %s\n", err.Error())
 		}
 
-		pccFile, err = os.OpenFile("pcc.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			clog.Error("Open File Error %s\n", err.Error())
-		}
-
-		occPureFile, err = os.OpenFile("occpure.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			clog.Error("Open File Error %s\n", err.Error())
-		}
-
-		lockPureFile, err = os.OpenFile("2plpure.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if err != nil {
-			clog.Error("Open File Error %s\n", err.Error())
-		}
-
+		defer pccFile.Close()
 		defer occFile.Close()
 		defer lockFile.Close()
-		defer pccFile.Close()
-		defer occPureFile.Close()
-		defer lockPureFile.Close()
 	}
 
-	if tm < testbed.TRAINPART || tm > testbed.TESTING {
+	if tm < testbed.TRAINPCC || tm > testbed.TESTING {
 		clog.Error("Training Mode %v Error: 0 for Part; 1 for OCC-Part; 2 for OCC-NoPart; 3 for Index Merge/Partition; 4 for Testing", tm)
 	}
 
 	nParts := nWorkers
 	var isPartition bool
-	if tm == testbed.TRAINOCCPURE {
-		nParts = 1
-		isPartition = false
-	} else {
-		isPartition = true
-	}
-
 	var double bool
-	if tm >= testbed.TRAININDEX {
+	if tm == testbed.TRAINPCC || tm == testbed.TESTING {
+		isPartition = true
 		double = true
 		clog.Info("Using Double Tables")
 	} else {
 		double = false
+		nParts = 1
+		isPartition = false
 	}
-
-	typeAR := make([]int, 0, testbed.LOCKSHARE+1)
 
 	clog.Info("Number of workers %v \n", nWorkers)
 	clog.Info("Adaptive CC Training\n")
@@ -173,10 +162,8 @@ func main() {
 	}
 
 	var totalTests int
-	if tm == testbed.TRAINPART { // Training for Partition
-		totalTests = len(ps) * len(contention) * len(transper)
-	} else if tm == testbed.TRAININDEX {
-		totalTests = len(cr) * len(contention) * len(transper)
+	if tm == testbed.TRAINPCC { // Training for Partition
+		totalTests = len(contention) * len(transper)
 	} else {
 		totalTests = len(cr) * len(ps) * len(contention) * len(transper)
 	}
@@ -184,7 +171,7 @@ func main() {
 	count := 0
 	for k := 0; k < totalTests; k++ {
 		startCR := 0
-		endCR := 50
+		endCR := 100
 		curCR := 0
 
 		startPS := float64(0)
@@ -193,13 +180,13 @@ func main() {
 
 		d := k
 		r := 0
-		if tm != testbed.TRAINPART {
+		if tm != testbed.TRAINPCC {
 			r = d % len(cr)
 			curCR = int(cr[r])
 			d = d / len(cr)
 		}
 
-		if tm != testbed.TRAININDEX {
+		if tm != testbed.TRAINPCC {
 			r = d % len(ps)
 			curPS = ps[r]
 			d = d / len(ps)
@@ -211,13 +198,14 @@ func main() {
 
 		tmpTP := transper[d]
 
+		searchState := PCONF_BEGIN
+		var crArray []int = make([]int, 0, 5)
+		var crIndex int = 0
+
 		for {
 
 			// Single Pruning
 			tp := strings.Split(tmpTP, ":")
-			if strings.Compare(tp[0], "0") == 0 && strings.Compare(tp[1], "0") == 0 && curCR > 0 && tm <= testbed.TRAINOCCPART {
-				break
-			}
 
 			var sbTranPer [testbed.SBTRANSNUM]int
 			if len(tp) != testbed.SBTRANSNUM {
@@ -275,8 +263,6 @@ func main() {
 			}
 			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, curPS, tmpContention, tmpTP)
 
-			typeAR = typeAR[0:0]
-
 			oneTest(sb, coord, ft, nWorkers, tm, curPS, partGenPool)
 
 			for z := 0; z < testbed.TOTALCC; z++ { // Find the middle one
@@ -301,18 +287,8 @@ func main() {
 				for i := 0; i < testbed.TOTALCC; i++ {
 					outF.Reset()
 
-					outIndex := i
-
-					if tm == testbed.TRAINOCCPART {
-						if i < testbed.OCCPART || i > testbed.LOCKPART {
-							continue
-						}
-					} else if tm == testbed.TRAINOCCPURE {
-						if i < testbed.OCCSHARE || i > testbed.LOCKSHARE {
-							continue
-						}
-					} else if tm == testbed.TRAINPART {
-						if i > testbed.LOCKPART {
+					if tm == testbed.TRAINOCC {
+						if i == testbed.PARTITION {
 							continue
 						}
 					}
@@ -322,40 +298,22 @@ func main() {
 					}
 					outF.Avg(3)
 					var outFile *os.File
-					if outIndex == 0 {
+					if i == testbed.PARTITION {
 						outFile = pccFile
-					} else if outIndex == 1 {
+					} else if i == testbed.OCC {
 						outFile = occFile
-					} else if outIndex == 2 {
-						outFile = lockFile
-					} else if outIndex == 3 {
-						outFile = occPureFile
 					} else {
-						outFile = lockPureFile
+						outFile = lockFile
 					}
 					outFile.WriteString(fmt.Sprintf("%v\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", curCR, ft[i][1].Txn, ft[i][1].AR, outF.HomeConfRate, outF.ConfRate, outF.Latency, outF.PartConf, outF.PartVar))
 				}
 			}
 
 			// Sort the first three and last two respectively
-			for x := testbed.PCC; x < testbed.LOCKPART; x++ { // Find the best one
+			for x := testbed.PCC; x < testbed.LOCKING; x++ { // Find the best one
 				tmp := ft[x][1]
 				tmpI := x
-				for y := x + 1; y <= testbed.LOCKPART; y++ {
-					if tmp.Txn < ft[y][1].Txn {
-						tmp = ft[y][1]
-						tmpI = y
-					}
-				}
-				tmp = ft[x][1]
-				ft[x][1] = ft[tmpI][1]
-				ft[tmpI][1] = tmp
-			}
-
-			for x := testbed.OCCSHARE; x < testbed.LOCKSHARE; x++ { // Find the best one
-				tmp := ft[x][1]
-				tmpI := x
-				for y := x + 1; y <= testbed.LOCKSHARE; y++ {
+				for y := x + 1; y <= testbed.LOCKING; y++ {
 					if tmp.Txn < ft[y][1].Txn {
 						tmp = ft[y][1]
 						tmpI = y
@@ -367,7 +325,7 @@ func main() {
 			}
 
 			if tm != testbed.TESTING {
-				for z := 0; z < 3*(testbed.LOCKPART+1); z++ {
+				for z := 0; z < 3*(testbed.TOTALCC); z++ {
 					x := z / 3
 					y := z % 3
 					if !(x == 0 && y == 1) {
@@ -375,91 +333,24 @@ func main() {
 					}
 				}
 
-				for z := 3 * testbed.OCCSHARE; z < 3*(testbed.LOCKSHARE+1); z++ {
-					x := z / 3
-					y := z % 3
-					if !(x == testbed.OCCSHARE && y == 1) {
-						ft[testbed.OCCSHARE][1].Add(ft[x][y])
-					}
-				}
-
-				if tm == testbed.TRAINOCCPART {
-					ft[0][1].Avg(float64(6))
-				} else if tm == testbed.TRAINPART {
+				if tm == testbed.TRAINPCC {
 					ft[0][1].Avg(float64(9))
-				} else if tm == testbed.TRAINOCCPURE {
-					ft[testbed.OCCSHARE][1].Avg(float64(6))
 				} else {
-					if ft[0][1].Txn > ft[testbed.OCCSHARE][1].Txn {
-						ft[0][1].Add(ft[testbed.OCCSHARE][1])
-						ft[0][1].Avg(15)
-					} else {
-						ft[testbed.OCCSHARE][1].Add(ft[0][1])
-						ft[testbed.OCCSHARE][1].Avg(15)
-					}
+					ft[0][1].Avg(float64(6))
 				}
 
 			}
 
-			// Find the train type with similar performance difference
-			if ft[0][1].Txn > ft[testbed.OCCSHARE][1].Txn {
-				typeNum := len(typeAR)
-				typeAR = typeAR[:typeNum+1]
-				typeAR[typeNum] = ft[0][1].TrainType
-				if tm == testbed.TRAININDEX && (ft[0][1].Txn-ft[testbed.OCCSHARE][1].Txn)/ft[0][1].Txn < PERFDIFF {
-					typeNum := len(typeAR)
-					typeAR = typeAR[:typeNum+1]
-					typeAR[typeNum] = ft[testbed.OCCSHARE][1].TrainType
-				} else if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {
-					typeNum := len(typeAR)
-					typeAR = typeAR[:typeNum+1]
-					typeAR[typeNum] = ft[1][1].TrainType
-				}
-			} else {
-				typeNum := len(typeAR)
-				typeAR = typeAR[:typeNum+1]
-				typeAR[typeNum] = ft[testbed.OCCSHARE][1].TrainType
-				if tm == testbed.TRAININDEX && (ft[testbed.OCCSHARE][1].Txn-ft[0][1].Txn)/ft[testbed.OCCSHARE][1].Txn < PERFDIFF {
-					typeNum := len(typeAR)
-					typeAR = typeAR[:typeNum+1]
-					typeAR[typeNum] = ft[0][1].TrainType
-				} else if (ft[testbed.OCCSHARE][1].Txn-ft[testbed.OCCSHARE+1][1].Txn)/ft[testbed.OCCSHARE][1].Txn < PERFDIFF {
-					typeNum := len(typeAR)
-					typeAR = typeAR[:typeNum+1]
-					typeAR[typeNum] = ft[testbed.OCCSHARE+1][1].TrainType
-				}
+			fOut.WriteString(fmt.Sprintf("%v\t%v\t%.4f\t%v\t%v\t", count, curCR, curPS, tmpContention, tmpTP))
+			fOut.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%v", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].HomeConfRate, ft[0][1].ConfRate, ft[0][1].TrainType))
+
+			if (ft[0][1].Txn-ft[1][1].Txn)/ft[0][1].Txn < PERFDIFF {
+				fOut.WriteString(fmt.Sprintf("\t%v", ft[1][1].TrainType))
 			}
 
-			if tm == testbed.TRAINPART || tm == testbed.TRAINOCCPART {
-				fPart.WriteString(fmt.Sprintf("%v\t%v\t%.4f\t%v\t%v\t", count, curCR, curPS, tmpContention, tmpTP))
-				fPart.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[0][1].PartConf, ft[0][1].PartVar, ft[0][1].RecAvg, ft[0][1].Latency, ft[0][1].ReadRate, ft[0][1].HomeConfRate, ft[0][1].ConfRate))
-				for _, trainType := range typeAR {
-					fPart.WriteString(fmt.Sprintf("\t%v", trainType))
-				}
-				fPart.WriteString("\n")
-			} else if tm == testbed.TRAINOCCPURE {
-				fMerge.WriteString(fmt.Sprintf("%v\t%v\t%.4f\t%v\t%v\t", count, curCR, curPS, tmpContention, tmpTP))
-				fMerge.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", ft[testbed.OCCSHARE][1].PartConf, ft[testbed.OCCSHARE][1].PartVar, ft[testbed.OCCSHARE][1].RecAvg, ft[testbed.OCCSHARE][1].Latency, ft[testbed.OCCSHARE][1].ReadRate, ft[testbed.OCCSHARE][1].HomeConfRate, ft[testbed.OCCSHARE][1].ConfRate))
-				for _, trainType := range typeAR {
-					fMerge.WriteString(fmt.Sprintf("\t%v", trainType))
-				}
-				fMerge.WriteString("\n")
-			} else {
-				var tmpFeature *testbed.Feature
-				if ft[0][1].Txn > ft[testbed.OCCSHARE][1].Txn {
-					tmpFeature = ft[0][1]
-				} else {
-					tmpFeature = ft[testbed.OCCSHARE][1]
-				}
-				fWhole.WriteString(fmt.Sprintf("%v\t%v\t%.4f\t%v\t%v\t", count, curCR, curPS, tmpContention, tmpTP))
-				fWhole.WriteString(fmt.Sprintf("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f", tmpFeature.PartConf, tmpFeature.PartVar, tmpFeature.RecAvg, tmpFeature.Latency, tmpFeature.ReadRate, tmpFeature.HomeConfRate, tmpFeature.ConfRate))
-				for _, trainType := range typeAR {
-					fWhole.WriteString(fmt.Sprintf("\t%v", trainType))
-				}
-				fWhole.WriteString("\n")
-			}
+			fOut.WriteString("\n")
 
-			win := typeAR[0]
+			win := ft[0][1].TrainType
 
 			// One Test Finished
 			for _, features := range ft {
@@ -471,20 +362,61 @@ func main() {
 
 			clog.Info("\n")
 
-			if tm == testbed.TRAINPART && endCR-startCR > 3 {
-				if win == testbed.PCC {
-					startCR = curCR
+			if tm == testbed.TRAINPCC {
+				if searchState == PCONF_BEGIN {
+					if endCR-startCR > 7 {
+						if win == testbed.PCC {
+							startCR = curCR
+						} else {
+							endCR = curCR
+						}
+					} else {
+						searchState = PSKEW
+						if win == testbed.PCC {
+							endCR = curCR
+						} else {
+							endCR = startCR
+						}
+						startCR = 0
+						if endCR <= 20 {
+							crArray = crArray[:(endCR+9)/5]
+							crArray[0] = startCR
+							crArray[len(crArray)-1] = endCR
+							for c := 1; c < len(crArray)-1; c++ {
+								crArray[c] = crArray[c-1] + 5
+							}
+						} else {
+							crArray = crArray[:5]
+							perStep := (endCR - startCR) / 4
+							crArray[0] = startCR
+							crArray[len(crArray)-1] = endCR
+							for c := 1; c < len(crArray)-1; c++ {
+								crArray[c] = crArray[c-1] + perStep
+							}
+						}
+						curCR = crArray[crIndex]
+						startPS = 0
+						endPS = 0.3
+						curPS = 0
+					}
 				} else {
-					endCR = curCR
+					if endPS-startPS > 0.03 {
+						if win == testbed.PCC {
+							startPS = curPS
+						} else {
+							endPS = curPS
+						}
+					} else {
+						crIndex++
+						if crIndex >= len(crArray) {
+							break
+						}
+						curCR = crArray[crIndex]
+						startPS = 0
+						endPS = 0.3
+						curPS = 0
+					}
 				}
-				curCR = (startCR + endCR) / 2
-			} else if tm == testbed.TRAININDEX && endPS-startPS > 0.02 {
-				if win <= testbed.LOCKPART { // Use Partition Index
-					startPS = curPS
-				} else {
-					endPS = curPS
-				}
-				curPS = (startPS + endPS) / 2
 			} else {
 				break
 			}
@@ -500,29 +432,16 @@ func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed
 
 			ft[j][a].TrainType = j
 
-			if tm == testbed.TRAINPART {
-				if j > testbed.LOCKPART {
-					continue
-				}
-			} else if tm == testbed.TRAINOCCPART {
-				if j < testbed.OCCPART || j > testbed.LOCKPART {
-					continue
-				}
-			} else if tm == testbed.TRAINOCCPURE {
-				if j < testbed.OCCSHARE || j > testbed.LOCKSHARE {
+			if tm == testbed.TRAINOCC {
+				if j == testbed.PARTITION {
 					continue
 				}
 			}
 
 			curMode := j
-			if j == testbed.OCCSHARE {
-				curMode = testbed.OCC
-			} else if j == testbed.LOCKSHARE {
-				curMode = testbed.LOCKING
-			}
 
-			if tm == testbed.TRAININDEX || tm == testbed.TESTING {
-				if j == testbed.OCCSHARE {
+			if tm == testbed.TRAINPCC || tm == testbed.TESTING {
+				if j == testbed.OCC {
 					sb.Switch(*testbed.NumPart, false, testbed.NOPARTSKEW)
 					basic := sb.GetBasicWL()
 					partGens, ok1 := partGenPool[curPS]
@@ -612,7 +531,7 @@ func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed
 
 			coord.Reset()
 		}
-		if tm == testbed.TRAININDEX || tm == testbed.TESTING {
+		if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 			sb.Switch(*testbed.NumPart, true, curPS)
 
 			basic := sb.GetBasicWL()

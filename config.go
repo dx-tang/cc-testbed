@@ -92,10 +92,8 @@ const (
 )
 
 const (
-	TRAINPART = iota
-	TRAINOCCPART
-	TRAINOCCPURE
-	TRAININDEX
+	TRAINPCC = iota
+	TRAINOCC
 	TESTING
 )
 
@@ -103,8 +101,6 @@ const (
 	PCC = iota
 	OCCPART
 	LOCKPART
-	OCCSHARE
-	LOCKSHARE
 	TOTALCC
 )
 
