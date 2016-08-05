@@ -41,7 +41,8 @@ type Shard struct {
 }
 
 type Partition struct {
-	padding1    [PADDING]byte
+	padding1 [PADDING]byte
+	spinlock.Spinlock
 	ht          *HashTable
 	init_orders map[Key]int
 	padding2    [PADDING]byte
@@ -99,7 +100,9 @@ func (bt *BasicTable) CreateRecByID(k Key, partNum int, tuple Tuple, iaAR IndexA
 	}
 
 	if WLTYPE == TPCCWL && bt.tableID == DISTRICT {
+		bt.data[partNum].Lock()
 		bt.data[partNum].init_orders[k] = tuple.(*DistrictTuple).d_next_o_id
+		bt.data[partNum].Unlock()
 	}
 
 	return rec, nil
