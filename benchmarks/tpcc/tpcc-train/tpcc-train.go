@@ -366,6 +366,15 @@ func main() {
 			win := ft[0][1].TrainType
 
 			// One Test Finished
+			for _, features := range ft {
+				for _, tmp := range features {
+					tmp.Reset()
+				}
+			}
+			count++
+
+			clog.Info("\n")
+
 			if tm == testbed.TRAINPCC {
 				if searchState == PCONF_BEGIN {
 					if endCR-startCR > 14 {
