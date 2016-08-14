@@ -17,20 +17,16 @@ READRATE = 4
 HOMECONF = 5
 CONFRATE = 6
 
-threshold_index = 1
+threshold_part = 0.9
 threshold = 0.7
 
 class Single(object):
 
-	def __init__(self, partFile, occFile, pureFile, indexFile):
+	def __init__(self, partFile, occFile, pureFile, IndexFile):
 		self.partclf = self.PartTrain(partFile)
 		self.occclf = self.OCCTrain(occFile)
-		self.pureclf = self.PureTrain(pureFile)
-		self.indexclf = self.IndexTrain(indexFile)
-		self.indexprob = 0.0
-		self.pureprob = 0.0
-		self.occprob = 0.0
 		self.partprob = 0.0
+		self.occprob = 0.0
 		self.totalprob = 0.0
 
 	def PartTrain(self, f):
@@ -40,14 +36,15 @@ class Single(object):
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
 			tmp = []
-			tmp.extend(columns[PARTAVG:PARTSKEW])
-			tmp.extend(columns[RECAVG:CONFRATE])
+			tmp.extend(columns[PARTAVG:RECAVG])
+			tmp.extend(columns[RECAVG:LATENCY])
+			tmp.extend(columns[READRATE:CONFRATE])
 			X.append(tmp)
 			if (columns[FEATURELEN] == 0):
 				Y.extend([0])
 			else:
 				Y.extend([1])
-		partclf = tree.DecisionTreeClassifier(max_depth=4)
+		partclf = tree.DecisionTreeClassifier(max_depth=6)
 		partclf = partclf.fit(np.array(X), np.array(Y))
 		return partclf
 
@@ -58,111 +55,39 @@ class Single(object):
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
 			tmp = []
-			tmp.extend(columns[RECAVG:CONFRATE])
-			X.append(tmp)
-			if (columns[FEATURELEN] == 1):
-				Y.extend([1])
-			elif (columns[FEATURELEN] == 2):
-				Y.extend([2])
-				if len(columns[FEATURELEN:]) == 2:
-					if columns[FEATURELEN+1] == 1:
-						X.append(tmp)
-						Y.extend([1])
+			tmp.extend(columns[RECAVG:LATENCY])
+			tmp.extend(columns[READRATE:HOMECONF])
+			tmp.extend(columns[CONFRATE:FEATURELEN])
+			for _, y in enumerate(columns[FEATURELEN:]):
+				if y == 1:
+					X.append(tmp)
+					Y.extend([1])
+				if y == 2:
+					X.append(tmp)
+					Y.extend([2])
 		occclf = tree.DecisionTreeClassifier(max_depth=4)
 		occclf = occclf.fit(np.array(X), np.array(Y))
 		return occclf
 
-	def PureTrain(self, f):
-		X = []
-		Y = []
-		for line in open(f):
-			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
-			tmp = []
-			tmp.extend(columns[RECAVG:HOMECONF])
-			tmp.extend(columns[CONFRATE:FEATURELEN])
-			X.append(tmp)
-			if (columns[FEATURELEN] == 3):
-				Y.extend([3])
-			elif (columns[FEATURELEN] == 4):
-				Y.extend([4])
-				if len(columns[FEATURELEN:]) == 2:
-					if columns[FEATURELEN+1] == 3:
-						X.append(tmp)
-						Y.extend([3])
-		pureclf = tree.DecisionTreeClassifier(max_depth=4)
-		pureclf = pureclf.fit(np.array(X), np.array(Y))
-		return pureclf
-
-
-	def IndexTrain(self, f):
-		# X is feature, while Y is label
-		X = []
-		Y = []
-		for line in open(f):
-			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
-			tmp = []
-			tmp.extend(columns[PARTAVG:RECAVG])
-			tmp.extend(columns[LATENCY:READRATE])
-			tmp.extend(columns[HOMECONF:CONFRATE])
-			X.append(tmp)
-			if (columns[FEATURELEN] <= 2):
-				Y.extend([0])
-			else:
-				Y.extend([1])
-
-		indexclf = tree.DecisionTreeClassifier(max_depth=4)
-		indexclf = indexclf.fit(np.array(X), np.array(Y))
-		return indexclf
-
 	def Predict(self, curType, partAvg, partSkew, recAvg, latency, readRate, homeconf, confRate):
-		testIndex = [[partAvg, partSkew, latency, homeconf]]
-		result = self.indexclf.predict(testIndex)
-		self.indexprob = self.indexclf.predict_proba(testIndex)[0][result[0]]
-		self.totalprob = self.indexprob
-		#print result, self.indexprob
+		testPart = [[partAvg, partSkew, recAvg, readRate, homeconf]]
+		result = self.partclf.predict(testPart)
+		self.partprob = self.partclf.predict_proba(testPart)[0][result[0]]
+		self.totalprob = self.partprob
+		# cur represent PCC or not
 		cur = 0
-		if curType > 2:
+		if curType > 0:
 			cur = 1
-		if self.indexprob >= threshold_index:
+		if self.partprob > threshold_part: # use result[0]
 			cur = result[0]
 
-		if cur == 0: # Switch within partitioned index
-			testPart = [[partAvg, recAvg, latency, readRate, homeconf]]
-			result = self.partclf.predict(testPart)
-			self.partprob = self.partclf.predict_proba(testPart)[0][result[0]]
-			self.totalprob = self.partprob * self.totalprob
-			#print result, self.partprob
-			# cur represent PCC or not
-			cur = 0
-			if curType > 0:
-				cur = 1
-			if self.partprob > threshold: # use result[0]
-				cur = result[0]
-
-			if cur == 0:
-				return 0
-			else:
-				if curType > 2:
-					curType = curType - 2
-				testOCC = [[recAvg, latency, readRate, homeconf]]
-				result = self.occclf.predict(testOCC)
-				self.occprob = self.occclf.predict_proba(testOCC)[0][result[0] - 1]
-				self.totalprob = self.occprob * self.totalprob
-				if self.occprob > threshold:
-					return result[0]
-				return curType
+		if cur == 0:
+			return 0
 		else:
-			if curType <= 2:
-				curType = curType + 2
-			if curType == 2:
-				curType = 4
-			testPure = [[recAvg, latency, readRate, confRate]]
-			result = self.pureclf.predict(testPure)
-			self.pureprob = self.pureclf.predict_proba(testPure)[0][result[0] - 3]
-			self.totalprob = self.pureprob * self.totalprob
-			if self.pureprob > threshold:
-				return result[0]
-			return curType
+			testOCC = [[recAvg, readRate, confRate]]
+			result = self.occclf.predict(testOCC)
+			self.occprob = self.occclf.predict_proba(testOCC)[0][result[0] - 1]
+			return result[0]
 
 	def GetIndexProb(self):
 		return self.indexprob

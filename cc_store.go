@@ -223,7 +223,7 @@ func NewStore(schema string, tableSize []int, nParts int, isPartition bool, mode
 				s.backTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE, nParts, *NumPart, isPartition, useLatch)
 			} else {
 				s.priTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE*(*NumPart), nParts, *NumPart, isPartition, useLatch)
-				s.secTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE, nParts, *NumPart, !isPartition, useLatch)
+				s.secTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE, *NumPart, *NumPart, !isPartition, useLatch)
 				s.backTables[i] = MakeCustomerTable(CUSTOMERSIZE_PER_WAREHOUSE*(*NumPart), nParts, *NumPart, isPartition, useLatch)
 			}
 			clog.Info("Making Customer %.2f", time.Since(start).Seconds())
