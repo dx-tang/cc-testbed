@@ -87,7 +87,7 @@ class TPCC(object):
 			testOCC = [[recAvg, readRate, confRate]]
 			result = self.occclf.predict(testOCC)
 			self.occprob = self.occclf.predict_proba(testOCC)[0][result[0] - 1]
-			return result[0]
+			return result[0] + 2
 
 
 	def GetIndexProb(self):
