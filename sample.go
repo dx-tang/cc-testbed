@@ -23,6 +23,7 @@ type ReportInfo struct {
 	prevTxn         int64
 	prevAborts      int64
 	txnSample       int64
+	txnNonPart      int64
 	partTotal       int64
 	partStat        []int64
 	partLenStat     int64
@@ -70,6 +71,7 @@ func (ri *ReportInfo) Reset() {
 	ri.readCount = 0
 	ri.writeCount = 0
 	ri.txnSample = 0
+	ri.txnNonPart = 0
 	ri.totalCount = 0
 
 	ri.hits = 0

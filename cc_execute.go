@@ -28,7 +28,7 @@ type ETransaction interface {
 	GetKeysBySecIndex(tableID int, k Key, partNum int, val Value) error
 	GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error)
 	Abort(req *LockReq) TID
-	Commit(req *LockReq) TID
+	Commit(req *LockReq, isHome bool) TID
 	Store() *Store
 	Worker() *Worker
 	GetType() int
@@ -401,7 +401,7 @@ func (p *PTransaction) Abort(req *LockReq) TID {
 	return 0
 }
 
-func (p *PTransaction) Commit(req *LockReq) TID {
+func (p *PTransaction) Commit(req *LockReq, isHome bool) TID {
 	s := p.Store()
 	w := p.w
 	//for i := 0; i < len(p.tt); i++ {
@@ -576,7 +576,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			if transExec.st.sampleCount == 0 {
+			/*if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
@@ -585,7 +585,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 					transExec.w.riMaster.readCount++
 				}
 				transExec.w.riMaster.totalCount++
-			}
+			}*/
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -715,7 +715,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			if transExec.st.sampleCount == 0 {
+			/*if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 					transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
@@ -724,7 +724,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 					transExec.w.riMaster.writeCount++
 				}
 				transExec.w.riMaster.totalCount++
-			}
+			}*/
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -887,7 +887,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			if transExec.st.sampleCount == 0 {
+			/*if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
@@ -896,7 +896,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 					transExec.w.riMaster.readCount++
 				}
 				transExec.w.riMaster.totalCount++
-			}
+			}*/
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1004,7 +1004,24 @@ func Compare(k1 Key, k2 Key) int {
 	return 0
 }
 
-func (o *OTransaction) Commit(req *LockReq) TID {
+func (o *OTransaction) Commit(req *LockReq, isHome bool) TID {
+
+	if isHome && o.w.st.sampleCount == 0 {
+		o.w.riMaster.txnNonPart++
+		for p := 0; p < len(o.tt); p++ {
+			tmpT := &o.tt[p]
+			if WLTYPE == TPCCWL && p == WAREHOUSE {
+				o.w.riMaster.readCount += WAREHOUSEWEIGHT * int64(len(tmpT.rKeys))
+				o.w.riMaster.writeCount += WAREHOUSEWEIGHT * int64(len(tmpT.wKeys))
+			} else if WLTYPE == TPCCWL && p == DISTRICT {
+				o.w.riMaster.readCount += DISTRICTWEIGHT * int64(len(tmpT.rKeys))
+				o.w.riMaster.writeCount += DISTRICTWEIGHT * int64(len(tmpT.wKeys))
+			} else {
+				o.w.riMaster.readCount += int64(len(tmpT.rKeys))
+				o.w.riMaster.writeCount += int64(len(tmpT.wKeys))
+			}
+		}
+	}
 
 	// Phase 1: Lock all write keys
 	//for _, wk := range o.wKeys {
@@ -1258,7 +1275,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			if transExec.st.sampleCount == 0 {
+			/*if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
@@ -1267,7 +1284,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 					transExec.w.riMaster.readCount++
 				}
 				transExec.w.riMaster.totalCount++
-			}
+			}*/
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1384,7 +1401,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			if transExec.st.sampleCount == 0 {
+			/*if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 					transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
@@ -1393,7 +1410,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 					transExec.w.riMaster.writeCount++
 				}
 				transExec.w.riMaster.totalCount++
-			}
+			}*/
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1662,7 +1679,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			if transExec.st.sampleCount == 0 {
+			/*if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
@@ -1671,7 +1688,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 					transExec.w.riMaster.readCount++
 				}
 				transExec.w.riMaster.totalCount++
-			}
+			}*/
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1773,9 +1790,26 @@ func (l *LTransaction) Abort(req *LockReq) TID {
 	return 0
 }
 
-func (l *LTransaction) Commit(req *LockReq) TID {
+func (l *LTransaction) Commit(req *LockReq, isHome bool) TID {
 	w := l.w
 	s := l.s
+
+	if isHome && l.w.st.sampleCount == 0 {
+		l.w.riMaster.txnNonPart++
+		for p := 0; p < len(l.rt); p++ {
+			tmpT := &l.rt[p]
+			if WLTYPE == TPCCWL && p == WAREHOUSE {
+				l.w.riMaster.readCount += WAREHOUSEWEIGHT * int64(len(tmpT.rRecs))
+				l.w.riMaster.writeCount += WAREHOUSEWEIGHT * int64(len(tmpT.wRecs))
+			} else if WLTYPE == TPCCWL && p == DISTRICT {
+				l.w.riMaster.readCount += DISTRICTWEIGHT * int64(len(tmpT.rRecs))
+				l.w.riMaster.writeCount += DISTRICTWEIGHT * int64(len(tmpT.wRecs))
+			} else {
+				l.w.riMaster.readCount += int64(len(tmpT.rRecs))
+				l.w.riMaster.writeCount += int64(len(tmpT.wRecs))
+			}
+		}
+	}
 
 	//for i := 0; i < len(l.rt); i++ {
 	for i := len(l.rt) - 1; i >= 0; i-- {

@@ -192,12 +192,14 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		allLocal = 1
 	}
 
+	isHome := t.isHome()
+
 	partNum := noTrans.w_id
 
 	// Get W_TAX
 	w_id := noTrans.w_id
 	k[0] = w_id
-	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req, t.isHome())
+	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +209,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	// Get D_TAX and D_NEXT_O_ID
 	d_id := noTrans.d_id
 	k[1] = d_id
-	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, t.isHome())
+	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +221,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	// Increment D_NEXT_O_ID
 	wb_next_o_id := &noTrans.wb_next_o_id
 	wb_next_o_id.intVal = d_next_o_id + 1
-	err = exec.WriteValue(DISTRICT, k, partNum, wb_next_o_id, D_NEXT_O_ID, req, false, t.isHome(), rec)
+	err = exec.WriteValue(DISTRICT, k, partNum, wb_next_o_id, D_NEXT_O_ID, req, false, isHome, rec)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +229,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	// Get One Record from Customer
 	c_id := noTrans.c_id
 	k[2] = c_id
-	rec, err = exec.GetRecord(CUSTOMER, k, partNum, req, t.isHome())
+	rec, err = exec.GetRecord(CUSTOMER, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +290,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		sKey[3] = 0
 
 		if !distRead {
-			_, _, _, err = exec.ReadValue(STOCK, sKey, sKey[0], rb_o_dist, S_DIST_01+d_id, req, t.isHome())
+			_, _, _, err = exec.ReadValue(STOCK, sKey, sKey[0], rb_o_dist, S_DIST_01+d_id, req, isHome)
 			if err != nil {
 				return nil, err
 			}
@@ -296,7 +298,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		}
 
 		// Update s_quantity
-		rec, val, _, err = exec.ReadValue(STOCK, sKey, sKey[0], intRB, S_QUANTITY, req, t.isHome())
+		rec, val, _, err = exec.ReadValue(STOCK, sKey, sKey[0], intRB, S_QUANTITY, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -307,7 +309,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 			s_quantity = s_quantity - noTrans.ol_quantity[i] + 91
 		}
 		noTrans.wb_s_quantity[i].intVal = s_quantity
-		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_quantity[i], S_QUANTITY, req, false, t.isHome(), rec)
+		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_quantity[i], S_QUANTITY, req, false, isHome, rec)
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +320,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		//	return nil, err
 		//}
 		noTrans.wb_s_ytd[i].intVal = 1
-		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_ytd[i], S_YTD, req, true, t.isHome(), rec)
+		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_ytd[i], S_YTD, req, true, isHome, rec)
 		if err != nil {
 			return nil, err
 		}
@@ -329,7 +331,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		//	return nil, err
 		//}
 		noTrans.wb_s_order_cnt[i].intVal = 1
-		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req, true, t.isHome(), rec)
+		err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_order_cnt[i], S_ORDER_CNT, req, true, isHome, rec)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +343,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 			//	return nil, err
 			//}
 			noTrans.wb_s_remote_cnt[i].intVal = 1
-			err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req, true, t.isHome(), rec)
+			err = exec.WriteValue(STOCK, sKey, sKey[0], &noTrans.wb_s_remote_cnt[i], S_REMOTE_CNT, req, true, isHome, rec)
 			if err != nil {
 				return nil, err
 			}
@@ -371,7 +373,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 
 	noTrans.retVal.floatVal = totalAmount * (1 - c_discount) * (1 + w_tax + d_tax)
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -394,28 +396,30 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	partNum := payTrans.w_id
 	remotePart := payTrans.c_w_id
 
+	isHome := t.isHome()
+
 	// Increment w_ytd in warehouse
 	k[0] = payTrans.w_id
-	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req, t.isHome())
+	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
 	wTuple := rec.GetTuple().(*WarehouseTuple)
 	payTrans.wb_w_ytd.floatVal = wTuple.w_ytd + payTrans.h_amount
-	err = exec.WriteValue(WAREHOUSE, k, partNum, &payTrans.wb_w_ytd, W_YTD, req, false, t.isHome(), rec)
+	err = exec.WriteValue(WAREHOUSE, k, partNum, &payTrans.wb_w_ytd, W_YTD, req, false, isHome, rec)
 	if err != nil {
 		return nil, err
 	}
 
 	// Increment D_YTD in district
 	k[1] = payTrans.d_id
-	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, t.isHome())
+	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
 	dTuple := rec.GetTuple().(*DistrictTuple)
 	payTrans.wb_d_ytd.floatVal = dTuple.d_ytd + payTrans.h_amount
-	err = exec.WriteValue(DISTRICT, k, partNum, &payTrans.wb_d_ytd, D_YTD, req, false, t.isHome(), rec)
+	err = exec.WriteValue(DISTRICT, k, partNum, &payTrans.wb_d_ytd, D_YTD, req, false, isHome, rec)
 	if err != nil {
 		return nil, err
 	}
@@ -435,27 +439,27 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	} else {
 		k[2] = payTrans.c_id
 	}
-	rec, err = exec.GetRecord(CUSTOMER, k, remotePart, req, t.isHome())
+	rec, err = exec.GetRecord(CUSTOMER, k, remotePart, req, isHome)
 	if err != nil {
 		return nil, err
 	}
 	cTuple := rec.GetTuple().(*CustomerTuple)
 	// Decrease C_BALANCE
 	payTrans.wb_c_balance.floatVal = cTuple.c_balance - payTrans.h_amount
-	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_balance, C_BALANCE, req, false, t.isHome(), rec)
+	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_balance, C_BALANCE, req, false, isHome, rec)
 	if err != nil {
 		return nil, err
 	}
 	// Increase C_YTD_PAYMENT
 	payTrans.wb_c_ytd_payment.floatVal = cTuple.c_ytd_payment + payTrans.h_amount
-	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_ytd_payment, C_YTD_PAYMENT, req, false, t.isHome(), rec)
+	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_ytd_payment, C_YTD_PAYMENT, req, false, isHome, rec)
 	if err != nil {
 		return nil, err
 	}
 
 	// Increase C_PAYMENT_CNT
 	payTrans.wb_c_payment_cnt.intVal = cTuple.c_payment_cnt + 1
-	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_payment_cnt, C_PAYMENT_CNT, req, false, t.isHome(), rec)
+	err = exec.WriteValue(CUSTOMER, k, remotePart, &payTrans.wb_c_payment_cnt, C_PAYMENT_CNT, req, false, isHome, rec)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +516,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -532,6 +536,8 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 
 	partNum := orderTrans.w_id
 
+	isHome := t.isHome()
+
 	// Select one row from Customer
 	k[0] = orderTrans.w_id
 	k[1] = orderTrans.d_id
@@ -548,7 +554,7 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	} else {
 		k[2] = orderTrans.c_id
 	}
-	_, err = exec.GetRecord(CUSTOMER, k, partNum, req, t.isHome())
+	_, err = exec.GetRecord(CUSTOMER, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
@@ -565,7 +571,7 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	o_id := intRB.intVal
 
 	k[2] = o_id
-	rec, err = exec.GetRecord(ORDER, k, partNum, req, t.isHome())
+	rec, err = exec.GetRecord(ORDER, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
@@ -573,13 +579,13 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 	ol_cnt := rec.GetTuple().(*OrderTuple).o_ol_cnt
 	for i := 0; i < ol_cnt; i++ {
 		k[3] = i
-		_, err = exec.GetRecord(ORDERLINE, k, partNum, req, t.isHome())
+		_, err = exec.GetRecord(ORDERLINE, k, partNum, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -602,10 +608,12 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 	partNum := stockTrans.w_id
 	req := &stockTrans.req
 
+	isHome := t.isHome()
+
 	// Select one row from District Table
 	k[0] = stockTrans.w_id
 	k[1] = stockTrans.d_id
-	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, t.isHome())
+	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +629,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 		// Read one row from ORDER Table
 		k[2] = i
 		k[3] = 0
-		rec, err = exec.GetRecord(ORDER, k, partNum, req, t.isHome())
+		rec, err = exec.GetRecord(ORDER, k, partNum, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -630,7 +638,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 		for j := 0; j < ol_cnt; j++ {
 			// Read ol_cnt rows from OrderLine Table
 			k[3] = j
-			rec, err = exec.GetRecord(ORDERLINE, k, partNum, req, t.isHome())
+			rec, err = exec.GetRecord(ORDERLINE, k, partNum, req, isHome)
 			if err != nil {
 				return nil, err
 			}
@@ -653,7 +661,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 
 			// Check threshold; Read s_quantity from Stock Table
 			s_k[1] = i_id
-			rec, err = exec.GetRecord(STOCK, s_k, partNum, req, t.isHome())
+			rec, err = exec.GetRecord(STOCK, s_k, partNum, req, isHome)
 			if err != nil {
 				return nil, err
 			}
@@ -663,7 +671,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 		}
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -685,6 +693,8 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
+	isHome := t.isHome()
+
 	var part0, part1 int
 	if len(sbTrnas.accessParts) == 1 {
 		part0 = sbTrnas.accessParts[0]
@@ -703,12 +713,12 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -723,14 +733,14 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 			return nil, err
 		}
 
-		_, val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, SAVING_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(SAVINGS, acctId0, part0, floatRB, SAVING_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 		//sum := val.(*FloatValue).floatVal
 		fv0.floatVal = val.(*FloatValue).floatVal
 
-		_, val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, CHECK_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(CHECKING, acctId1, part1, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -758,18 +768,18 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 			}
 		*/
 
-		err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, req, false, t.isHome(), nil)
+		err = exec.WriteValue(CHECKING, acctId1, part1, fv0, CHECK_BAL, req, false, isHome, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, req, false, t.isHome(), nil)
+		err = exec.WriteValue(SAVINGS, acctId0, part0, fv1, SAVING_BAL, req, false, isHome, nil)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -789,6 +799,8 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
+
+	isHome := t.isHome()
 
 	var part0, part1 int
 	if len(sbTrnas.accessParts) == 1 {
@@ -810,12 +822,12 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 
-		_, _, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -830,7 +842,7 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 			return nil, err
 		}
 
-		_, val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, CHECK_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(CHECKING, send, part0, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -843,24 +855,24 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 
 		fv0.floatVal = bal - ammt.floatVal
 
-		_, val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, CHECK_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(CHECKING, dest, part1, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 		fv1.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-		err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, req, false, t.isHome(), nil)
+		err = exec.WriteValue(CHECKING, send, part0, fv0, CHECK_BAL, req, false, isHome, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, req, false, t.isHome(), nil)
+		err = exec.WriteValue(CHECKING, dest, part1, fv1, CHECK_BAL, req, false, isHome, nil)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -882,23 +894,25 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 	ret := &sbTrnas.ret
 	part := sbTrnas.accessParts[0]
 
+	isHome := t.isHome()
+
 	for i := 0; i < SBMAXSUBTRANS; i++ {
 		acct := sbTrnas.accoutID[i]
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 
-		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 		ret.floatVal = val.(*FloatValue).floatVal
 
-		_, val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -906,7 +920,7 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 		ret.floatVal += val.(*FloatValue).floatVal
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -929,25 +943,27 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 	part := sbTrnas.accessParts[0]
 	ammt := &sbTrnas.ammount
 
+	isHome := t.isHome()
+
 	for i := 0; i < SBMAXSUBTRANS; i++ {
 		acct := sbTrnas.accoutID[i]
 		fv0 := &sbTrnas.fv[i]
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 
-		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 		checkBal := val.(*FloatValue).floatVal
 		sum := checkBal
 
-		_, val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -955,20 +971,20 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 
 		if sum < ammt.floatVal {
 			fv0.floatVal = checkBal - ammt.floatVal + float32(1)
-			err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false, t.isHome(), nil)
+			err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false, isHome, nil)
 			if err != nil {
 				return nil, err
 			}
 		} else {
 			fv0.floatVal = checkBal - ammt.floatVal
-			err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false, t.isHome(), nil)
+			err = exec.WriteValue(CHECKING, acct, part, fv0, 1, req, false, isHome, nil)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -989,31 +1005,33 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 	part := sbTrnas.accessParts[0]
 	ammt := &sbTrnas.ammount
 
+	isHome := t.isHome()
+
 	for i := 0; i < SBMAXSUBTRANS; i++ {
 		fv0 := &sbTrnas.fv[i]
 		acct := sbTrnas.accoutID[i]
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 
-		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 		fv0.floatVal = val.(*FloatValue).floatVal + ammt.floatVal
 
-		err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, req, false, t.isHome(), nil)
+		err = exec.WriteValue(CHECKING, acct, part, fv0, CHECK_BAL, req, false, isHome, nil)
 		if err != nil {
 			return nil, err
 		}
 
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -1037,18 +1055,20 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 	part := sbTrnas.accessParts[0]
 	ammt := &sbTrnas.ammount
 
+	isHome := t.isHome()
+
 	for i := 0; i < SBMAXSUBTRANS; i++ {
 		acct := sbTrnas.accoutID[i]
 		fv0 := &sbTrnas.fv[i]
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, t.isHome())
+		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
 
-		_, val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -1059,14 +1079,14 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 			return nil, ENEGSAVINGS
 		} else {
 			fv0.floatVal = sum
-			err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, req, false, t.isHome(), nil)
+			err = exec.WriteValue(SAVINGS, acct, part, fv0, SAVING_BAL, req, false, isHome, nil)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -1076,6 +1096,8 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 func AddOne(t Trans, exec ETransaction) (Value, error) {
 	singleTrans := t.(*SingleTrans)
 	iv := singleTrans.iv
+
+	isHome := t.isHome()
 
 	req := &singleTrans.req
 	intRB := &singleTrans.intRB
@@ -1094,7 +1116,7 @@ func AddOne(t Trans, exec ETransaction) (Value, error) {
 		}
 
 		//val, fromStore, err = exec.ReadValue(SINGLE, k, part, intRB, SINGLE_VAL, tid)
-		_, val, _, err = exec.ReadValue(SINGLE, k, part, intRB, SINGLE_VAL, req, t.isHome())
+		_, val, _, err = exec.ReadValue(SINGLE, k, part, intRB, SINGLE_VAL, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -1106,14 +1128,14 @@ func AddOne(t Trans, exec ETransaction) (Value, error) {
 		}*/
 		iv[i].intVal = val.(*IntValue).intVal + 1
 
-		err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, req, false, t.isHome(), nil)
+		err = exec.WriteValue(SINGLE, k, part, &iv[i], SINGLE_VAL, req, false, isHome, nil)
 		if err != nil {
 			return nil, err
 		}
 
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
@@ -1132,6 +1154,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 	var col int
 	col = singleTrans.rnd.Intn(25) + SINGLE_VAL + 1
 	var isRead bool
+	isHome := t.isHome()
 	for i := 0; i < len(singleTrans.keys); i++ {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
@@ -1142,7 +1165,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 			isRead = false
 		}
 
-		_, val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req, t.isHome())
+		_, val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -1152,14 +1175,14 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 
 		if !isRead {
 			sv[i].stringVal = sv[i].stringVal[:CAP_SINGLE_STR]
-			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, req, false, t.isHome(), nil)
+			err = exec.WriteValue(SINGLE, k, part, &sv[i], col, req, false, isHome, nil)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if exec.Commit(req) == 0 {
+	if exec.Commit(req, isHome) == 0 {
 		return nil, EABORT
 	}
 
