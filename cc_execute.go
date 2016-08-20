@@ -3,7 +3,6 @@ package testbed
 import (
 	"flag"
 	"github.com/totemtang/cc-testbed/clog"
-	"time"
 )
 
 var Spec = flag.Bool("spec", false, "Whether Speculatively Indicate MayWrite")
@@ -106,10 +105,10 @@ func (p *PTransaction) Reset(t Trans) {
 
 func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
 	if *SysType == ADAPTIVE {
-		if p.st.trueCounter == 0 { // Sample Latency
-			tm := time.Now()
-			_, _, _, _ = p.s.GetRecByID(tableID, k, partNum)
-			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
+		/*if p.st.trueCounter == 0 { // Sample Latency
+			//tm := time.Now()
+			//_, _, _, _ = p.s.GetRecByID(tableID, k, partNum)
+			//p.w.riMaster.latency += time.Since(tm).Nanoseconds()
 			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
 				p.w.riMaster.readCount += WAREHOUSEWEIGHT
 			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
@@ -118,8 +117,18 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 				p.w.riMaster.readCount++
 			}
 			p.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if p.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					p.w.riMaster.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					p.w.riMaster.readCount += DISTRICTWEIGHT
+				} else {
+					p.w.riMaster.readCount++
+				}
+				p.w.riMaster.totalCount++
+			}
 			sample := &p.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
@@ -171,7 +180,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 
 func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error {
 	if *SysType == ADAPTIVE {
-		if p.st.trueCounter == 0 { // Sample Latency
+		/*if p.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = p.s.GetRecByID(tableID, k, partNum)
 			p.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -183,8 +192,18 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 				p.w.riMaster.writeCount++
 			}
 			p.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if p.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					p.w.riMaster.writeCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					p.w.riMaster.writeCount += DISTRICTWEIGHT
+				} else {
+					p.w.riMaster.writeCount++
+				}
+				p.w.riMaster.totalCount++
+			}
 			sample := &p.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, true)
@@ -300,7 +319,7 @@ func (p *PTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
 	transExec := p
 	if *SysType == ADAPTIVE {
-		if transExec.st.trueCounter == 0 { // Sample Latency
+		/*if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -312,8 +331,18 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 				p.w.riMaster.readCount++
 			}
 			p.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if transExec.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					p.w.riMaster.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					p.w.riMaster.readCount += DISTRICTWEIGHT
+				} else {
+					p.w.riMaster.readCount++
+				}
+				p.w.riMaster.totalCount++
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -533,7 +562,7 @@ func (o *OTransaction) Reset(t Trans) {
 func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
 	transExec := o
 	if *SysType == ADAPTIVE {
-		if transExec.st.trueCounter == 0 { // Sample Latency
+		/*if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -545,8 +574,18 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 				transExec.w.riMaster.readCount++
 			}
 			transExec.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if transExec.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+				} else {
+					transExec.w.riMaster.readCount++
+				}
+				transExec.w.riMaster.totalCount++
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -662,7 +701,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error {
 	transExec := o
 	if *SysType == ADAPTIVE {
-		if transExec.st.trueCounter == 0 { // Sample Latency
+		/*if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -674,8 +713,18 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 				transExec.w.riMaster.writeCount++
 			}
 			transExec.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if transExec.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					transExec.w.riMaster.writeCount += DISTRICTWEIGHT
+				} else {
+					transExec.w.riMaster.writeCount++
+				}
+				transExec.w.riMaster.totalCount++
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -824,7 +873,7 @@ func (o *OTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
 	transExec := o
 	if *SysType == ADAPTIVE {
-		if transExec.st.trueCounter == 0 { // Sample Latency
+		/*if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -836,8 +885,18 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 				transExec.w.riMaster.readCount++
 			}
 			transExec.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if transExec.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+				} else {
+					transExec.w.riMaster.readCount++
+				}
+				transExec.w.riMaster.totalCount++
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1185,7 +1244,7 @@ func (l *LTransaction) Reset(t Trans) {
 func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
 	transExec := l
 	if *SysType == ADAPTIVE {
-		if transExec.st.trueCounter == 0 { // Sample Latency
+		/*if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -1197,8 +1256,18 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 				transExec.w.riMaster.readCount++
 			}
 			transExec.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if transExec.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+				} else {
+					transExec.w.riMaster.readCount++
+				}
+				transExec.w.riMaster.totalCount++
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1301,7 +1370,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error {
 	transExec := l
 	if *SysType == ADAPTIVE {
-		if transExec.st.trueCounter == 0 { // Sample Latency
+		/*if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -1313,8 +1382,18 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 				transExec.w.riMaster.writeCount++
 			}
 			transExec.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if transExec.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					transExec.w.riMaster.writeCount += DISTRICTWEIGHT
+				} else {
+					transExec.w.riMaster.writeCount++
+				}
+				transExec.w.riMaster.totalCount++
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1569,7 +1648,7 @@ func (l *LTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
 	transExec := l
 	if *SysType == ADAPTIVE {
-		if transExec.st.trueCounter == 0 { // Sample Latency
+		/*if transExec.st.trueCounter == 0 { // Sample Latency
 			tm := time.Now()
 			_, _, _, _ = transExec.s.GetRecByID(tableID, k, partNum)
 			transExec.w.riMaster.latency += time.Since(tm).Nanoseconds()
@@ -1581,8 +1660,18 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 				transExec.w.riMaster.readCount++
 			}
 			transExec.w.riMaster.totalCount++
-		}
+		}*/
 		if isHome {
+			if transExec.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+				} else {
+					transExec.w.riMaster.readCount++
+				}
+				transExec.w.riMaster.totalCount++
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)

@@ -189,10 +189,10 @@ func (pr *PRecord) DeltaValue(val Value, col int) {
 
 type ORecord struct {
 	padding1 [PADDING]byte
-	tuple    Tuple
 	key      Key
-	table    Table
+	tuple    Tuple
 	last     wfmutex.WFMutex
+	table    Table
 	padding2 [PADDING]byte
 }
 
@@ -362,8 +362,8 @@ func (dr *DRecord) DeltaValue(val Value, col int) {
 
 type LRecord struct {
 	padding1 [PADDING]byte
-	tuple    Tuple
 	key      Key
+	tuple    Tuple
 	wdLock   WDLock
 	table    Table
 	nwLock   nowaitlock.NoWaitLock
@@ -510,8 +510,8 @@ func (lr *LRecord) DeltaValue(val Value, col int) {
 type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
-	tuple    Tuple
 	mixLock  mixlock.MixLock
+	tuple    Tuple
 	cd       ConfDetector
 	table    Table
 	padding2 [PADDING]byte

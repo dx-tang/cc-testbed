@@ -105,5 +105,6 @@ const (
 )
 
 const (
-	HEAD = 0
+	HEAD        = 30
+	PARTVARRATE = 100
 )

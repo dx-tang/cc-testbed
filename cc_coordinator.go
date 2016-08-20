@@ -1180,19 +1180,23 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	var head int
 	if coord.store.isPartition {
-		head = 0
+		if *NumPart < HEAD {
+			head = *NumPart
+		} else {
+			head = HEAD
+		}
 	} else {
-		head = HEAD
+		head = *NumPart
 	}
 
 	for i, p := range summary.partStat {
-		if i >= head {
+		if i < head {
 			sum += float64(p)
 		}
 	}
 
 	for i, p := range summary.partStat {
-		if i >= head {
+		if i < head {
 			sumpow += float64(p*p) / (sum * sum)
 		}
 	}
@@ -1204,7 +1208,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
 	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
-	n := float64(len(summary.partStat) - head)
+	//n := float64(len(summary.partStat) - head)
+	n := float64(head)
 	partVar := (sumpow/n - 1/(n*n)) * 1000
 
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))

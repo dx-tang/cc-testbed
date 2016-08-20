@@ -136,9 +136,9 @@ func NewStore(schema string, tableSize []int, nParts int, isPartition bool, mode
 
 	var useLatch bool
 	if mode == PARTITION {
-		useLatch = true
-	} else {
 		useLatch = false
+	} else {
+		useLatch = true
 	}
 
 	// Open Schema File and Read Configuration

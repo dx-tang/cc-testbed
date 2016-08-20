@@ -4,6 +4,11 @@ package testbed
 	"fmt"
 )*/
 
+import (
+	"github.com/totemtang/cc-testbed/clog"
+)
+
+
 const (
 	LOADFACTOR    = 0.75 // numEntries/numBuckets
 	PERHASHBUCKET = 15
@@ -27,6 +32,7 @@ type HashTable struct {
 	hashCode    func(Key) int
 	useLatch    bool
 	isPartition bool
+	tableID     int
 	padding2    [PADDING]byte
 }
 
@@ -37,6 +43,7 @@ func NewHashTable(numEntries int, isPartition bool, useLatch bool, tableID int) 
 		bucketNum:   numBucket,
 		useLatch:    useLatch,
 		isPartition: isPartition,
+		tableID: tableID,
 	}
 
 	if WLTYPE == TPCCWL {
@@ -100,6 +107,7 @@ func (ht *HashTable) Put(k Key, rec Record, ia IndexAlloc) bool {
 	if ht.useLatch {
 		ht.latches[bucketIndex%LATCHNUM].Lock()
 	}
+	var lessThan bool = false
 	for {
 		for i := 0; i < bucket.cur; i++ {
 			//if k == bucket.keyArray[i] {
@@ -108,7 +116,14 @@ func (ht *HashTable) Put(k Key, rec Record, ia IndexAlloc) bool {
 			//	}
 			//	return false
 			//}
-			if k[0] < bucket.keyArray[i][0] {
+		 	if k[0] < bucket.keyArray[i][0] {
+				lessThan = true
+			} else if k[0] == bucket.keyArray[i][0] {
+				if k[1] < bucket.keyArray[i][1] {
+					lessThan = true
+				}
+			}
+			if lessThan {
 				for j := bucket.cur - 1; j >= i; j-- {
 					bucket.keyArray[j+1] = bucket.keyArray[j]
 					bucket.recArray[j+1] = bucket.recArray[j]
@@ -122,6 +137,10 @@ func (ht *HashTable) Put(k Key, rec Record, ia IndexAlloc) bool {
 				return true
 			}
 		}
+		
+		/*if bucket.cur >= len(bucket.keyArray) {
+			clog.Error("%v Index Out of Range: %v %v", ht.tableID, bucket.cur, len(bucket.keyArray))
+		}*/
 
 		bucket.keyArray[bucket.cur] = k
 		bucket.recArray[bucket.cur] = rec
@@ -173,5 +192,6 @@ func (ht *HashTable) Get(k Key) (Record, bool) {
 	if ht.useLatch {
 		ht.latches[bucketIndex%LATCHNUM].RUnlock()
 	}
+	clog.Info("%v %v %v %v %v %v",k, bucketIndex, ht.useLatch, ht.bucket[bucketIndex].keyArray, ht.bucket[bucketIndex].cur, ht.bucketNum)
 	return nil, false
 }
