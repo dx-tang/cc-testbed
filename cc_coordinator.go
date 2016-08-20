@@ -1247,7 +1247,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 		}
 	}
 
-	latency := float64(summary.latency) / float64(summary.totalCount)
+	/*latency := float64(summary.latency) / float64(summary.totalCount)
 
 	if !coord.store.isPartition {
 		if WLTYPE != TPCCWL {
@@ -1270,7 +1270,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 			latency -= 40
 		}
 
-	}
+	}*/
+	latency := float64(0)
 	partVar = math.Sqrt(partVar)
 	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
