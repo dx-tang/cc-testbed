@@ -121,13 +121,12 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 		if isHome {
 			if p.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					p.w.riMaster.readCount += WAREHOUSEWEIGHT
+					p.st.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					p.w.riMaster.readCount += DISTRICTWEIGHT
+					p.st.readCount += DISTRICTWEIGHT
 				} else {
-					p.w.riMaster.readCount++
+					p.st.readCount++
 				}
-				p.w.riMaster.totalCount++
 			}
 			sample := &p.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
@@ -196,13 +195,12 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 		if isHome {
 			if p.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					p.w.riMaster.writeCount += WAREHOUSEWEIGHT
+					p.st.writeCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					p.w.riMaster.writeCount += DISTRICTWEIGHT
+					p.st.writeCount += DISTRICTWEIGHT
 				} else {
-					p.w.riMaster.writeCount++
+					p.st.writeCount++
 				}
-				p.w.riMaster.totalCount++
 			}
 			sample := &p.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
@@ -335,13 +333,12 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 		if isHome {
 			if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					p.w.riMaster.readCount += WAREHOUSEWEIGHT
+					p.st.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					p.w.riMaster.readCount += DISTRICTWEIGHT
+					p.st.readCount += DISTRICTWEIGHT
 				} else {
-					p.w.riMaster.readCount++
+					p.st.readCount++
 				}
-				p.w.riMaster.totalCount++
 			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
@@ -377,6 +374,10 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 }
 
 func (p *PTransaction) Abort(req *LockReq) TID {
+	if p.st.readCount != 0 {
+		p.st.readCount = 0
+		p.st.writeCount = 0
+	}
 	s := p.s
 	for i := 0; i < len(p.tt); i++ {
 		t := &p.tt[i]
@@ -402,6 +403,13 @@ func (p *PTransaction) Abort(req *LockReq) TID {
 }
 
 func (p *PTransaction) Commit(req *LockReq, isHome bool) TID {
+	if isHome && p.w.st.sampleCount == 0 {
+		p.w.riMaster.txnSample++
+		p.w.riMaster.readCount += p.w.st.readCount
+		p.w.riMaster.writeCount += p.w.st.writeCount
+		p.w.st.readCount = 0
+		p.w.st.writeCount = 0
+	}
 	s := p.Store()
 	w := p.w
 	//for i := 0; i < len(p.tt); i++ {
@@ -576,16 +584,15 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			/*if transExec.st.sampleCount == 0 {
+			if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+					transExec.st.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+					transExec.st.readCount += DISTRICTWEIGHT
 				} else {
-					transExec.w.riMaster.readCount++
+					transExec.st.readCount++
 				}
-				transExec.w.riMaster.totalCount++
-			}*/
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -715,16 +722,15 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			/*if transExec.st.sampleCount == 0 {
+			if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
+					transExec.st.writeCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					transExec.w.riMaster.writeCount += DISTRICTWEIGHT
+					transExec.st.writeCount += DISTRICTWEIGHT
 				} else {
-					transExec.w.riMaster.writeCount++
+					transExec.st.writeCount++
 				}
-				transExec.w.riMaster.totalCount++
-			}*/
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -887,16 +893,15 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			/*if transExec.st.sampleCount == 0 {
+			if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+					transExec.st.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+					transExec.st.readCount += DISTRICTWEIGHT
 				} else {
-					transExec.w.riMaster.readCount++
+					transExec.st.readCount++
 				}
-				transExec.w.riMaster.totalCount++
-			}*/
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -972,6 +977,10 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 }
 
 func (o *OTransaction) Abort(req *LockReq) TID {
+	if o.st.readCount != 0 {
+		o.st.readCount = 0
+		o.st.writeCount = 0
+	}
 	s := o.s
 	for i := 0; i < len(o.tt); i++ {
 		t := &o.tt[i]
@@ -1007,8 +1016,12 @@ func Compare(k1 Key, k2 Key) int {
 func (o *OTransaction) Commit(req *LockReq, isHome bool) TID {
 
 	if isHome && o.w.st.sampleCount == 0 {
-		o.w.riMaster.txnNonPart++
-		for p := 0; p < len(o.tt); p++ {
+		o.w.riMaster.txnSample++
+		o.w.riMaster.readCount += o.w.st.readCount
+		o.w.riMaster.writeCount += o.w.st.writeCount
+		o.w.st.readCount = 0
+		o.w.st.writeCount = 0
+		/*for p := 0; p < len(o.tt); p++ {
 			tmpT := &o.tt[p]
 			if WLTYPE == TPCCWL && p == WAREHOUSE {
 				o.w.riMaster.readCount += WAREHOUSEWEIGHT * int64(len(tmpT.rKeys))
@@ -1020,7 +1033,7 @@ func (o *OTransaction) Commit(req *LockReq, isHome bool) TID {
 				o.w.riMaster.readCount += int64(len(tmpT.rKeys))
 				o.w.riMaster.writeCount += int64(len(tmpT.wKeys))
 			}
-		}
+		}*/
 	}
 
 	// Phase 1: Lock all write keys
@@ -1275,16 +1288,15 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			/*if transExec.st.sampleCount == 0 {
+			if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+					transExec.st.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+					transExec.st.readCount += DISTRICTWEIGHT
 				} else {
-					transExec.w.riMaster.readCount++
+					transExec.st.readCount++
 				}
-				transExec.w.riMaster.totalCount++
-			}*/
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1401,16 +1413,15 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			/*if transExec.st.sampleCount == 0 {
+			if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					transExec.w.riMaster.writeCount += WAREHOUSEWEIGHT
+					transExec.st.writeCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					transExec.w.riMaster.writeCount += DISTRICTWEIGHT
+					transExec.st.writeCount += DISTRICTWEIGHT
 				} else {
-					transExec.w.riMaster.writeCount++
+					transExec.st.writeCount++
 				}
-				transExec.w.riMaster.totalCount++
-			}*/
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1679,16 +1690,15 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			transExec.w.riMaster.totalCount++
 		}*/
 		if isHome {
-			/*if transExec.st.sampleCount == 0 {
+			if transExec.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-					transExec.w.riMaster.readCount += WAREHOUSEWEIGHT
+					transExec.st.readCount += WAREHOUSEWEIGHT
 				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-					transExec.w.riMaster.readCount += DISTRICTWEIGHT
+					transExec.st.readCount += DISTRICTWEIGHT
 				} else {
-					transExec.w.riMaster.readCount++
+					transExec.st.readCount++
 				}
-				transExec.w.riMaster.totalCount++
-			}*/
+			}
 			sample := &transExec.st.homeSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, true)
@@ -1753,6 +1763,10 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 
 func (l *LTransaction) Abort(req *LockReq) TID {
 	//w := l.w
+	if l.st.readCount != 0 {
+		l.st.readCount = 0
+		l.st.writeCount = 0
+	}
 	s := l.s
 	for i := 0; i < len(l.rt); i++ {
 		t := &l.rt[i]
@@ -1795,20 +1809,11 @@ func (l *LTransaction) Commit(req *LockReq, isHome bool) TID {
 	s := l.s
 
 	if isHome && l.w.st.sampleCount == 0 {
-		l.w.riMaster.txnNonPart++
-		for p := 0; p < len(l.rt); p++ {
-			tmpT := &l.rt[p]
-			if WLTYPE == TPCCWL && p == WAREHOUSE {
-				l.w.riMaster.readCount += WAREHOUSEWEIGHT * int64(len(tmpT.rRecs))
-				l.w.riMaster.writeCount += WAREHOUSEWEIGHT * int64(len(tmpT.wRecs))
-			} else if WLTYPE == TPCCWL && p == DISTRICT {
-				l.w.riMaster.readCount += DISTRICTWEIGHT * int64(len(tmpT.rRecs))
-				l.w.riMaster.writeCount += DISTRICTWEIGHT * int64(len(tmpT.wRecs))
-			} else {
-				l.w.riMaster.readCount += int64(len(tmpT.rRecs))
-				l.w.riMaster.writeCount += int64(len(tmpT.wRecs))
-			}
-		}
+		l.w.riMaster.txnSample++
+		l.w.riMaster.readCount += l.w.st.readCount
+		l.w.riMaster.writeCount += l.w.st.writeCount
+		l.w.st.readCount = 0
+		l.w.st.writeCount = 0
 	}
 
 	//for i := 0; i < len(l.rt); i++ {

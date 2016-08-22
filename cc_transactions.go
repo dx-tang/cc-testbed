@@ -689,7 +689,7 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 	sbTrnas := t.(*SBTrans)
 
-	intRB := &sbTrnas.intRB
+	//intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
@@ -713,7 +713,7 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, req, isHome)
+		/*_, _, _, err = exec.ReadValue(ACCOUNTS, acctId0, part0, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -721,7 +721,7 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 		_, _, _, err = exec.ReadValue(ACCOUNTS, acctId1, part1, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
-		}
+		}*/
 
 		err = exec.MayWrite(SAVINGS, acctId0, part0, req)
 		if err != nil {
@@ -796,7 +796,7 @@ func Amalgamate(t Trans, exec ETransaction) (Value, error) {
 func SendPayment(t Trans, exec ETransaction) (Value, error) {
 	sbTrnas := t.(*SBTrans)
 
-	intRB := &sbTrnas.intRB
+	//intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
@@ -822,7 +822,7 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, req, isHome)
+		/*_, _, _, err = exec.ReadValue(ACCOUNTS, send, part0, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
 		}
@@ -830,7 +830,7 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 		_, _, _, err = exec.ReadValue(ACCOUNTS, dest, part1, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
-		}
+		}*/
 
 		err = exec.MayWrite(CHECKING, send, part0, req)
 		if err != nil {
@@ -887,7 +887,7 @@ func SendPayment(t Trans, exec ETransaction) (Value, error) {
 func Balance(t Trans, exec ETransaction) (Value, error) {
 	sbTrnas := t.(*SBTrans)
 
-	intRB := &sbTrnas.intRB
+	//intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
@@ -901,10 +901,10 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
+		/*_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
-		}
+		}*/
 
 		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
@@ -936,7 +936,7 @@ func Balance(t Trans, exec ETransaction) (Value, error) {
 func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 	sbTrnas := t.(*SBTrans)
 
-	intRB := &sbTrnas.intRB
+	//intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
@@ -951,10 +951,10 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
+		/*_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
-		}
+		}*/
 
 		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
@@ -998,7 +998,7 @@ func WriteCheck(t Trans, exec ETransaction) (Value, error) {
 func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 	sbTrnas := t.(*SBTrans)
 
-	intRB := &sbTrnas.intRB
+	//intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
@@ -1013,10 +1013,10 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
+		/*_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
-		}
+		}*/
 
 		_, val, _, err = exec.ReadValue(CHECKING, acct, part, floatRB, CHECK_BAL, req, isHome)
 		if err != nil {
@@ -1048,7 +1048,7 @@ func DepositChecking(t Trans, exec ETransaction) (Value, error) {
 func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 	sbTrnas := t.(*SBTrans)
 
-	intRB := &sbTrnas.intRB
+	//intRB := &sbTrnas.intRB
 	floatRB := &sbTrnas.floatRB
 	req := &sbTrnas.req
 
@@ -1063,10 +1063,10 @@ func TransactionSavings(t Trans, exec ETransaction) (Value, error) {
 
 		var val Value
 		var err error
-		_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
+		/*_, _, _, err = exec.ReadValue(ACCOUNTS, acct, part, intRB, ACCT_ID, req, isHome)
 		if err != nil {
 			return nil, err
-		}
+		}*/
 
 		_, val, _, err = exec.ReadValue(SAVINGS, acct, part, floatRB, SAVING_BAL, req, isHome)
 		if err != nil {

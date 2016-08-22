@@ -1176,10 +1176,6 @@ func (coord *Coordinator) GetFeature() *Feature {
 
 	txn := summary.txnSample
 
-	if !coord.store.isPartition {
-		txn = summary.txnNonPart
-	}
-
 	var sum float64
 	var sumpow float64
 

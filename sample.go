@@ -124,6 +124,8 @@ type SampleTool struct {
 	w           *Worker
 	homeSample  ConfSample
 	allSample   ConfSample
+	readCount   int64
+	writeCount  int64
 	padding1    [PADDING]byte
 }
 
@@ -423,6 +425,9 @@ func (st *SampleTool) Reset() {
 	st.cur = -1
 	//st.cur = 0
 	st.partTrial = 0
+
+	st.readCount = 0
+	st.writeCount = 0
 }
 
 func (st *SampleTool) reconf(isPartition bool) {
