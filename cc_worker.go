@@ -363,7 +363,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 		if t.isHome() {
 			w.st.sampleCount++
 			if w.st.sampleCount >= w.st.sampleRate {
-				w.riMaster.txnSample++
+				//w.riMaster.txnSample++
 				w.st.sampleCount = 0
 				w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
 			}
