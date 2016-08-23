@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"strconv"
 	"strings"
@@ -372,6 +373,12 @@ func main() {
 				}
 			}
 			count++
+
+			if count%10 == 0 {
+				debug.SetGCPercent(1)
+				debug.FreeOSMemory()
+				debug.SetGCPercent(-1)
+			}
 
 			clog.Info("\n")
 

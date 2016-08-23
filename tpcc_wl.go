@@ -5,7 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"runtime/debug"
+	//"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -929,11 +929,11 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 		w.iaAR[NEWORDER].Reset()
 	}
 
-	if gc {
-		debug.SetGCPercent(1)
-		debug.FreeOSMemory()
-		debug.SetGCPercent(-1)
-	}
+	// if gc {
+	// 	debug.SetGCPercent(1)
+	// 	debug.FreeOSMemory()
+	// 	debug.SetGCPercent(-1)
+	// }
 
 }
 
