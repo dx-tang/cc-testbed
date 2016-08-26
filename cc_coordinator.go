@@ -588,24 +588,24 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 
 	var head int
 	if coord.store.isPartition {
-		head = 0
+		head = *NumPart
 	} else {
 		head = HEAD
 	}
 
 	for i, p := range summary.partStat {
-		if i >= head {
+		if i < head {
 			sum += float64(p)
 		}
 	}
 
 	for i, p := range summary.partStat {
-		if i >= head {
+		if i < head {
 			sumpow += float64(p*p) / (sum * sum)
 		}
 	}
 
-	n := float64(len(summary.partStat) - head)
+	n := float64(head)
 	partVar := (sumpow/n - 1/(n*n)) * 1000
 
 	var recAvg float64
@@ -636,25 +636,25 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 		}
 	}
 
-	latency := float64(summary.latency) / float64(summary.totalCount)
+	latency := float64(0)
 
-	if !coord.store.isPartition {
-		if latency <= 350 {
-			latency -= 80
-		} else if latency <= 650 {
-			if coord.mode == 1 {
-				latency -= 80
-			} else {
-				latency -= 100
-			}
-		} else {
-			if coord.mode == 1 {
-				latency -= 100
-			} else {
-				latency -= 150
-			}
-		}
-	}
+	// if !coord.store.isPartition {
+	// 	if latency <= 350 {
+	// 		latency -= 80
+	// 	} else if latency <= 650 {
+	// 		if coord.mode == 1 {
+	// 			latency -= 80
+	// 		} else {
+	// 			latency -= 100
+	// 		}
+	// 	} else {
+	// 		if coord.mode == 1 {
+	// 			latency -= 100
+	// 		} else {
+	// 			latency -= 150
+	// 		}
+	// 	}
+	// }
 	partVar = math.Sqrt(partVar)
 	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
@@ -814,10 +814,6 @@ func setReport(ri *ReportInfo, summary *ReportInfo) {
 			summary.partStat[i] = ps
 		}
 
-		for i, rs := range ri.recStat {
-			summary.recStat[i] = rs
-		}
-
 		summary.readCount = ri.readCount
 		summary.writeCount = ri.writeCount
 		summary.totalCount = ri.totalCount
@@ -832,7 +828,7 @@ func setReport(ri *ReportInfo, summary *ReportInfo) {
 		summary.partAccess = ri.partAccess
 		summary.partSuccess = ri.partSuccess
 
-		summary.latency = ri.latency
+		//summary.latency = ri.latency
 	}
 }
 
@@ -849,10 +845,6 @@ func collectReport(ri *ReportInfo, summary *ReportInfo) {
 			summary.partStat[i] += ps
 		}
 
-		for i, rs := range ri.recStat {
-			summary.recStat[i] += rs
-		}
-
 		summary.readCount += ri.readCount
 		summary.writeCount += ri.writeCount
 		summary.totalCount += ri.totalCount
@@ -867,7 +859,7 @@ func collectReport(ri *ReportInfo, summary *ReportInfo) {
 		summary.partAccess += ri.partAccess
 		summary.partSuccess += ri.partSuccess
 
-		summary.latency += ri.latency
+		//summary.latency += ri.latency
 	}
 }
 
@@ -1146,20 +1138,20 @@ func (coord *Coordinator) GetFeature() *Feature {
 		summary.aborts += w.riMaster.aborts
 
 		summary.txnSample += w.riMaster.txnSample
-		summary.txnNonPart += w.riMaster.txnNonPart
+		//summary.txnNonPart += w.riMaster.txnNonPart
 
 		for j, ps := range master.partStat {
 			summary.partStat[j] += ps
 		}
 
-		summary.partTotal += master.partTotal
+		//summary.partTotal += master.partTotal
 
-		summary.partLenStat += master.partLenStat
+		//summary.partLenStat += master.partLenStat
 
 		summary.readCount += master.readCount
 		summary.writeCount += master.writeCount
 		summary.totalCount += master.totalCount
-		summary.hits += master.hits
+		//summary.hits += master.hits
 
 		for i, _ := range master.accessCount {
 			summary.accessCount[i] += master.accessCount[i]
@@ -1207,14 +1199,14 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//f.WriteString(fmt.Sprintf("%v %v %v\n", sum, sumpow, txn))
 
 	//partAvg := float64(sum) / (float64(txn) * float64(len(summary.partStat)))
-	partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
+	//partAvg := float64(summary.partTotal) / (float64(txn) * float64(len(summary.partStat)))
 	//partVar := (float64(sumpow) / (float64(len(summary.partStat)))) / float64(txn*txn)
 	//n := float64(len(summary.partStat) - head)
 	n := float64(head)
 	partVar := (sumpow/n - 1/(n*n)) * 1000
 
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
-	partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
+	//partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1
 
 	var recAvg float64
 	sum = float64(summary.readCount + summary.writeCount)
@@ -1224,7 +1216,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	if WLTYPE == TPCCWL {
 		rr *= 10000
 	}
-	hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
+	//hitRate := float64(summary.hits*100) / float64(summary.readCount+summary.writeCount)
 	var confRate float64
 	var homeConfRate float64
 
@@ -1271,14 +1263,14 @@ func (coord *Coordinator) GetFeature() *Feature {
 	partVar = math.Sqrt(partVar)
 	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
-	coord.feature.PartAvg = partAvg
+	//coord.feature.PartAvg = partAvg
 	coord.feature.PartVar = partVar
-	coord.feature.PartLenVar = partLenVar
+	//coord.feature.PartLenVar = partLenVar
 	coord.feature.PartConf = partConf
 	coord.feature.RecAvg = recAvg
 	//coord.feature.RecVar = recVar
-	coord.feature.HitRate = hitRate
-	coord.feature.Latency = latency
+	//coord.feature.HitRate = hitRate
+	//coord.feature.Latency = latency
 	coord.feature.ReadRate = rr
 	coord.feature.HomeConfRate = homeConfRate
 	coord.feature.ConfRate = confRate

@@ -341,6 +341,8 @@ func (w *Worker) One(t Trans) (Value, error) {
 		return nil, nil
 	}
 
+	w.Lock()
+
 	if w.needLock {
 		// Acquire all locks
 		s := w.store
@@ -356,8 +358,6 @@ func (w *Worker) One(t Trans) (Value, error) {
 			s.spinLock[p].Lock()
 		}
 	}
-
-	w.Lock()
 
 	if *SysType == ADAPTIVE {
 		if t.isHome() {
@@ -384,14 +384,14 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	r, err := w.doTxn(t)
 
-	w.Unlock()
-
 	if w.needLock {
 		s := w.store
 		for _, p := range ap {
 			s.spinLock[p].Unlock()
 		}
 	}
+
+	w.Unlock()
 
 	//w.NExecute += time.Since(w.start)
 
