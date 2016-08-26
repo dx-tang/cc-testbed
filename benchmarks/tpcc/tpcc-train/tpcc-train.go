@@ -374,7 +374,7 @@ func main() {
 			}
 			count++
 
-			if count%10 == 0 {
+			if count%100 == 0 {
 				debug.SetGCPercent(1)
 				debug.FreeOSMemory()
 				debug.SetGCPercent(-1)
