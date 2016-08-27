@@ -1132,9 +1132,12 @@ func (coord *Coordinator) GetFeature() *Feature {
 					}
 				}
 			}
-			topKConfRate += float64(topKConf) / float64(topKTotal)
+			if topKTotal != 0 {
+				topKConfRate += float64(topKConf) / float64(topKTotal)
+			}
 			topKConf = 0
 			topKTotal = 0
+			
 		}
 
 	}
