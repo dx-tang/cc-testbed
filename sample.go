@@ -39,6 +39,7 @@ type ReportInfo struct {
 	partAccess      int64
 	partSuccess     int64
 	latency         int64
+	totalLatency    time.Duration
 	padding1        [PADDING]byte
 }
 
@@ -80,6 +81,8 @@ func (ri *ReportInfo) Reset() {
 	ri.partSuccess = 0
 
 	ri.latency = 0
+
+	ri.totalLatency = 0
 
 }
 

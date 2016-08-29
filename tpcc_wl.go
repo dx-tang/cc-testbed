@@ -54,6 +54,7 @@ type BaseTrans struct {
 	dateRB      DateValue
 	rnd         rand.Rand
 	penalty     time.Time
+	start       time.Time
 	home        bool
 	homePart    int
 }
@@ -96,6 +97,14 @@ func (bt *BaseTrans) isHome() bool {
 
 func (bt *BaseTrans) getHome() int {
 	return bt.homePart
+}
+
+func (bt *BaseTrans) SetStartTime(start time.Time) {
+	bt.start = start
+}
+
+func (bt *BaseTrans) GetStartTime() time.Time {
+	return bt.start
 }
 
 // Vary Distribution of i_id

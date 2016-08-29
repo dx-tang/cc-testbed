@@ -352,7 +352,6 @@ func main() {
 				} else {
 					ft[0][1].Avg(float64(6))
 				}
-
 			}
 
 			fOut.WriteString(fmt.Sprintf("%v\t%v\t%.4f\t%v\t%v\t", count, curCR, curPS, tmpContention, tmpTP))

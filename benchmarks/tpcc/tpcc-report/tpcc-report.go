@@ -148,20 +148,21 @@ func main() {
 			tq := testbed.NewTransQueue(BUFSIZE)
 			w.Start()
 			for {
-				tm := time.Now()
-
 				t = tq.Executable()
 
 				if t == nil {
+					tm := time.Now()
 					t = gen.GenOneTrans(initMode)
 					t.SetTrial(TRIALS)
 					if *testbed.SysType == testbed.LOCKING && !*testbed.NoWait {
 						tid := testbed.TID(atomic.AddUint64((*uint64)(&ts), 1))
 						t.SetTID(tid)
 					}
-				}
-				if t.GetTXN() != -1 {
-					w.NGen += time.Since(tm)
+					if t.GetTXN() != -1 {
+						now := time.Now()
+						t.SetStartTime(now)
+						w.NGen += now.Sub(tm)
+					}
 				}
 
 				_, err := w.One(t)

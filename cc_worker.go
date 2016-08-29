@@ -309,6 +309,8 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 		w.NStats[NABORTS]++
 	}
 
+	w.riMaster.totalLatency += time.Since(t.GetStartTime())
+
 	//return x, err
 	return x, nil
 }

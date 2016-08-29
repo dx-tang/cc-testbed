@@ -262,6 +262,7 @@ type SingleTrans struct {
 	rr          int
 	req         LockReq
 	penalty     time.Time
+	start       time.Time
 	home        bool
 	homePart    int
 	padding2    [PADDING]byte
@@ -305,6 +306,14 @@ func (s *SingleTrans) isHome() bool {
 
 func (s *SingleTrans) getHome() int {
 	return s.homePart
+}
+
+func (s *SingleTrans) SetStartTime(start time.Time) {
+	s.start = start
+}
+
+func (s *SingleTrans) GetStartTime() time.Time {
+	return s.start
 }
 
 type SingleTransGen struct {
