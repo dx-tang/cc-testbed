@@ -11,7 +11,7 @@ var TopK = flag.Bool("topk", false, "use topk for each worker to monitor access 
 const (
 	BUCKETBUFSIZE = 1000
 	ELEMSIZE      = 1000
-	BIGK          = 100
+	BIGK          = 1000
 )
 
 type TopKCounter struct {

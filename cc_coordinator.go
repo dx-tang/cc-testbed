@@ -1109,6 +1109,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 	var topKConf int
 
 	if *TopK {
+		start := time.Now()	
 		for k := 0; k < len(coord.Workers[0].riMaster.tc); k++ {
 			for i, _ := range coord.Workers {
 				A := coord.Workers[i].riMaster.tc[k]
@@ -1139,6 +1140,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 			topKTotal = 0
 			
 		}
+		clog.Info("Takes %.4f ", time.Since(start).Seconds())
 
 	}
 

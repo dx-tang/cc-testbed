@@ -2,9 +2,9 @@ package testbed
 
 import (
 	"fmt"
-	//"math"
+	"math"
 	"testing"
-	//"time"
+	"time"
 )
 
 type AR struct {
@@ -15,12 +15,13 @@ type AR struct {
 }
 
 func TestZipf(t *testing.T) {
+/*
 	numKeys := int64(10000000)
 	theta := 0.99
 	zipf := NewZipfGenerator(numKeys, theta, 0)
 	//a := []int{0, 0, 0, 0}
 	m := 1000
-	tc := NewTopKCounter(m)
+	tc := NewTopKCounter(m, 100)
 	keyAR := make([]Key, m)
 	countAR := make([]int, m)
 	for j := 0; j < 2; j++ {
@@ -38,10 +39,10 @@ func TestZipf(t *testing.T) {
 		fmt.Println()
 		tc.Reset()
 	}
-
-	/*
-		BIGK := 100
-		Cores := 32
+*/
+	
+		BIGK := 1000
+		Cores := 100
 		ARCollect := make([]AR, Cores)
 		for i, _ := range ARCollect {
 			arPoint := &ARCollect[i]
@@ -73,7 +74,7 @@ func TestZipf(t *testing.T) {
 				}
 			}
 
-			fmt.Printf("%v %.4f \n", total, time.Since(start).Seconds())
-	*/
+			fmt.Printf("Take %v %.4f \n", total, time.Since(start).Seconds())
+	
 
 }
