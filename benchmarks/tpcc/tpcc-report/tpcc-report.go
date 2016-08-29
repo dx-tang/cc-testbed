@@ -161,7 +161,9 @@ func main() {
 					if t.GetTXN() != -1 {
 						now := time.Now()
 						t.SetStartTime(now)
-						w.NGen += now.Sub(tm)
+						genTime := now.Sub(tm)
+						tq.AddGen(genTime)
+						w.NGen += genTime
 					}
 				}
 

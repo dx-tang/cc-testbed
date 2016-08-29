@@ -240,6 +240,10 @@ func (s *SBTrans) GetStartTime() time.Time {
 	return s.start
 }
 
+func (s *SBTrans) AddStartTime(genTime time.Duration) {
+	s.start = s.start.Add(genTime)
+}
+
 type SBTransGen struct {
 	padding1 [PADDING]byte
 	spinlock.Spinlock

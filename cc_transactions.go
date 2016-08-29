@@ -49,6 +49,7 @@ type Trans interface {
 	getHome() int
 	SetStartTime(start time.Time)
 	GetStartTime() time.Time
+	AddStartTime(genTime time.Duration)
 }
 
 type DummyTrans struct {
@@ -100,6 +101,10 @@ func (d *DummyTrans) SetStartTime(start time.Time) {
 
 func (d *DummyTrans) GetStartTime() time.Time {
 	return d.t
+}
+
+func (d *DummyTrans) AddStartTime(genTime time.Duration) {
+	return
 }
 
 type TransGen interface {
@@ -175,6 +180,12 @@ func (tq *TransQueue) Dequeue() Trans {
 	tq.tail = next
 	tq.count--
 	return t
+}
+
+func (tq *TransQueue) AddGen(genTime time.Duration) {
+	for i := tq.tail; i < tq.tail+tq.count; i++ {
+		tq.queue[i%tq.size].AddStartTime(genTime)
+	}
 }
 
 func NewOrder(t Trans, exec ETransaction) (Value, error) {

@@ -107,6 +107,10 @@ func (bt *BaseTrans) GetStartTime() time.Time {
 	return bt.start
 }
 
+func (bt *BaseTrans) AddStartTime(genTime time.Duration) {
+	bt.start = bt.start.Add(genTime)
+}
+
 // Vary Distribution of i_id
 type NewOrderTrans struct {
 	padding1 [PADDING]byte

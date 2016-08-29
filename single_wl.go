@@ -316,6 +316,10 @@ func (s *SingleTrans) GetStartTime() time.Time {
 	return s.start
 }
 
+func (s *SingleTrans) AddStartTime(genTime time.Duration) {
+	s.start = s.start.Add(genTime)
+}
+
 type SingleTransGen struct {
 	padding1 [PADDING]byte
 	spinlock.Spinlock
