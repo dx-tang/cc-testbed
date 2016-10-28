@@ -63,6 +63,8 @@ var (
 func main() {
 	flag.Parse()
 
+	curPS := 0
+
 	if *testbed.SysType != testbed.ADAPTIVE {
 		clog.Error("Training only Works for Adaptive CC\n")
 	}
@@ -138,16 +140,14 @@ func main() {
 	}
 
 	nParts := nWorkers
+	double := false
 	var isPartition bool
-	var double bool
+	partAlign := true
 	if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 		isPartition = true
-		double = true
-		clog.Info("Using Double Tables")
 	} else {
-		double = false
-		nParts = 1
-		isPartition = false
+		partAlign = false
+		isPartition = true
 	}
 
 	clog.Info("Number of workers %v \n", nWorkers)
@@ -155,7 +155,6 @@ func main() {
 
 	ParseTrainConf(*tc)
 	keyGenPool := make(map[float64][][]testbed.KeyGen)
-	partGenPool := make(map[float64][]testbed.KeyGen)
 	var tpccWL *testbed.TPCCWorkload
 	var coord *testbed.Coordinator = nil
 
@@ -171,7 +170,7 @@ func main() {
 	if tm == testbed.TRAINPCC { // Training for Partition
 		totalTests = len(contention) * len(transper)
 	} else {
-		totalTests = len(cr) * len(ps) * len(contention) * len(transper)
+		totalTests = len(cr) * len(contention) * len(transper)
 	}
 
 	count := 0
@@ -179,10 +178,6 @@ func main() {
 		startCR := 0
 		endCR := 100
 		curCR := 0
-
-		startPS := float64(0)
-		endPS := float64(0.3)
-		curPS := float64(0)
 
 		d := k
 		r := 0
@@ -192,21 +187,11 @@ func main() {
 			d = d / len(cr)
 		}
 
-		if tm != testbed.TRAINPCC {
-			r = d % len(ps)
-			curPS = ps[r]
-			d = d / len(ps)
-		}
-
 		r = d % len(contention)
 		tmpContention := contention[r]
 		d = d / len(contention)
 
 		tmpTP := transper[d]
-
-		searchState := PCONF_BEGIN
-		var crArray []int = make([]int, 0, 5)
-		var crIndex int = 0
 
 		for {
 
@@ -235,15 +220,15 @@ func main() {
 
 			if tpccWL == nil {
 				// Warm up
-				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.OCC, double)
+				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.OCC, double, partAlign)
 				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpccWL)
 
 				tpccWL.SetWorkers(coord)
 
 				clog.Info("Begin warming up")
-				oneTest(tpccWL, coord, ft, nWorkers, tm, 0, partGenPool)
-				tpccWL.ResetConf(PAYTP, float64(0), coord, true, testbed.NOPARTSKEW, false)
-				oneTest(tpccWL, coord, ft, nWorkers, tm, 0, partGenPool)
+				oneTest(tpccWL, coord, ft, nWorkers, tm)
+				tpccWL.ResetConf(PAYTP, float64(0), coord, true, 0, false)
+				oneTest(tpccWL, coord, ft, nWorkers, tm)
 				clog.Info("End warming up")
 
 				if *prof {
@@ -264,20 +249,14 @@ func main() {
 			tpccWL.SetKeyGens(keyGens)
 
 			if isPartition {
-				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, curPS, true)
+				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, 0, true)
 			} else {
-				partGens, ok1 := partGenPool[curPS]
-				if !ok1 {
-					partGens = tpccWL.NewPartGen(curPS)
-					partGenPool[curPS] = partGens
-				}
-				tpccWL.SetPartGens(partGens)
-				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, testbed.NOPARTSKEW, true)
+				tpccWL.ResetConf(tmpTP, float64(curCR), coord, true, 0, true)
 			}
 
-			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, curPS, tmpContention, tmpTP)
+			clog.Info("CR %v Contention %v TransPer %v \n", curCR, tmpContention, tmpTP)
 
-			oneTest(tpccWL, coord, ft, nWorkers, tm, curPS, partGenPool)
+			oneTest(tpccWL, coord, ft, nWorkers, tm)
 
 			for z := 0; z < testbed.TOTALCC; z++ {
 				tmpFeature := ft[z]
@@ -382,61 +361,15 @@ func main() {
 			clog.Info("\n")
 
 			if tm == testbed.TRAINPCC {
-				if searchState == PCONF_BEGIN {
-					if endCR-startCR > 14 {
-						if win == testbed.PCC {
-							startCR = curCR
-						} else {
-							endCR = curCR
-						}
-						curCR = (startCR + endCR) / 2
+				if endCR-startCR > 3 {
+					if win == testbed.PCC {
+						startCR = curCR
 					} else {
-						searchState = PSKEW
-						if win == testbed.PCC {
-							endCR = curCR
-						} else {
-							endCR = startCR
-						}
-						startCR = 0
-						if endCR <= 20 {
-							crArray = crArray[:(endCR+9)/5]
-							crArray[0] = startCR
-							crArray[len(crArray)-1] = endCR
-							for c := 1; c < len(crArray)-1; c++ {
-								crArray[c] = crArray[c-1] + 5
-							}
-						} else {
-							crArray = crArray[:5]
-							perStep := (endCR - startCR) / 4
-							crArray[0] = startCR
-							crArray[len(crArray)-1] = endCR
-							for c := 1; c < len(crArray)-1; c++ {
-								crArray[c] = crArray[c-1] + perStep
-							}
-						}
-						curCR = crArray[crIndex]
-						startPS = 0
-						endPS = 0.3
-						curPS = 0
+						endCR = curCR
 					}
+					curCR = (startCR + endCR) / 2
 				} else {
-					if endPS-startPS > 0.06 {
-						if win == testbed.PCC {
-							startPS = curPS
-						} else {
-							endPS = curPS
-						}
-						curPS = (startPS + endPS) / 2
-					} else {
-						crIndex++
-						if crIndex >= len(crArray) {
-							break
-						}
-						curCR = crArray[crIndex]
-						startPS = 0
-						endPS = 0.3
-						curPS = 0
-					}
+					break
 				}
 			} else {
 				break
@@ -445,7 +378,7 @@ func main() {
 	}
 }
 
-func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*testbed.Feature, nWorkers int, tm int, curPS float64, partGenPool map[float64][]testbed.KeyGen) {
+func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*testbed.Feature, nWorkers int, tm int) {
 
 	// One Test
 	for a := 0; a < 3; a++ {
@@ -463,14 +396,8 @@ func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*t
 
 			if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 				if j == testbed.OCC {
-					tpccWL.Switch(*testbed.NumPart, false, testbed.NOPARTSKEW)
-					partGens, ok1 := partGenPool[curPS]
-					if !ok1 {
-						partGens = tpccWL.NewPartGen(curPS)
-						partGenPool[curPS] = partGens
-					}
-					tpccWL.SetPartGens(partGens)
-					coord.ResetPart(false)
+					//tpccWL.Switch(*testbed.NumPart, false, testbed.NOPARTSKEW)
+					coord.ResetPartAlign(false)
 				}
 			}
 
@@ -554,14 +481,8 @@ func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*t
 		}
 
 		if tm == testbed.TRAINPCC || tm == testbed.TESTING {
-			tpccWL.Switch(*testbed.NumPart, true, curPS)
-			partGens, ok1 := partGenPool[testbed.NOPARTSKEW]
-			if !ok1 {
-				partGens = tpccWL.NewPartGen(testbed.NOPARTSKEW)
-				partGenPool[testbed.NOPARTSKEW] = partGens
-			}
-			tpccWL.SetPartGens(partGens)
-			coord.ResetPart(true)
+			//tpccWL.Switch(*testbed.NumPart, true, curPS)
+			coord.ResetPartAlign(true)
 		}
 	}
 }

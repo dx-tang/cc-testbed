@@ -348,9 +348,9 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 	return coordinator
 }
 
-func (coord *Coordinator) ResetPart(isPartition bool) {
+func (coord *Coordinator) ResetPartAlign(isPartAlign bool) {
 	for _, w := range coord.Workers {
-		w.st.reconf(isPartition)
+		w.st.reconf(isPartAlign)
 	}
 }
 
@@ -467,89 +467,51 @@ func (coord *Coordinator) process() {
 				clog.Info("Done with Index Partitioning: %.3f", time.Since(coord.indexChangeStart).Seconds())
 			}
 
-			if coord.workload == SINGLEWL {
-				single := coord.singleWL
-				/*if coord.isMerge {
-					single.ResetPart(1, false)
-					single.zp.Reconf(NOPARTSKEW)
-					for i := 0; i < len(single.transGen); i++ {
-						tg := single.transGen[i]
-						tg.validProb = single.zp.GetProb(i)
-						tg.timeInit = false
-					}
-					basic := single.GetBasicWL()
-					partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
-					basic.SetPartGen(partGens)
-					coord.ResetPart(false)
-				} else */
-				if !coord.isMerge {
-					single.ResetPart(*NumPart, true)
-					single.zp.Reconf(coord.testCases[coord.curTest].PS)
-					for i := 0; i < len(single.transGen); i++ {
-						tg := single.transGen[i]
-						tg.validProb = single.zp.GetProb(i)
-						tg.timeInit = false
-					}
-					basic := single.GetBasicWL()
-					partGens := basic.NewPartGen(NOPARTSKEW)
-					basic.SetPartGen(partGens)
-					coord.ResetPart(true)
-				}
-			} else if coord.workload == SMALLBANKWL {
-				sb := coord.sbWL
-				/*if coord.isMerge {
-					sb.ResetPart(1, false)
-					sb.zp.Reconf(NOPARTSKEW)
-					for i := 0; i < len(sb.transGen); i++ {
-						tg := sb.transGen[i]
-						tg.validProb = sb.zp.GetProb(i)
-						tg.timeInit = false
-					}
-					basic := sb.GetBasicWL()
-					partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
-					basic.SetPartGen(partGens)
-					coord.ResetPart(false)
-				} else*/
-				if !coord.isMerge {
-					sb.ResetPart(*NumPart, true)
-					sb.zp.Reconf(coord.testCases[coord.curTest].PS)
-					for i := 0; i < len(sb.transGen); i++ {
-						tg := sb.transGen[i]
-						tg.validProb = sb.zp.GetProb(i)
-						tg.timeInit = false
-					}
-					basic := sb.GetBasicWL()
-					partGens := basic.NewPartGen(NOPARTSKEW)
-					basic.SetPartGen(partGens)
-					coord.ResetPart(true)
-				}
-			} else { // TPCCWL
-				tpccWL := coord.tpccWL
-				/*if coord.isMerge {
-					tpccWL.ResetPart(1, false)
-					tpccWL.zp.Reconf(NOPARTSKEW)
-					for i := 0; i < len(tpccWL.transGen); i++ {
-						tg := &tpccWL.transGen[i]
-						tg.validProb = tpccWL.zp.GetProb(i)
-						tg.timeInit = false
-					}
-					partGens := tpccWL.NewPartGen(coord.testCases[coord.curTest].PS)
-					tpccWL.SetPartGens(partGens)
-					coord.ResetPart(false)
-				} else*/
-				if !coord.isMerge {
-					tpccWL.ResetPart(*NumPart, true)
-					tpccWL.zp.Reconf(coord.testCases[coord.curTest].PS)
-					for i := 0; i < len(tpccWL.transGen); i++ {
-						tg := &tpccWL.transGen[i]
-						tg.validProb = tpccWL.zp.GetProb(i)
-						tg.timeInit = false
-					}
-					partGens := tpccWL.NewPartGen(NOPARTSKEW)
-					tpccWL.SetPartGens(partGens)
-					coord.ResetPart(true)
-				}
-			}
+			// if coord.workload == SINGLEWL {
+			// 	single := coord.singleWL
+			// 	if !coord.isMerge {
+			// 		single.ResetPart(*NumPart, true)
+			// 		single.zp.Reconf(coord.testCases[coord.curTest].PS)
+			// 		for i := 0; i < len(single.transGen); i++ {
+			// 			tg := single.transGen[i]
+			// 			tg.validProb = single.zp.GetProb(i)
+			// 			tg.timeInit = false
+			// 		}
+			// 		basic := single.GetBasicWL()
+			// 		partGens := basic.NewPartGen(NOPARTSKEW)
+			// 		basic.SetPartGen(partGens)
+			// 		coord.ResetPart(true)
+			// 	}
+			// } else if coord.workload == SMALLBANKWL {
+			// 	sb := coord.sbWL
+			// 	if !coord.isMerge {
+			// 		sb.ResetPart(*NumPart, true)
+			// 		sb.zp.Reconf(coord.testCases[coord.curTest].PS)
+			// 		for i := 0; i < len(sb.transGen); i++ {
+			// 			tg := sb.transGen[i]
+			// 			tg.validProb = sb.zp.GetProb(i)
+			// 			tg.timeInit = false
+			// 		}
+			// 		basic := sb.GetBasicWL()
+			// 		partGens := basic.NewPartGen(NOPARTSKEW)
+			// 		basic.SetPartGen(partGens)
+			// 		coord.ResetPart(true)
+			// 	}
+			// } else { // TPCCWL
+			// 	tpccWL := coord.tpccWL
+			// 	if !coord.isMerge {
+			// 		tpccWL.ResetPart(*NumPart, true)
+			// 		tpccWL.zp.Reconf(coord.testCases[coord.curTest].PS)
+			// 		for i := 0; i < len(tpccWL.transGen); i++ {
+			// 			tg := &tpccWL.transGen[i]
+			// 			tg.validProb = tpccWL.zp.GetProb(i)
+			// 			tg.timeInit = false
+			// 		}
+			// 		partGens := tpccWL.NewPartGen(NOPARTSKEW)
+			// 		tpccWL.SetPartGens(partGens)
+			// 		coord.ResetPart(true)
+			// 	}
+			// }
 
 			for i := 0; i < len(coord.Workers); i++ {
 				coord.Workers[i].Unlock()
@@ -688,23 +650,67 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 }
 
 func (coord *Coordinator) OtherstoPCC() {
-	store := coord.store
+	// store := coord.store
 	// Stop all workers; change meta data
+	// for i := 0; i < len(coord.Workers); i++ {
+	// 	coord.Workers[i].Lock()
+	// }
+
+	// // store.state = INDEX_CHANGING
+	// // tmpTables := store.priTables
+	// // store.priTables = store.secTables
+	// // store.secTables = tmpTables
+	// // store.isPartition = true
+
+	// for i := 0; i < len(coord.Workers); i++ {
+	// 	coord.Workers[i].Unlock()
+	// }
+
+	//coord.indexReorganize(false)
+
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Lock()
 	}
 
-	store.state = INDEX_CHANGING
-	tmpTables := store.priTables
-	store.priTables = store.secTables
-	store.secTables = tmpTables
-	store.isPartition = true
+	if coord.workload == SINGLEWL {
+		single := coord.singleWL
+		single.ResetPartAlign(true)
+		coord.ResetPartAlign(true)
+	} else if coord.workload == SMALLBANKWL {
+		sb := coord.sbWL
+		sb.ResetPartAlign(true)
+		coord.ResetPartAlign(true)
+	} else { // TPCCWL
+		tpccWL := coord.tpccWL
+		tpccWL.ResetPartAlign(true)
+		coord.ResetPartAlign(true)
+	}
 
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Unlock()
 	}
 
-	coord.indexReorganize(false)
+	// UseLocks
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].modeChange <- true
+	}
+	for i := 0; i < len(coord.Workers); i++ {
+		<-coord.changeACK[i]
+		coord.Workers[i].needLock = true
+		coord.Workers[i].modeChan <- coord.mode
+	}
+
+	coord.store.SetLatch(false)
+
+	// Change CC
+	coord.mode = PARTITION
+	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].modeChange <- true
+	}
+	for i := 0; i < len(coord.Workers); i++ {
+		<-coord.changeACK[i]
+		coord.Workers[i].modeChan <- coord.mode
+	}
 }
 
 func (coord *Coordinator) PCCtoOthers(mode int) {
@@ -716,42 +722,48 @@ func (coord *Coordinator) PCCtoOthers(mode int) {
 
 	if coord.workload == SINGLEWL {
 		single := coord.singleWL
-		single.ResetPart(1, false)
-		single.zp.Reconf(NOPARTSKEW)
-		for i := 0; i < len(single.transGen); i++ {
-			tg := single.transGen[i]
-			tg.validProb = single.zp.GetProb(i)
-			tg.timeInit = false
-		}
-		basic := single.GetBasicWL()
-		partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
-		basic.SetPartGen(partGens)
-		coord.ResetPart(false)
+		//single.ResetPart(1, false)
+		//single.zp.Reconf(NOPARTSKEW)
+		//for i := 0; i < len(single.transGen); i++ {
+		//	tg := single.transGen[i]
+		//	tg.validProb = single.zp.GetProb(i)
+		//	tg.timeInit = false
+		//}
+		//basic := single.GetBasicWL()
+		//partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
+		//basic.SetPartGen(partGens)
+		//coord.ResetPart(false)
+		single.ResetPartAlign(false)
+		coord.ResetPartAlign(false)
 	} else if coord.workload == SMALLBANKWL {
 		sb := coord.sbWL
-		sb.ResetPart(1, false)
-		sb.zp.Reconf(NOPARTSKEW)
-		for i := 0; i < len(sb.transGen); i++ {
-			tg := sb.transGen[i]
-			tg.validProb = sb.zp.GetProb(i)
-			tg.timeInit = false
-		}
-		basic := sb.GetBasicWL()
-		partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
-		basic.SetPartGen(partGens)
-		coord.ResetPart(false)
+		// sb.ResetPart(1, false)
+		// sb.zp.Reconf(NOPARTSKEW)
+		// for i := 0; i < len(sb.transGen); i++ {
+		// 	tg := sb.transGen[i]
+		// 	tg.validProb = sb.zp.GetProb(i)
+		// 	tg.timeInit = false
+		// }
+		// basic := sb.GetBasicWL()
+		// partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
+		// basic.SetPartGen(partGens)
+		// coord.ResetPart(false)
+		sb.ResetPartAlign(false)
+		coord.ResetPartAlign(false)
 	} else { // TPCCWL
 		tpccWL := coord.tpccWL
-		tpccWL.ResetPart(1, false)
-		tpccWL.zp.Reconf(NOPARTSKEW)
-		for i := 0; i < len(tpccWL.transGen); i++ {
-			tg := &tpccWL.transGen[i]
-			tg.validProb = tpccWL.zp.GetProb(i)
-			tg.timeInit = false
-		}
-		partGens := tpccWL.NewPartGen(coord.testCases[coord.curTest].PS)
-		tpccWL.SetPartGens(partGens)
-		coord.ResetPart(false)
+		// tpccWL.ResetPart(1, false)
+		// tpccWL.zp.Reconf(NOPARTSKEW)
+		// for i := 0; i < len(tpccWL.transGen); i++ {
+		// 	tg := &tpccWL.transGen[i]
+		// 	tg.validProb = tpccWL.zp.GetProb(i)
+		// 	tg.timeInit = false
+		// }
+		// partGens := tpccWL.NewPartGen(coord.testCases[coord.curTest].PS)
+		// tpccWL.SetPartGens(partGens)
+		//coord.ResetPart(false)
+		tpccWL.ResetPartAlign(false)
+		coord.ResetPartAlign(false)
 	}
 
 	store.SetLatch(true)
@@ -767,17 +779,17 @@ func (coord *Coordinator) PCCtoOthers(mode int) {
 		coord.Workers[i].needLock = false
 	}
 
-	store.state = INDEX_CHANGING
-	tmpTables := store.priTables
-	store.priTables = store.secTables
-	store.secTables = tmpTables
-	store.isPartition = false
+	// store.state = INDEX_CHANGING
+	// tmpTables := store.priTables
+	// store.priTables = store.secTables
+	// store.secTables = tmpTables
+	// store.isPartition = false
 
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Unlock()
 	}
 
-	coord.indexReorganize(true)
+	//coord.indexReorganize(true)
 
 }
 

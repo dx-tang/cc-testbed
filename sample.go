@@ -113,7 +113,7 @@ func NewReportInfo(nParts int, tableCount int) *ReportInfo {
 type SampleTool struct {
 	padding0    [PADDING]byte
 	nParts      int
-	isPartition bool
+	isPartAlign bool
 	tableCount  int
 	sampleRate  int
 	sampleCount int
@@ -141,17 +141,17 @@ type ConfSample struct {
 	recRate      int
 }
 
-func NewSampleTool(nParts int, sampleRate int, s *Store, w *Worker) *SampleTool {
+func NewSampleTool(nParts int, sampleRate int, s *Store, w *Worker, partAlign bool) *SampleTool {
 	st := &SampleTool{
 		nParts:      nParts,
-		isPartition: s.isPartition,
+		isPartAlign: partAlign,
 		tableCount:  len(s.priTables),
 		trueRate:    sampleRate,
 		trueCounter: 0,
 		//lruAr:        make([]*LRU, len(IDToKeyRange)),
 	}
 
-	if !st.isPartition {
+	if !st.isPartAlign {
 		st.sampleRate = sampleRate / (*NumPart)
 		st.homeSample.recRate = RECSR / (*NumPart)
 	} else {
@@ -433,9 +433,9 @@ func (st *SampleTool) Reset() {
 	st.writeCount = 0
 }
 
-func (st *SampleTool) reconf(isPartition bool) {
-	st.isPartition = isPartition
-	if isPartition {
+func (st *SampleTool) reconf(isPartAlign bool) {
+	st.isPartAlign = isPartAlign
+	if isPartAlign {
 		st.sampleRate = st.sampleRate * (*NumPart)
 		st.homeSample.recRate = st.homeSample.recRate * (*NumPart)
 	} else {

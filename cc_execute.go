@@ -140,7 +140,7 @@ func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			}
 		}
 
-		if !p.st.isPartition {
+		if !p.st.isPartAlign {
 			sample := &p.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
@@ -214,7 +214,7 @@ func (p *PTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			}
 		}
 
-		if !p.st.isPartition {
+		if !p.st.isPartAlign {
 			sample := &p.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				p.st.oneSampleConf(tableID, k, partNum, p.s, p.w.riMaster, false)
@@ -352,7 +352,7 @@ func (p *PTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			}
 		}
 
-		if !transExec.st.isPartition {
+		if !transExec.st.isPartAlign {
 			sample := &transExec.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
@@ -605,7 +605,7 @@ func (o *OTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			}
 		}
 
-		if !transExec.st.isPartition {
+		if !transExec.st.isPartAlign {
 			sample := &transExec.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
@@ -743,7 +743,7 @@ func (o *OTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			}
 		}
 
-		if !transExec.st.isPartition {
+		if !transExec.st.isPartAlign {
 			sample := &transExec.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
@@ -914,7 +914,7 @@ func (o *OTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			}
 		}
 
-		if !transExec.st.isPartition {
+		if !transExec.st.isPartAlign {
 			sample := &transExec.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
@@ -1309,7 +1309,7 @@ func (l *LTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 			}
 		}
 
-		if !transExec.st.isPartition {
+		if !transExec.st.isPartAlign {
 			sample := &transExec.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
@@ -1434,7 +1434,7 @@ func (l *LTransaction) WriteValue(tableID int, k Key, partNum int, value Value, 
 			}
 		}
 
-		if !transExec.st.isPartition {
+		if !transExec.st.isPartAlign {
 			sample := &transExec.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)
@@ -1711,7 +1711,7 @@ func (l *LTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			}
 		}
 
-		if !transExec.st.isPartition {
+		if !transExec.st.isPartAlign {
 			sample := &transExec.st.allSample
 			if sample.state == 0 { // Not Enough locks acquired
 				transExec.st.oneSampleConf(tableID, k, partNum, transExec.s, transExec.w.riMaster, false)

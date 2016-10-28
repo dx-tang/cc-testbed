@@ -257,6 +257,7 @@ type SBTransGen struct {
 	partIndex       int
 	nParts          int
 	isPartition     bool
+	isPartAlign     bool
 	validProb       float64
 	validTime       time.Time
 	endTime         time.Time
@@ -640,6 +641,12 @@ func (s *SBWorkload) ResetConf(transPercentage string, cr float64, ps float64) {
 		tg.timeInit = false
 	}
 
+}
+
+func (sb *SBWorkload) ResetPartAlign(isPartAlign bool) {
+	for _, tranGen := range sb.transGen {
+		tranGen.isPartAlign = isPartAlign
+	}
 }
 
 func (sb *SBWorkload) ResetPart(nParts int, isPartition bool) {

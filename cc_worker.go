@@ -114,7 +114,11 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.riMaster = NewReportInfo(s.nParts, tableCount)
 	w.riReplica = NewReportInfo(s.nParts, tableCount)*/
 
-	w.st = NewSampleTool(*NumPart, sampleRate, s, w)
+	if mode == PARTITION {
+		w.st = NewSampleTool(*NumPart, sampleRate, s, w, true)
+	} else {
+		w.st = NewSampleTool(*NumPart, sampleRate, s, w, false)
+	}
 	w.riMaster = NewReportInfo(*NumPart, tableCount)
 	w.riReplica = NewReportInfo(*NumPart, tableCount)
 
@@ -375,7 +379,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 		w.st.trueCounter++
 		if w.st.trueCounter == PARTVARRATE {
 			w.st.trueCounter = 0
-			if w.st.isPartition {
+			if w.st.isPartAlign {
 				w.riMaster.partStat[w.ID]++
 			} else {
 				//for _, p := range t.GetAccessParts() {

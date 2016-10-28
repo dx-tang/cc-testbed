@@ -333,6 +333,7 @@ type SingleTransGen struct {
 	partIndex       int
 	nParts          int
 	isPartition     bool
+	isPartAlign     bool
 	tlen            int
 	rr              int
 	mp              int
@@ -786,6 +787,12 @@ func (s *SingelWorkload) PrintSum() {
 	}
 
 	clog.Info("Sum: %v\n", total)
+}
+
+func (singleWL *SingelWorkload) ResetPartAlign(isPartAlign bool) {
+	for _, tranGen := range singleWL.transGen {
+		tranGen.isPartAlign = isPartAlign
+	}
 }
 
 func (singleWL *SingelWorkload) ResetPart(nParts int, isPartition bool) {

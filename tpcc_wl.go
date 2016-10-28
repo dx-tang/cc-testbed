@@ -207,6 +207,7 @@ type TPCCTransGen struct {
 	partIndex       int
 	nParts          int
 	isPartition     bool
+	partAlign       bool
 	oa              OrderAllocator
 	ola             OrderLineAllocator
 	ha              HistoryAllocator
@@ -290,14 +291,14 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 	w_id_gen := tg.w_id_gen
 
 	pi := tg.partIndex
-	isPart := tg.isPartition
+	isPartAlign := tg.partAlign
 	cr := int(tg.cr)
 
 	oa := &tg.oa
 	ola := &tg.ola
 
 	var tmpPi int
-	if isPart {
+	if isPartAlign {
 		t.w_id = pi
 	} else {
 		t.w_id = w_id_gen.GetWholeRank()
@@ -573,7 +574,7 @@ type TPCCWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int, double bool) *TPCCWorkload {
+func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int, double bool, partAlign bool) *TPCCWorkload {
 	tpccWL := &TPCCWorkload{
 		isGC: false,
 	}
@@ -785,6 +786,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		tg.partIndex = i
 		tg.nParts = *NumPart
 		tg.isPartition = isPartition
+		tg.partAlign = partAlign
 
 		tg.i_id_gen = tpcc_NewKeyGen(s, i, tpccWL.i_id_range, kr_i_id, isPartition)
 		tg.c_id_gen = tpcc_NewKeyGen(s, i, tpccWL.c_id_range, kr_c_id, isPartition)
@@ -953,6 +955,13 @@ func (tpccWL *TPCCWorkload) ResetConf(transPercentage string, cr float64, coord 
 func (tpccWL *TPCCWorkload) resetTmp() {
 	for _, table := range tpccWL.store.priTables {
 		table.Reset()
+	}
+}
+
+func (tpccWL *TPCCWorkload) ResetPartAlign(partAlign bool) {
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		tg := &tpccWL.transGen[i]
+		tg.partAlign = partAlign
 	}
 }
 
