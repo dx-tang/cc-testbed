@@ -63,7 +63,7 @@ var (
 func main() {
 	flag.Parse()
 
-	curPS := 0
+	curPS := float64(0)
 
 	if *testbed.SysType != testbed.ADAPTIVE {
 		clog.Error("Training only Works for Adaptive CC\n")
@@ -220,7 +220,7 @@ func main() {
 
 			if tpccWL == nil {
 				// Warm up
-				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.OCC, double, partAlign)
+				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.OCC, double, true)
 				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpccWL)
 
 				tpccWL.SetWorkers(coord)
@@ -397,6 +397,7 @@ func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*t
 			if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 				if j == testbed.OCC {
 					//tpccWL.Switch(*testbed.NumPart, false, testbed.NOPARTSKEW)
+					tpccWL.ResetPartAlign(false)
 					coord.ResetPartAlign(false)
 				}
 			}
@@ -482,6 +483,7 @@ func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*t
 
 		if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 			//tpccWL.Switch(*testbed.NumPart, true, curPS)
+			tpccWL.ResetPartAlign(true)
 			coord.ResetPartAlign(true)
 		}
 	}
