@@ -156,25 +156,25 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.iaAR[ORDERLINE] = &OrderLineIndexAlloc{}
 		w.iaAR[ORDERLINE].OneAllocate()
 
-		loaders := *NLOADERS
-		if id < loaders {
-			perWorker := *NumPart / loaders
-			residue := *NumPart % loaders
-			numWorkers := perWorker
-			tmpID := id - (*NumPart - loaders)
-			if tmpID < residue {
-				numWorkers += 1
-			}
-			w.preIAAR = make([]IndexAlloc, tableCount)
-			w.preIAAR[NEWORDER] = &NewOrderIndexAlloc{}
-			w.preIAAR[NEWORDER].OneAllocateSize(NEWORDER_INDEX_ORIGINAL * numWorkers)
-			w.preIAAR[ORDER] = &OrderIndexAlloc{}
-			w.preIAAR[ORDER].OneAllocateSize(ORDER_INDEX_ORIGINAL * numWorkers)
-			w.preIAAR[HISTORY] = &HistoryIndexAlloc{}
-			w.preIAAR[HISTORY].OneAllocateSize(HISTORY_INDEX_ORIGINAL * numWorkers)
-			w.preIAAR[ORDERLINE] = &OrderLineIndexAlloc{}
-			w.preIAAR[ORDERLINE].OneAllocateSize(ORDERLINE_INDEX_ORIGINAL * numWorkers)
-		}
+		// loaders := *NLOADERS
+		// if id < loaders {
+		// 	perWorker := *NumPart / loaders
+		// 	residue := *NumPart % loaders
+		// 	numWorkers := perWorker
+		// 	tmpID := id - (*NumPart - loaders)
+		// 	if tmpID < residue {
+		// 		numWorkers += 1
+		// 	}
+		// 	w.preIAAR = make([]IndexAlloc, tableCount)
+		// 	w.preIAAR[NEWORDER] = &NewOrderIndexAlloc{}
+		// 	w.preIAAR[NEWORDER].OneAllocateSize(NEWORDER_INDEX_ORIGINAL * numWorkers)
+		// 	w.preIAAR[ORDER] = &OrderIndexAlloc{}
+		// 	w.preIAAR[ORDER].OneAllocateSize(ORDER_INDEX_ORIGINAL * numWorkers)
+		// 	w.preIAAR[HISTORY] = &HistoryIndexAlloc{}
+		// 	w.preIAAR[HISTORY].OneAllocateSize(HISTORY_INDEX_ORIGINAL * numWorkers)
+		// 	w.preIAAR[ORDERLINE] = &OrderLineIndexAlloc{}
+		// 	w.preIAAR[ORDERLINE].OneAllocateSize(ORDERLINE_INDEX_ORIGINAL * numWorkers)
+		// }
 	} else if workload == SINGLEWL {
 		if *Report {
 			w.partitioner = c.singleWL.GetPartitioner(w.ID)
