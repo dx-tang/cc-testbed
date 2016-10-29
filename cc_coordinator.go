@@ -159,6 +159,7 @@ type Coordinator struct {
 	NLockAcquire     int64
 	stat             *os.File
 	mode             int
+	isPartAlign      bool
 	feature          *Feature
 	padding2         [PADDING]byte
 	reports          []chan *ReportInfo
@@ -349,6 +350,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 }
 
 func (coord *Coordinator) ResetPartAlign(isPartAlign bool) {
+	coord.isPartAlign = isPartAlign
 	for _, w := range coord.Workers {
 		w.st.reconf(isPartAlign)
 	}
@@ -1283,7 +1285,7 @@ func (coord *Coordinator) GetFeature() *Feature {
 			homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
 		}
 	}
-	if coord.store.isPartition {
+	if coord.isPartAlign {
 		confRate = homeConfRate
 	} else {
 		for i, _ := range summary.conflicts {
@@ -1344,9 +1346,9 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//clog.Info("PartAccess %v; PartSuccess %v", summary.partAccess, summary.partSuccess)
 	//clog.Info("TXN %.4f, Abort Rate %.4f, Hits %.4f, Conficts %.4f, PartConf %.4f, Mode %v\n",
 	ccType := coord.GetMode()
-	if !coord.store.isPartition && coord.mode != PARTITION {
-		ccType = ccType + 2
-	}
+	// if !coord.store.isPartition && coord.mode != PARTITION {
+	// 	ccType = ccType + 2
+	// }
 
 	clog.Info("%.4f, %.4f, Conf %.4f, Home %.4f, Latency %.4f, Type %v, PConf %.4f, PVar %.4f\n",
 		float64(coord.NStats[NTXN]-coord.NStats[NABORTS])/(coord.NTotal.Seconds()-coord.NGen.Seconds()), coord.feature.AR, coord.feature.ConfRate, coord.feature.HomeConfRate, latency, ccType, coord.feature.PartConf, coord.feature.PartVar)

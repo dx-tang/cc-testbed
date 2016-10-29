@@ -133,15 +133,13 @@ func main() {
 
 	nParts := nWorkers
 	var isPartition bool
-	var double bool
+	double := false
+	partAlign := true
 	if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 		isPartition = true
-		double = true
-		clog.Info("Using Double Tables")
 	} else {
-		double = false
-		nParts = 1
-		isPartition = false
+		partAlign = false
+		isPartition = true
 	}
 
 	clog.Info("Number of workers %v \n", nWorkers)
@@ -149,7 +147,6 @@ func main() {
 
 	ParseTrainConf(*tc)
 	keyGenPool := make(map[float64][][]testbed.KeyGen)
-	partGenPool := make(map[float64][]testbed.PartGen)
 	var sb *testbed.SBWorkload = nil
 	var coord *testbed.Coordinator = nil
 
@@ -165,7 +162,7 @@ func main() {
 	if tm == testbed.TRAINPCC { // Training for Partition
 		totalTests = len(contention) * len(transper)
 	} else {
-		totalTests = len(cr) * len(ps) * len(contention) * len(transper)
+		totalTests = len(cr) * len(contention) * len(transper)
 	}
 
 	count := 0
@@ -174,8 +171,6 @@ func main() {
 		endCR := 100
 		curCR := 0
 
-		startPS := float64(0)
-		endPS := float64(0.3)
 		curPS := float64(0)
 
 		d := k
@@ -186,21 +181,11 @@ func main() {
 			d = d / len(cr)
 		}
 
-		if tm != testbed.TRAINPCC {
-			r = d % len(ps)
-			curPS = ps[r]
-			d = d / len(ps)
-		}
-
 		r = d % len(contention)
 		tmpContention := contention[r]
 		d = d / len(contention)
 
 		tmpTP := transper[d]
-
-		searchState := PCONF_BEGIN
-		var crArray []int = make([]int, 0, 5)
-		var crIndex int = 0
 
 		for {
 
@@ -228,7 +213,7 @@ func main() {
 			}
 
 			if sb == nil {
-				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, sbTranPer, float64(curCR), curPS, testbed.PARTITION, double)
+				sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tmpContention, sbTranPer, float64(curCR), curPS, testbed.PARTITION, double, partAlign)
 				coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.SMALLBANKWL, sb)
 				if *prof {
 					f, err := os.Create("smallbank.prof")
@@ -252,18 +237,12 @@ func main() {
 				if isPartition {
 					sb.ResetConf(tmpTP, float64(curCR), curPS)
 				} else {
-					partGens, ok1 := partGenPool[curPS]
-					if !ok1 {
-						partGens = basic.NewPartGen(curPS)
-						partGenPool[curPS] = partGens
-					}
-					basic.SetPartGen(partGens)
 					sb.ResetConf(tmpTP, float64(curCR), testbed.NOPARTSKEW)
 				}
 			}
 			clog.Info("CR %v PS %v Contention %v TransPer %v \n", curCR, curPS, tmpContention, tmpTP)
 
-			oneTest(sb, coord, ft, nWorkers, tm, curPS, partGenPool)
+			oneTest(sb, coord, ft, nWorkers, tm)
 
 			for z := 0; z < testbed.TOTALCC; z++ { // Find the middle one
 				tmpFeature := ft[z]
@@ -363,61 +342,15 @@ func main() {
 			clog.Info("\n")
 
 			if tm == testbed.TRAINPCC {
-				if searchState == PCONF_BEGIN {
-					if endCR-startCR > 14 {
-						if win == testbed.PCC {
-							startCR = curCR
-						} else {
-							endCR = curCR
-						}
-						curCR = (startCR + endCR) / 2
+				if endCR-startCR > 3 {
+					if win == testbed.PCC {
+						startCR = curCR
 					} else {
-						searchState = PSKEW
-						if win == testbed.PCC {
-							endCR = curCR
-						} else {
-							endCR = startCR
-						}
-						startCR = 0
-						if endCR <= 20 {
-							crArray = crArray[:(endCR+9)/5]
-							crArray[0] = startCR
-							crArray[len(crArray)-1] = endCR
-							for c := 1; c < len(crArray)-1; c++ {
-								crArray[c] = crArray[c-1] + 5
-							}
-						} else {
-							crArray = crArray[:5]
-							perStep := (endCR - startCR) / 4
-							crArray[0] = startCR
-							crArray[len(crArray)-1] = endCR
-							for c := 1; c < len(crArray)-1; c++ {
-								crArray[c] = crArray[c-1] + perStep
-							}
-						}
-						curCR = crArray[crIndex]
-						startPS = 0
-						endPS = 0.3
-						curPS = 0
+						endCR = curCR
 					}
+					curCR = (startCR + endCR) / 2
 				} else {
-					if endPS-startPS > 0.06 {
-						if win == testbed.PCC {
-							startPS = curPS
-						} else {
-							endPS = curPS
-						}
-						curPS = (startPS + endPS) / 2
-					} else {
-						crIndex++
-						if crIndex >= len(crArray) {
-							break
-						}
-						curCR = crArray[crIndex]
-						startPS = 0
-						endPS = 0.3
-						curPS = 0
-					}
+					break
 				}
 			} else {
 				break
@@ -426,7 +359,7 @@ func main() {
 	}
 }
 
-func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed.Feature, nWorkers int, tm int, curPS float64, partGenPool map[float64][]testbed.PartGen) {
+func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed.Feature, nWorkers int, tm int) {
 
 	// One Test
 	for a := 0; a < 3; a++ {
@@ -444,15 +377,8 @@ func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed
 
 			if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 				if j == testbed.OCC {
-					sb.Switch(*testbed.NumPart, false, testbed.NOPARTSKEW)
-					basic := sb.GetBasicWL()
-					partGens, ok1 := partGenPool[curPS]
-					if !ok1 {
-						partGens = basic.NewPartGen(curPS)
-						partGenPool[curPS] = partGens
-					}
-					basic.SetPartGen(partGens)
-					coord.ResetPart(false)
+					sb.ResetPartAlign(false)
+					coord.ResetPartAlign(false)
 				}
 			}
 
@@ -534,17 +460,8 @@ func oneTest(sb *testbed.SBWorkload, coord *testbed.Coordinator, ft [][]*testbed
 			coord.Reset()
 		}
 		if tm == testbed.TRAINPCC || tm == testbed.TESTING {
-			sb.Switch(*testbed.NumPart, true, curPS)
-
-			basic := sb.GetBasicWL()
-			partGens, ok1 := partGenPool[testbed.NOPARTSKEW]
-			if !ok1 {
-				partGens = basic.NewPartGen(testbed.NOPARTSKEW)
-				partGenPool[testbed.NOPARTSKEW] = partGens
-			}
-			basic.SetPartGen(partGens)
-
-			coord.ResetPart(true)
+			sb.ResetPartAlign(true)
+			coord.ResetPartAlign(true)
 		}
 	}
 }

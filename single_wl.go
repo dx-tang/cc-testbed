@@ -376,7 +376,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	var pi int
 
 	nParts := s.nParts
-	isPart := s.isPartition
+	isPartAlign := s.isPartAlign
 	tlen := s.tlen
 	mp := s.mp
 
@@ -390,7 +390,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 
 	t.TXN = txn + SINGLEBASE
 
-	if isPart {
+	if isPartAlign {
 		pi = s.partIndex
 	} else {
 		pi = gen.GenOnePart()
@@ -494,7 +494,7 @@ type SingelWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int, double bool) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int, double bool, partAlign bool) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	if nParts == 1 {
@@ -598,6 +598,7 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 			cr:              cr,
 			nParts:          *NumPart,
 			isPartition:     isPartition,
+			isPartAlign:     partAlign,
 			tlen:            tlen,
 			rr:              rr,
 			mp:              mp,

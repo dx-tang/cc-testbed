@@ -296,9 +296,9 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	cr := int(s.cr)
 	var pi int
 
-	isPart := s.isPartition
+	isPartAlign := s.isPartAlign
 
-	if isPart {
+	if isPartAlign {
 		pi = s.partIndex
 	} else {
 		pi = gen.GenOnePart()
@@ -313,12 +313,6 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	}
 
 	t.TXN = txn + SMALLBANKBASE
-
-	if isPart {
-		pi = s.partIndex
-	} else {
-		pi = gen.GenOnePart()
-	}
 
 	t.homePart = pi
 
@@ -456,7 +450,7 @@ type SBWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [SBTRANSNUM]int, cr float64, ps float64, initMode int, double bool) *SBWorkload {
+func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [SBTRANSNUM]int, cr float64, ps float64, initMode int, double bool, partAlign bool) *SBWorkload {
 	sbWorkload := &SBWorkload{}
 
 	if nParts == 1 {
@@ -567,6 +561,7 @@ func NewSmallBankWL(workload string, nParts int, isPartition bool, nWorkers int,
 			cr:              cr,
 			nParts:          *NumPart,
 			isPartition:     isPartition,
+			isPartAlign:     partAlign,
 			validProb:       sbWorkload.zp.GetProb(i),
 			timeInit:        false,
 		}
