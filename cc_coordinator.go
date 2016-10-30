@@ -594,7 +594,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 			homeConfRate += float64(summary.homeConflicts[i]*100) / float64(summary.accessHomeCount[i])
 		}
 	}
-	if coord.store.isPartition {
+	if coord.isPartAlign {
 		confRate = homeConfRate
 	} else {
 		for i, _ := range summary.conflicts {
