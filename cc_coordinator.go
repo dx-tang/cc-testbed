@@ -377,8 +377,8 @@ func (coord *Coordinator) process() {
 			execTime := float64(*NumPart*REPORTPERIOD/PERMINISEC) - summary.genTime.Seconds()
 
 			// Record Throughput and Mode
-			//coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / execTime
-			coord.TxnAR[coord.rc] = summary.totalLatency.Seconds() / float64(summary.txn-summary.aborts)
+			coord.TxnAR[coord.rc] = float64(summary.txn-summary.aborts) / execTime
+			//coord.TxnAR[coord.rc] = summary.totalLatency.Seconds() / float64(summary.txn-summary.aborts)
 			//clog.Info("Summary %v; Exec Secs: %v", summary.txn, summary.execTime.Seconds())
 			coord.ModeAR[coord.rc] = coord.mode
 
@@ -631,7 +631,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	// Use Classifier to Predict Features
 	//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
 	curType := coord.mode
-	if !coord.store.isPartition {
+	if !coord.isPartAlign {
 		curType += 2
 	}
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
