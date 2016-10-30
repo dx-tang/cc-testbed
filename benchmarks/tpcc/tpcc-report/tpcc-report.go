@@ -49,11 +49,13 @@ func main() {
 	isPartition := true
 	initMode := testbed.PARTITION
 	lockInit := false
+	isPartAlign := true
 
 	if *testbed.SysType == testbed.PARTITION {
 		clog.Info("Using Partition-based CC\n")
 	} else if *testbed.SysType == testbed.OCC {
 		initMode = testbed.OCC
+		isPartAlign = false
 		if *isPart {
 			clog.Info("Using OCC with partition\n")
 		} else {
@@ -63,6 +65,7 @@ func main() {
 		}
 	} else if *testbed.SysType == testbed.LOCKING {
 		initMode = testbed.LOCKING
+		isPartAlign = false
 		if *isPart {
 			clog.Info("Using 2PL with partition\n")
 		} else {
@@ -71,6 +74,7 @@ func main() {
 			clog.Info("Using 2PL\n")
 		}
 	} else if *testbed.SysType == testbed.ADAPTIVE {
+		isPartAlign = false
 		if *isPart {
 			initMode = testbed.PARTITION
 			clog.Info("Using Adaptive CC: Starting from PCC")
@@ -114,7 +118,7 @@ func main() {
 	testCases := testbed.BuildTestCases(*tc, testbed.TPCCWL)
 
 	clog.Info("Populating Whole Store\n")
-	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode, false)
+	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode, false, isPartAlign)
 	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL)
 
 	tpccWL.SetWorkers(coord)
