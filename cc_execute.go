@@ -105,19 +105,6 @@ func (p *PTransaction) Reset(t Trans) {
 
 func (p *PTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
 	if *SysType == ADAPTIVE {
-		/*if p.st.trueCounter == 0 { // Sample Latency
-			//tm := time.Now()
-			//_, _, _, _ = p.s.GetRecByID(tableID, k, partNum)
-			//p.w.riMaster.latency += time.Since(tm).Nanoseconds()
-			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-				p.w.riMaster.readCount += WAREHOUSEWEIGHT
-			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-				p.w.riMaster.readCount += DISTRICTWEIGHT
-			} else {
-				p.w.riMaster.readCount++
-			}
-			p.w.riMaster.totalCount++
-		}*/
 		if isHome {
 			if p.st.sampleCount == 0 {
 				if WLTYPE == TPCCWL && tableID == WAREHOUSE {

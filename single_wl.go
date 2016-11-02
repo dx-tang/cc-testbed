@@ -343,6 +343,11 @@ type SingleTransGen struct {
 	timeInit        bool
 	dt              DummyTrans
 	w               *Worker
+	clusterNPart    int
+	otherNPart      int
+	start           int
+	end             int
+	partRnd         *rand.Rand
 	padding2        [PADDING]byte
 }
 
@@ -390,10 +395,14 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 
 	t.TXN = txn + SINGLEBASE
 
-	if isPartAlign {
-		pi = s.partIndex
+	if *SysType == ADAPTIVE {
+		pi = s.start + s.partRnd.Intn(s.clusterNPart)
 	} else {
-		pi = gen.GenOnePart()
+		if isPartAlign {
+			pi = s.partIndex
+		} else {
+			pi = gen.GenOnePart()
+		}
 	}
 
 	t.homePart = pi
@@ -405,62 +414,75 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	}
 
 	if rnd.Intn(100) < cr && mp > 1 {
-		ap := nParts
-		if ap > mp {
-			ap = mp
-		}
-		if ap > tlen {
-			ap = tlen
-		}
-		t.accessParts = t.accessParts[:ap]
-		start := gen.GenOnePart()
-		//start := rnd.Intn(nParts)
-		end := (start + ap - 1) % nParts
-		wrap := false
-		if start >= end {
-			wrap = true
-		}
-		//clog.Info("start %v; end %v; pi %v", start, end, pi)
-		if (!wrap && pi >= start && pi < end) || (wrap && (pi >= start || pi < end)) { // The Extending Parts Includes the Home Partition
-			if start+ap <= nParts {
-				for i := 0; i < ap; i++ {
-					t.accessParts[i] = start + i
-				}
+		if *SysType == ADAPTIVE {
+			t.accessParts = t.accessParts[:2]
+			tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
+			if tmpPi > pi {
+				t.accessParts[0] = pi
+				t.accessParts[1] = tmpPi
 			} else {
-				for i := 0; i < ap; i++ {
-					tmp := start + i
-					if tmp >= nParts {
-						t.accessParts[tmp-nParts] = tmp - nParts
-					} else {
-						t.accessParts[ap-nParts+start+i] = tmp
-					}
-				}
+				t.accessParts[0] = tmpPi
+				t.accessParts[1] = pi
 			}
 		} else {
-			if !wrap { // Conseculative Partitions; No Wrap
-				if pi < start { // pi to the left
-					t.accessParts[0] = pi
-					for i := 0; i < ap-1; i++ {
-						t.accessParts[i+1] = start + i
-					}
-				} else { // pi to the right
-					t.accessParts[ap-1] = pi
-					for i := 0; i < ap-1; i++ {
+			ap := nParts
+			if ap > mp {
+				ap = mp
+			}
+			if ap > tlen {
+				ap = tlen
+			}
+			t.accessParts = t.accessParts[:ap]
+			start := gen.GenOnePart()
+			//start := rnd.Intn(nParts)
+			end := (start + ap - 1) % nParts
+			wrap := false
+			if start >= end {
+				wrap = true
+			}
+			//clog.Info("start %v; end %v; pi %v", start, end, pi)
+			if (!wrap && pi >= start && pi < end) || (wrap && (pi >= start || pi < end)) { // The Extending Parts Includes the Home Partition
+				if start+ap <= nParts {
+					for i := 0; i < ap; i++ {
 						t.accessParts[i] = start + i
 					}
+				} else {
+					for i := 0; i < ap; i++ {
+						tmp := start + i
+						if tmp >= nParts {
+							t.accessParts[tmp-nParts] = tmp - nParts
+						} else {
+							t.accessParts[ap-nParts+start+i] = tmp
+						}
+					}
 				}
-			} else { // Wrap
-				t.accessParts[ap-nParts+start-1] = pi
-				for i := 0; i < ap-1; i++ {
-					tmp := start + i
-					if tmp >= nParts {
-						t.accessParts[tmp-nParts] = tmp - nParts
-					} else {
-						t.accessParts[ap-nParts+start+i] = tmp
+			} else {
+				if !wrap { // Conseculative Partitions; No Wrap
+					if pi < start { // pi to the left
+						t.accessParts[0] = pi
+						for i := 0; i < ap-1; i++ {
+							t.accessParts[i+1] = start + i
+						}
+					} else { // pi to the right
+						t.accessParts[ap-1] = pi
+						for i := 0; i < ap-1; i++ {
+							t.accessParts[i] = start + i
+						}
+					}
+				} else { // Wrap
+					t.accessParts[ap-nParts+start-1] = pi
+					for i := 0; i < ap-1; i++ {
+						tmp := start + i
+						if tmp >= nParts {
+							t.accessParts[tmp-nParts] = tmp - nParts
+						} else {
+							t.accessParts[ap-nParts+start+i] = tmp
+						}
 					}
 				}
 			}
 		}
+
 	} else {
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
@@ -819,5 +841,16 @@ func (singleWL *SingelWorkload) SetWorkers(coord *Coordinator) {
 	Workers := coord.Workers
 	for i, w := range Workers {
 		singleWL.transGen[i].w = w
+	}
+}
+
+func (singleWL *SingelWorkload) MixConfig(wc []WorkerConfig) {
+	for i := 0; i < len(singleWL.transGen); i++ {
+		tg := singleWL.transGen[i]
+		tg.start = int(wc[i].start)
+		tg.end = int(wc[i].end)
+		tg.clusterNPart = tg.end - tg.start + 1
+		tg.otherNPart = *NumPart - tg.clusterNPart
+		tg.partRnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i+1)))
 	}
 }

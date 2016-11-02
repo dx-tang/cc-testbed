@@ -264,6 +264,11 @@ type SBTransGen struct {
 	timeInit        bool
 	dt              DummyTrans
 	w               *Worker
+	clusterNPart    int
+	otherNPart      int
+	start           int
+	end             int
+	partRnd         *rand.Rand
 	padding2        [PADDING]byte
 }
 
@@ -298,10 +303,14 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 
 	isPartAlign := s.isPartAlign
 
-	if isPartAlign {
-		pi = s.partIndex
+	if *SysType == ADAPTIVE {
+		pi = s.start + s.partRnd.Intn(s.clusterNPart)
 	} else {
-		pi = gen.GenOnePart()
+		if isPartAlign {
+			pi = s.partIndex
+		} else {
+			pi = gen.GenOnePart()
+		}
 	}
 
 	txn := rnd.Intn(100)
@@ -342,10 +351,14 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	case AMALGAMATE:
 		if rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			for {
-				tmpPi = gen.GenOnePart()
-				if tmpPi != pi {
-					break
+			if *SysType == ADAPTIVE {
+				tmpPi = (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
+			} else {
+				for {
+					tmpPi = gen.GenOnePart()
+					if tmpPi != pi {
+						break
+					}
 				}
 			}
 			if tmpPi > pi {
@@ -378,11 +391,14 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	case SENDPAYMENT:
 		if rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			//tmpPi = (pi + rnd.Intn(nParts-1) + 1) % nParts
-			for {
-				tmpPi = gen.GenOnePart()
-				if tmpPi != pi {
-					break
+			if *SysType == ADAPTIVE {
+				tmpPi = (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
+			} else {
+				for {
+					tmpPi = gen.GenOnePart()
+					if tmpPi != pi {
+						break
+					}
 				}
 			}
 			if tmpPi > pi {
@@ -769,5 +785,16 @@ func (sb *SBWorkload) SetWorkers(coord *Coordinator) {
 	Workers := coord.Workers
 	for i, w := range Workers {
 		sb.transGen[i].w = w
+	}
+}
+
+func (sb *SBWorkload) MixConfig(wc []WorkerConfig) {
+	for i := 0; i < len(sb.transGen); i++ {
+		tg := sb.transGen[i]
+		tg.start = int(wc[i].start)
+		tg.end = int(wc[i].end)
+		tg.clusterNPart = tg.end - tg.start + 1
+		tg.otherNPart = *NumPart - tg.clusterNPart
+		tg.partRnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i+1)))
 	}
 }

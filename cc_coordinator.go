@@ -202,7 +202,7 @@ const (
 	REPORTPERIOD = 1000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, testCases []TestCase, nsecs int, workload int, wl interface{}) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, testCases []TestCase, nsecs int, workload int, wl interface{}, wc []WorkerConfig) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:        make([]*Worker, nWorkers),
 		store:          store,
@@ -343,7 +343,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 	}
 
 	for i := range coordinator.Workers {
-		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate, workload)
+		coordinator.Workers[i] = NewWorker(i, store, coordinator, tableCount, mode, sampleRate, workload, wc)
 	}
 
 	return coordinator
@@ -387,13 +387,13 @@ func (coord *Coordinator) process() {
 			coord.rc++
 
 			// Switch
-			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE {
-				if !coord.justReconfig {
-					coord.predict(summary)
-				} else {
-					coord.justReconfig = false
-				}
-			}
+			// if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE {
+			// 	if !coord.justReconfig {
+			// 		coord.predict(summary)
+			// 	} else {
+			// 		coord.justReconfig = false
+			// 	}
+			// }
 
 			// Done
 			if coord.rc == coord.reportCount {

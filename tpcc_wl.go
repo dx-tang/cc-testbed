@@ -217,6 +217,11 @@ type TPCCTransGen struct {
 	timeInit        bool
 	dt              DummyTrans
 	w               *Worker
+	clusterNPart    int
+	otherNPart      int
+	start           int
+	end             int
+	partRnd         *rand.Rand
 	padding2        [PADDING]byte
 }
 
@@ -298,10 +303,14 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 	ola := &tg.ola
 
 	var tmpPi int
-	if isPartAlign {
-		t.w_id = pi
+	if *SysType == ADAPTIVE {
+		t.w_id = tg.start + tg.partRnd.Intn(tg.clusterNPart)
 	} else {
-		t.w_id = w_id_gen.GetWholeRank()
+		if isPartAlign {
+			t.w_id = pi
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	}
 
 	t.homePart = t.w_id
@@ -314,10 +323,14 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 
 	if rnd.Intn(100) < cr {
 		t.accessParts = t.accessParts[:2]
-		for {
-			tmpPi = int(w_id_gen.GetWholeRank())
-			if tmpPi != t.w_id {
-				break
+		if *SysType == ADAPTIVE {
+			tmpPi = (tg.end + tg.partRnd.Intn(tg.otherNPart) + 1) % *NumPart
+		} else {
+			for {
+				tmpPi = int(w_id_gen.GetWholeRank())
+				if tmpPi != t.w_id {
+					break
+				}
 			}
 		}
 		if tmpPi > t.w_id {
@@ -367,10 +380,14 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	isPart := tg.isPartition
 	cr := int(tg.cr)
 
-	if isPart {
-		t.w_id = pi
+	if *SysType == ADAPTIVE {
+		t.w_id = tg.start + tg.partRnd.Intn(tg.clusterNPart)
 	} else {
-		t.w_id = w_id_gen.GetWholeRank()
+		if isPart {
+			t.w_id = pi
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	}
 
 	tmpPi := t.w_id
@@ -385,10 +402,14 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 
 	if rnd.Intn(100) < cr {
 		t.accessParts = t.accessParts[:2]
-		for {
-			tmpPi = w_id_gen.GetWholeRank()
-			if tmpPi != t.w_id {
-				break
+		if *SysType == ADAPTIVE {
+			tmpPi = (tg.end + tg.partRnd.Intn(tg.otherNPart) + 1) % *NumPart
+		} else {
+			for {
+				tmpPi = w_id_gen.GetWholeRank()
+				if tmpPi != t.w_id {
+					break
+				}
 			}
 		}
 		if tmpPi > t.w_id {
@@ -465,10 +486,14 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	t.TXN = txn
 	t.isLast = isLast
 
-	if tg.isPartition {
-		t.w_id = pi
+	if *SysType == ADAPTIVE {
+		t.w_id = tg.start + tg.partRnd.Intn(tg.clusterNPart)
 	} else {
-		t.w_id = w_id_gen.GetWholeRank()
+		if tg.isPartition {
+			t.w_id = pi
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	}
 
 	t.homePart = t.w_id
@@ -531,10 +556,15 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
 	t.accessParts = t.accessParts[:1]
 	t.accessParts[0] = pi
 	t.TXN = txn
-	if tg.isPartition {
-		t.w_id = tg.partIndex
+
+	if *SysType == ADAPTIVE {
+		t.w_id = tg.start + tg.partRnd.Intn(tg.clusterNPart)
 	} else {
-		t.w_id = w_id_gen.GetWholeRank()
+		if tg.isPartition {
+			t.w_id = tg.partIndex
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	}
 
 	t.homePart = t.w_id
@@ -1009,6 +1039,17 @@ func (tpccWL *TPCCWorkload) SetWorkers(coord *Coordinator) {
 	Workers := coord.Workers
 	for i, w := range Workers {
 		tpccWL.transGen[i].w = w
+	}
+}
+
+func (tpccWL *TPCCWorkload) MixConfig(wc []WorkerConfig) {
+	for i := 0; i < len(tpccWL.transGen); i++ {
+		tg := tpccWL.transGen[i]
+		tg.start = int(wc[i].start)
+		tg.end = int(wc[i].end)
+		tg.clusterNPart = tg.end - tg.start + 1
+		tg.otherNPart = *NumPart - tg.clusterNPart
+		tg.partRnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i+1)))
 	}
 }
 

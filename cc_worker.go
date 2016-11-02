@@ -84,6 +84,7 @@ type Worker struct {
 	iaAR         []IndexAlloc
 	preIAAR      []IndexAlloc
 	partitioner  []Partitioner
+	partToExec   []int
 	padding2     [PADDING]byte
 }
 
@@ -91,7 +92,7 @@ func (w *Worker) Register(fn int, transaction TransactionFunc) {
 	w.txns[fn] = transaction
 }
 
-func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int, workload int) *Worker {
+func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampleRate int, workload int, wc []WorkerConfig) *Worker {
 	w := &Worker{
 		ID:           id,
 		store:        s,
@@ -108,6 +109,7 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		indexDone:    make(chan bool, 1),
 		indexConfirm: make(chan bool, 1),
 		actionTrans:  make(chan *IndexAction, 1),
+		partToExec:   make([]int, len(wc)),
 	}
 
 	/*w.st = NewSampleTool(s.nParts, sampleRate, s)
@@ -128,19 +130,32 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.needLock = false
 	}
 
-	w.ExecPool = make([]ETransaction, ADAPTIVE-PARTITION)
+	w.ExecPool = make([]ETransaction, ADAPTIVE-PARTITION+1)
 	w.ExecPool[PARTITION] = StartPTransaction(w, tableCount)
 	w.ExecPool[OCC] = StartOTransaction(w, tableCount)
 	w.ExecPool[LOCKING] = StartLTransaction(w, tableCount)
+	w.ExecPool[ADAPTIVE] = StartMTransaction(w, tableCount, wc)
 
 	if *SysType == PARTITION {
 		w.E = w.ExecPool[mode]
+		for i := 0; i < len(w.partToExec); i++ {
+			w.partToExec[i] = PARTITION
+		}
 	} else if *SysType == OCC {
 		w.E = w.ExecPool[mode]
+		for i := 0; i < len(w.partToExec); i++ {
+			w.partToExec[i] = OCC
+		}
 	} else if *SysType == LOCKING {
 		w.E = w.ExecPool[mode]
+		for i := 0; i < len(w.partToExec); i++ {
+			w.partToExec[i] = LOCKING
+		}
 	} else if *SysType == ADAPTIVE {
-		w.E = w.ExecPool[mode]
+		w.E = w.ExecPool[ADAPTIVE]
+		for i := 0; i < len(w.partToExec); i++ {
+			w.partToExec[i] = int(wc[i].protocol)
+		}
 	} else {
 		clog.Error("System Type %v Not Supported Yet\n", *SysType)
 	}
@@ -361,34 +376,36 @@ func (w *Worker) One(t Trans) (Value, error) {
 		}
 
 		for _, p := range ap {
-			s.spinLock[p].Lock()
+			if w.partToExec[p] == PARTITION {
+				s.spinLock[p].Lock()
+			}
 		}
 	}
 
 	w.Lock()
 
-	if *SysType == ADAPTIVE {
-		if t.isHome() {
-			w.st.sampleCount++
-			if w.st.sampleCount >= w.st.sampleRate {
-				//w.riMaster.txnSample++
-				w.st.sampleCount = 0
-				w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
-			}
-		}
-		w.st.trueCounter++
-		if w.st.trueCounter == PARTVARRATE {
-			w.st.trueCounter = 0
-			if w.st.isPartAlign {
-				w.riMaster.partStat[w.ID]++
-			} else {
-				//for _, p := range t.GetAccessParts() {
-				//	w.riMaster.partStat[p]++
-				//}
-				w.riMaster.partStat[t.getHome()]++
-			}
-		}
-	}
+	// if *SysType == ADAPTIVE {
+	// 	if t.isHome() {
+	// 		w.st.sampleCount++
+	// 		if w.st.sampleCount >= w.st.sampleRate {
+	// 			//w.riMaster.txnSample++
+	// 			w.st.sampleCount = 0
+	// 			w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
+	// 		}
+	// 	}
+	// 	w.st.trueCounter++
+	// 	if w.st.trueCounter == PARTVARRATE {
+	// 		w.st.trueCounter = 0
+	// 		if w.st.isPartAlign {
+	// 			w.riMaster.partStat[w.ID]++
+	// 		} else {
+	// 			//for _, p := range t.GetAccessParts() {
+	// 			//	w.riMaster.partStat[p]++
+	// 			//}
+	// 			w.riMaster.partStat[t.getHome()]++
+	// 		}
+	// 	}
+	// }
 
 	r, err := w.doTxn(t)
 
@@ -397,7 +414,9 @@ func (w *Worker) One(t Trans) (Value, error) {
 	if needLock {
 		s := w.store
 		for _, p := range ap {
-			s.spinLock[p].Unlock()
+			if w.partToExec[p] == PARTITION {
+				s.spinLock[p].Unlock()
+			}
 		}
 	}
 

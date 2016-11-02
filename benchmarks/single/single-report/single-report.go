@@ -34,6 +34,7 @@ var tc = flag.String("tc", "test.conf", "Test Configuration")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var isPart = flag.Bool("p", true, "Whether index partition")
+var dl = flag.String("dl", "layout.conf", "data layout")
 
 const (
 	TRIALS  = 3
@@ -115,12 +116,13 @@ func main() {
 	var coord *testbed.Coordinator = nil
 
 	testCases := testbed.BuildTestCases(*tc, testbed.SINGLEWL)
+	wc := testbed.BuildWorkerConfig(*dl)
 
 	tc := &testCases[0]
 
 	clog.Info("Populating Whole Store\n")
 	single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tc.Contention, *tp, tc.CR, tc.Tlen, tc.RR, tc.MP, tc.PS, initMode, false, isPartAlign)
-	coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.SINGLEWL, single)
+	coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.SINGLEWL, single, wc)
 
 	single.SetWorkers(coord)
 
