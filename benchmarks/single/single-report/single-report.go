@@ -122,6 +122,8 @@ func main() {
 
 	clog.Info("Populating Whole Store\n")
 	single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tc.Contention, *tp, tc.CR, tc.Tlen, tc.RR, tc.MP, tc.PS, initMode, false, isPartAlign)
+	single.MixConfig(wc)
+
 	coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.SINGLEWL, single, wc)
 
 	single.SetWorkers(coord)
