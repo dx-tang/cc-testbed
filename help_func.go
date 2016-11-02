@@ -51,3 +51,21 @@ func BuildWorkerConfig(f string) []WorkerConfig {
 
 	return wc
 }
+
+func BuildUseLatch(wc []WorkerConfig) []bool {
+	useLatch := make([]bool, len(wc))
+	for i := 0; i < len(wc); i++ {
+		if *SysType == ADAPTIVE {
+			if wc[i].protocol == PARTITION {
+				useLatch[i] = false
+			} else {
+				useLatch[i] = true
+			}
+		} else if *SysType == PARTITION {
+			useLatch[i] = false
+		} else {
+			useLatch[i] = true
+		}
+	}
+	return useLatch
+}

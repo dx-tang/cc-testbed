@@ -122,24 +122,23 @@ type Store struct {
 	mutexLock    []RWMutexPad
 	tableToIndex map[string]int
 	nParts       int
-	useLatch     bool
 	isPartition  bool
 	double       bool
 	padding2     [PADDING]byte
 }
 
-func NewStore(schema string, tableSize []int, nParts int, isPartition bool, mode int, double bool) *Store {
+func NewStore(schema string, tableSize []int, nParts int, isPartition bool, mode int, double bool, useLatch []bool) *Store {
 
 	if nParts == 1 {
 		isPartition = false
 	}
 
-	var useLatch bool
-	if mode == PARTITION {
-		useLatch = false
-	} else {
-		useLatch = true
-	}
+	// var useLatch bool
+	// if mode == PARTITION {
+	// 	useLatch = false
+	// } else {
+	// 	useLatch = true
+	// }
 
 	// Open Schema File and Read Configuration
 	sch, err := os.OpenFile(schema, os.O_RDONLY, 0600)
@@ -180,7 +179,6 @@ func NewStore(schema string, tableSize []int, nParts int, isPartition bool, mode
 		mutexLock:    make([]RWMutexPad, *NumPart),
 		spinLock:     make([]SpinLockPad, *NumPart),
 		nParts:       nParts,
-		useLatch:     useLatch,
 		isPartition:  isPartition,
 		double:       double,
 	}
@@ -350,7 +348,6 @@ func (s *Store) GetValueBySec(tableID int, k Key, partNum int, val Value) error 
 }
 
 func (s *Store) SetLatch(useLatch bool) {
-	s.useLatch = useLatch
 	for i, t := range s.priTables {
 		t.SetLatch(useLatch)
 		s.secTables[i].SetLatch(useLatch)

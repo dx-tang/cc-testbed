@@ -604,7 +604,7 @@ type TPCCWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int, double bool, partAlign bool) *TPCCWorkload {
+func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage [TPCCTRANSNUM]int, cr float64, ps float64, dataDir string, initMode int, double bool, partAlign bool, useLatch []bool) *TPCCWorkload {
 	tpccWL := &TPCCWorkload{
 		isGC: false,
 	}
@@ -629,7 +629,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 	tpccWL.nKeys[ITEM] = ITEMSIZE
 
 	start := time.Now()
-	tpccWL.store = NewStore(workload, tpccWL.nKeys, nParts, isPartition, initMode, double)
+	tpccWL.store = NewStore(workload, tpccWL.nKeys, nParts, isPartition, initMode, double, useLatch)
 	clog.Info("Building Store %.2fs \n", time.Since(start).Seconds())
 
 	tpccWL.nWorkers = nWorkers

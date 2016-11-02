@@ -536,7 +536,7 @@ type SingelWorkload struct {
 	padding2        [PADDING]byte
 }
 
-func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int, double bool, partAlign bool) *SingelWorkload {
+func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s float64, transPercentage string, cr float64, tlen int, rr int, mp int, ps float64, initMode int, double bool, partAlign bool, useLatch []bool) *SingelWorkload {
 	singleWL := &SingelWorkload{}
 
 	if nParts == 1 {
@@ -566,10 +566,10 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 
 	if isPartition {
 		singleWL.zp = NewZipfProb(ps, *NumPart)
-		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode, double)
+		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, NOPARTSKEW, initMode, double, useLatch)
 	} else {
 		singleWL.zp = NewZipfProb(NOPARTSKEW, *NumPart)
-		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode, double)
+		singleWL.basic = NewBasicWorkload(workload, nParts, isPartition, nWorkers, s, ps, initMode, double, useLatch)
 	}
 
 	// Populating the Store

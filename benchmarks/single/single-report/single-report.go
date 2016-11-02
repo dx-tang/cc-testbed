@@ -117,11 +117,12 @@ func main() {
 
 	testCases := testbed.BuildTestCases(*tc, testbed.SINGLEWL)
 	wc := testbed.BuildWorkerConfig(*dl)
+	useLatch := testbed.BuildUseLatch(wc)
 
 	tc := &testCases[0]
 
 	clog.Info("Populating Whole Store\n")
-	single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tc.Contention, *tp, tc.CR, tc.Tlen, tc.RR, tc.MP, tc.PS, initMode, false, isPartAlign)
+	single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tc.Contention, *tp, tc.CR, tc.Tlen, tc.RR, tc.MP, tc.PS, initMode, false, isPartAlign, useLatch)
 	single.MixConfig(wc)
 
 	coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.SINGLEWL, single, wc)
@@ -141,7 +142,7 @@ func main() {
 
 	ts := testbed.TID(0)
 	var wg sync.WaitGroup
-	//coord.SetMode(initMode)
+	coord.SetMode(initMode)
 	coord.Start()
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)

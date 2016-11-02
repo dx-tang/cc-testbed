@@ -57,12 +57,11 @@ type BasicTable struct {
 	isPartition bool
 	nParts      int
 	shardHash   func(Key) int
-	useLatch    bool
 	tableID     int
 	padding2    [PADDING]byte
 }
 
-func NewBasicTable(numEntries int, nParts int, isPartition bool, useLatch bool, tableID int) *BasicTable {
+func NewBasicTable(numEntries int, nParts int, isPartition bool, useLatch []bool, tableID int) *BasicTable {
 
 	// We allocate more space to make the array algined to cache line
 	bt := &BasicTable{
@@ -71,13 +70,12 @@ func NewBasicTable(numEntries int, nParts int, isPartition bool, useLatch bool, 
 		//name:        schemaStrs[0],
 		isPartition: isPartition,
 		nParts:      nParts,
-		useLatch:    useLatch,
 		tableID:     tableID,
 	}
 
 	bt.data = make([]Partition, nParts)
 	for k := 0; k < nParts; k++ {
-		bt.data[k].ht = NewHashTable(numEntries, isPartition, useLatch, tableID)
+		bt.data[k].ht = NewHashTable(numEntries, isPartition, useLatch[k], tableID)
 		bt.data[k].init_orders = make(map[Key]int)
 	}
 
@@ -169,7 +167,6 @@ func (bt *BasicTable) GetValueBySec(k Key, partNum int, val Value) error {
 }
 
 func (bt *BasicTable) SetLatch(useLatch bool) {
-	bt.useLatch = useLatch
 	for i, _ := range bt.data {
 		bt.data[i].ht.SetLatch(useLatch)
 	}
