@@ -343,10 +343,10 @@ type SingleTransGen struct {
 	timeInit        bool
 	dt              DummyTrans
 	w               *Worker
-	clusterNPart    int
-	otherNPart      int
-	start           int
-	end             int
+	clusterNPart    []int
+	otherNPart      []int
+	start           []int
+	end             []int
 	partRnd         *rand.Rand
 	padding2        [PADDING]byte
 }
@@ -396,7 +396,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	t.TXN = txn + SINGLEBASE
 
 	if *SysType == ADAPTIVE {
-		pi = s.start + s.partRnd.Intn(s.clusterNPart)
+		pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
 	} else {
 		if isPartAlign {
 			pi = s.partIndex
@@ -416,7 +416,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	if rnd.Intn(100) < cr && mp > 1 {
 		//if *SysType == ADAPTIVE {
 		t.accessParts = t.accessParts[:2]
-		tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
+		tmpPi := (s.end[pi] + s.partRnd.Intn(s.otherNPart[pi]) + 1) % *NumPart
 		if tmpPi > pi {
 			t.accessParts[0] = pi
 			t.accessParts[1] = tmpPi
@@ -486,9 +486,15 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 		}*/
 
 	} else {
-		if s.clusterNPart >= 2 && pi >= s.start && pi <= s.end {
+		if s.clusterNPart[pi] >= 2 {
 			t.accessParts = t.accessParts[:2]
-			tmpPi := (s.start + s.partRnd.Intn(s.clusterNPart))
+			var tmpPi int
+			for {
+				tmpPi = s.start[pi] + s.partRnd.Intn(s.clusterNPart[pi])
+				if tmpPi != pi {
+					break
+				}
+			}
 			if tmpPi > pi {
 				t.accessParts[0] = pi
 				t.accessParts[1] = tmpPi
@@ -861,10 +867,16 @@ func (singleWL *SingelWorkload) SetWorkers(coord *Coordinator) {
 func (singleWL *SingelWorkload) MixConfig(wc []WorkerConfig) {
 	for i := 0; i < len(singleWL.transGen); i++ {
 		tg := singleWL.transGen[i]
-		tg.start = int(wc[i].start)
-		tg.end = int(wc[i].end)
-		tg.clusterNPart = tg.end - tg.start + 1
-		tg.otherNPart = *NumPart - tg.clusterNPart
 		tg.partRnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i+1)))
+		tg.start = make([]int, len(wc))
+		tg.end = make([]int, len(wc))
+		tg.clusterNPart = make([]int, len(wc))
+		tg.otherNPart = make([]int, len(wc))
+		for j := 0; j < len(wc); j++ {
+			tg.start[j] = int(wc[j].start)
+			tg.end[j] = int(wc[j].end)
+			tg.clusterNPart[j] = tg.end[j] - tg.start[j] + 1
+			tg.otherNPart[j] = *NumPart - tg.clusterNPart[j]
+		}
 	}
 }
