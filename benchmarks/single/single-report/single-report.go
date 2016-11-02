@@ -142,7 +142,7 @@ func main() {
 
 	ts := testbed.TID(0)
 	var wg sync.WaitGroup
-	coord.SetMode(initMode)
+	//coord.SetMode(initMode)
 	coord.Start()
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)

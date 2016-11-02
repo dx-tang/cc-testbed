@@ -846,6 +846,13 @@ func (m *MTransaction) Commit(req *LockReq, isHome bool) TID {
 		pccT.wRecs = pccT.wRecs[0:0]
 
 		// LOCKING
+		for j, _ := range lockT.rRecs {
+			rr := &lockT.rRecs[j]
+			if rr.exist {
+				//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
+				rr.rec.RUnlock(req)
+			}
+		}
 		lockT.rRecs = lockT.rRecs[:0]
 		for j, _ := range lockT.wRecs {
 			wr := &lockT.wRecs[j]
