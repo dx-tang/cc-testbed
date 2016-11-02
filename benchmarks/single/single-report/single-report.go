@@ -78,9 +78,9 @@ func main() {
 		}
 	} else if *testbed.SysType == testbed.ADAPTIVE {
 		if *isPart {
-			initMode = testbed.OCC
+			initMode = testbed.PARTITION
 			isPartAlign = false
-			clog.Info("Using Adaptive CC: Starting from OCC")
+			clog.Info("Using Adaptive CC: Starting from PCC")
 		} else {
 			isPartAlign = false
 			nParts = 1
@@ -141,7 +141,7 @@ func main() {
 
 	ts := testbed.TID(0)
 	var wg sync.WaitGroup
-	coord.SetMode(initMode)
+	//coord.SetMode(initMode)
 	coord.Start()
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)

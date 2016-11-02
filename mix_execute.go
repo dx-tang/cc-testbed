@@ -844,6 +844,7 @@ func (m *MTransaction) Commit(req *LockReq, isHome bool) TID {
 		pccT.wRecs = pccT.wRecs[0:0]
 
 		// LOCKING
+		lockT.rRecs = lockT.rRecs[:0]
 		for j, _ := range lockT.wRecs {
 			wr := &lockT.wRecs[j]
 			for p := 0; p < len(wr.vals); p++ {
@@ -861,6 +862,7 @@ func (m *MTransaction) Commit(req *LockReq, isHome bool) TID {
 		}
 		lockT.wRecs = lockT.wRecs[:0]
 
+		// OCC
 		for i, _ := range occT.wKeys {
 			wk := &occT.wKeys[i]
 			for j := 0; j < len(wk.vals); j++ {
@@ -878,6 +880,7 @@ func (m *MTransaction) Commit(req *LockReq, isHome bool) TID {
 			wk.rec.Unlock(tid)
 			wk.locked = false
 		}
+		occT.rKeys = occT.rKeys[:0]
 		occT.wKeys = occT.wKeys[:0]
 
 	}
