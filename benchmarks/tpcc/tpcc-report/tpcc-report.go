@@ -76,8 +76,8 @@ func main() {
 	} else if *testbed.SysType == testbed.ADAPTIVE {
 		isPartAlign = false
 		if *isPart {
-			initMode = testbed.PARTITION
-			clog.Info("Using Adaptive CC: Starting from PCC")
+			initMode = testbed.OCC
+			clog.Info("Using Adaptive CC: Starting from OCC")
 		} else {
 			nParts = 1
 			isPartition = false

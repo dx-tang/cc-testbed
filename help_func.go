@@ -44,9 +44,9 @@ func BuildWorkerConfig(f string) []WorkerConfig {
 		}
 		wc[i].ID = i
 		splits = strings.Split(string(data), "\t")
-		wc[i].start, _ = strconv.ParseInt(splits[0], 10, 32)
-		wc[i].end, _ = strconv.ParseInt(splits[1], 10, 32)
-		wc[i].protocol, _ = strconv.ParseInt(splits[2], 10, 32)
+		wc[i].start, _ = strconv.ParseInt(splits[1], 10, 32)
+		wc[i].end, _ = strconv.ParseInt(splits[2], 10, 32)
+		wc[i].protocol, _ = strconv.ParseInt(splits[3], 10, 32)
 	}
 
 	return wc
