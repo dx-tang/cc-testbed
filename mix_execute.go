@@ -644,12 +644,14 @@ func (m *MTransaction) Abort(req *LockReq) TID {
 		lockT.wRecs = lockT.wRecs[:0]
 
 		// OCC
+		occT.rKeys = occT.rKeys[:0]
 		for j := 0; j < len(occT.wKeys); j++ {
 			wk := &occT.wKeys[j]
 			if wk.locked {
 				wk.rec.Unlock(m.occMaxSeen)
 			}
 		}
+		occT.wKeys = occT.wKeys[:0]
 
 		// For Insert
 		// PCC
