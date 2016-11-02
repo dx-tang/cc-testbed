@@ -331,7 +331,7 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 		t.home = false
 	}
 
-	var tmpPi int
+	//var tmpPi int
 	switch t.TXN {
 	case BALANCE: // Get Balance from One Account
 		t.accessParts = t.accessParts[:1]
@@ -351,16 +351,7 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	case AMALGAMATE:
 		if rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			if *SysType == ADAPTIVE {
-				tmpPi = (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
-			} else {
-				for {
-					tmpPi = gen.GenOnePart()
-					if tmpPi != pi {
-						break
-					}
-				}
-			}
+			tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
 			if tmpPi > pi {
 				t.accessParts[0] = pi
 				t.accessParts[1] = tmpPi
@@ -374,16 +365,33 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 				t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
 			}
 		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = pi
-			t.accoutID = t.accoutID[:SBMAXKEYS]
-			for i := 0; i < SBMAXSUBTRANS; i++ {
-				t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, pi)
-				for {
-					tmpKey := gen.GetKey(CHECKING, pi)
-					if tmpKey != t.accoutID[0] {
-						t.accoutID[i*SBMAXPARTS+1] = tmpKey
-						break
+			if s.clusterNPart >= 2 && pi >= s.start && pi <= s.end {
+				t.accessParts = t.accessParts[:2]
+				tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
+				if tmpPi > pi {
+					t.accessParts[0] = pi
+					t.accessParts[1] = tmpPi
+				} else {
+					t.accessParts[0] = tmpPi
+					t.accessParts[1] = pi
+				}
+				t.accoutID = t.accoutID[:SBMAXKEYS]
+				for i := 0; i < SBMAXSUBTRANS; i++ {
+					t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, t.accessParts[0])
+					t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
+				}
+			} else {
+				t.accessParts = t.accessParts[:1]
+				t.accessParts[0] = pi
+				t.accoutID = t.accoutID[:SBMAXKEYS]
+				for i := 0; i < SBMAXSUBTRANS; i++ {
+					t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, pi)
+					for {
+						tmpKey := gen.GetKey(CHECKING, pi)
+						if tmpKey != t.accoutID[i*SBMAXPARTS+0] {
+							t.accoutID[i*SBMAXPARTS+1] = tmpKey
+							break
+						}
 					}
 				}
 			}
@@ -391,16 +399,7 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 	case SENDPAYMENT:
 		if rnd.Intn(100) < cr { // cross-partition transaction
 			t.accessParts = t.accessParts[:2]
-			if *SysType == ADAPTIVE {
-				tmpPi = (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
-			} else {
-				for {
-					tmpPi = gen.GenOnePart()
-					if tmpPi != pi {
-						break
-					}
-				}
-			}
+			tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
 			if tmpPi > pi {
 				t.accessParts[0] = pi
 				t.accessParts[1] = tmpPi
@@ -414,16 +413,33 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 				t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
 			}
 		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = pi
-			t.accoutID = t.accoutID[:SBMAXKEYS]
-			for i := 0; i < SBMAXSUBTRANS; i++ {
-				t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, pi)
-				for {
-					tmpKey := gen.GetKey(CHECKING, pi)
-					if tmpKey != t.accoutID[0] {
-						t.accoutID[i*SBMAXPARTS+1] = tmpKey
-						break
+			if s.clusterNPart >= 2 && pi >= s.start && pi <= s.end {
+				t.accessParts = t.accessParts[:2]
+				tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
+				if tmpPi > pi {
+					t.accessParts[0] = pi
+					t.accessParts[1] = tmpPi
+				} else {
+					t.accessParts[0] = tmpPi
+					t.accessParts[1] = pi
+				}
+				t.accoutID = t.accoutID[:SBMAXKEYS]
+				for i := 0; i < SBMAXSUBTRANS; i++ {
+					t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, t.accessParts[0])
+					t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
+				}
+			} else {
+				t.accessParts = t.accessParts[:1]
+				t.accessParts[0] = pi
+				t.accoutID = t.accoutID[:SBMAXKEYS]
+				for i := 0; i < SBMAXSUBTRANS; i++ {
+					t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, pi)
+					for {
+						tmpKey := gen.GetKey(CHECKING, pi)
+						if tmpKey != t.accoutID[0] {
+							t.accoutID[i*SBMAXPARTS+1] = tmpKey
+							break
+						}
 					}
 				}
 			}

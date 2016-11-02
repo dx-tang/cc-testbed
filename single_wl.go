@@ -380,7 +380,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	cr := int(s.cr)
 	var pi int
 
-	nParts := s.nParts
+	//nParts := s.nParts
 	isPartAlign := s.isPartAlign
 	tlen := s.tlen
 	mp := s.mp
@@ -414,17 +414,19 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	}
 
 	if rnd.Intn(100) < cr && mp > 1 {
-		if *SysType == ADAPTIVE {
-			t.accessParts = t.accessParts[:2]
-			tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
-			if tmpPi > pi {
-				t.accessParts[0] = pi
-				t.accessParts[1] = tmpPi
-			} else {
-				t.accessParts[0] = tmpPi
-				t.accessParts[1] = pi
-			}
+		//if *SysType == ADAPTIVE {
+		t.accessParts = t.accessParts[:2]
+		tmpPi := (s.end + s.partRnd.Intn(s.otherNPart) + 1) % *NumPart
+		if tmpPi > pi {
+			t.accessParts[0] = pi
+			t.accessParts[1] = tmpPi
 		} else {
+			t.accessParts[0] = tmpPi
+			t.accessParts[1] = pi
+		}
+		//}
+
+		/*else {
 			ap := nParts
 			if ap > mp {
 				ap = mp
@@ -481,11 +483,23 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 					}
 				}
 			}
-		}
+		}*/
 
 	} else {
-		t.accessParts = t.accessParts[:1]
-		t.accessParts[0] = pi
+		if s.clusterNPart >= 2 && pi >= s.start && pi <= s.end {
+			t.accessParts = t.accessParts[:2]
+			tmpPi := (s.start + s.partRnd.Intn(s.clusterNPart))
+			if tmpPi > pi {
+				t.accessParts[0] = pi
+				t.accessParts[1] = tmpPi
+			} else {
+				t.accessParts[0] = tmpPi
+				t.accessParts[1] = pi
+			}
+		} else {
+			t.accessParts = t.accessParts[:1]
+			t.accessParts[0] = pi
+		}
 	}
 
 	t.keys = t.keys[:tlen]
