@@ -303,7 +303,7 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 
 	isPartAlign := s.isPartAlign
 
-	if *SysType == ADAPTIVE {
+	if *SysType == ADAPTIVE && !*Hybrid {
 		pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
 	} else {
 		if isPartAlign {
