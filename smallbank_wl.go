@@ -363,6 +363,12 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 			for i := 0; i < SBMAXSUBTRANS; i++ {
 				t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, t.accessParts[0])
 				t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
+				if *Hybrid && t.accoutID[i*SBMAXPARTS+0][3] < HOTREC { // isHot
+					t.accoutID[i*SBMAXPARTS+0][3] |= HOTBIT
+				}
+				if *Hybrid && t.accoutID[i*SBMAXPARTS+1][3] < HOTREC { // isHot
+					t.accoutID[i*SBMAXPARTS+1][3] |= HOTBIT
+				}
 			}
 		} else {
 			if s.clusterNPart[pi] >= 2 {
@@ -385,6 +391,12 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 				for i := 0; i < SBMAXSUBTRANS; i++ {
 					t.accoutID[i*SBMAXPARTS+0] = gen.GetKey(CHECKING, t.accessParts[0])
 					t.accoutID[i*SBMAXPARTS+1] = gen.GetKey(CHECKING, t.accessParts[1])
+					if *Hybrid && t.accoutID[i*SBMAXPARTS+0][3] < HOTREC { // isHot
+						t.accoutID[i*SBMAXPARTS+0][3] |= HOTBIT
+					}
+					if *Hybrid && t.accoutID[i*SBMAXPARTS+1][3] < HOTREC { // isHot
+						t.accoutID[i*SBMAXPARTS+1][3] |= HOTBIT
+					}
 				}
 			} else {
 				t.accessParts = t.accessParts[:1]
@@ -398,6 +410,12 @@ func (s *SBTransGen) GenOneTrans(mode int) Trans {
 							t.accoutID[i*SBMAXPARTS+1] = tmpKey
 							break
 						}
+					}
+					if *Hybrid && t.accoutID[i*SBMAXPARTS+0][3] < HOTREC { // isHot
+						t.accoutID[i*SBMAXPARTS+0][3] |= HOTBIT
+					}
+					if *Hybrid && t.accoutID[i*SBMAXPARTS+1][3] < HOTREC { // isHot
+						t.accoutID[i*SBMAXPARTS+1][3] |= HOTBIT
 					}
 				}
 			}
