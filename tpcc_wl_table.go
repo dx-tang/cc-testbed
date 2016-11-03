@@ -50,6 +50,7 @@ func MakeNewOrderTable(warehouse int, isPartition bool, useLatch []bool) *NewOrd
 	noTable.head = noTable.head[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
 	noTable.tail = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
 	noTable.tail = noTable.tail[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
+	noTable.useLatch = make([]bool, len(useLatch))
 
 	for i := 0; i < warehouse; i++ {
 		noTable.useLatch[i] = useLatch[i]
