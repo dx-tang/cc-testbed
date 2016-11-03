@@ -120,7 +120,9 @@ type NewOrderTrans struct {
 	c_id            int
 	o_entry_d       time.Time
 	ol_cnt          int
+	d_hot_bit       int
 	ol_i_id         [MAXOLCNT]int
+	ol_hot_bit      [MAXOLCNT]int
 	ol_quantity     [MAXOLCNT]int
 	ol_supply_w_id  [MAXOLCNT]int
 	wb_next_o_id    IntValue
@@ -303,7 +305,7 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 	ola := &tg.ola
 
 	var tmpPi int
-	if *SysType == ADAPTIVE {
+	if *SysType == ADAPTIVE && !*Hybrid {
 		t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
 	} else {
 		if isPartAlign {
@@ -354,6 +356,10 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 		}
 	}
 
+	if *Hybrid {
+		t.d_hot_bit = HOTBIT
+	}
+
 	t.TXN = txn
 	t.d_id = rnd.Intn(DIST_COUNT)
 	t.c_id = rnd.Intn(C_ID_PER_DIST)
@@ -365,8 +371,10 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 	for i := 0; i < t.ol_cnt; i++ {
 		t.ol_supply_w_id[i] = t.accessParts[j]
 		t.ol_i_id[i] = i_id_gen.GetPartRank(t.accessParts[j])
+		if *Hybrid && t.ol_i_id[i] < HOTREC/32 { // isHot
+			t.ol_hot_bit[i] = HOTBIT
+		}
 		j = (j + 1) % len(t.accessParts)
-
 		t.ol_quantity[i] = 5
 		t.olRec[i] = ola.genOrderLineRec()
 	}

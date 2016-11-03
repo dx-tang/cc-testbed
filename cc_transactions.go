@@ -229,10 +229,12 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	// Get D_TAX and D_NEXT_O_ID
 	d_id := noTrans.d_id
 	k[1] = d_id
+	k[3] = noTrans.d_hot_bit
 	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
+	k[3] = 0
 
 	distTuple := rec.GetTuple().(*DistrictTuple)
 	d_tax := distTuple.d_tax
@@ -307,7 +309,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 		sKey[0] = noTrans.ol_supply_w_id[i]
 		sKey[1] = noTrans.ol_i_id[i]
 		sKey[2] = 0
-		sKey[3] = 0
+		sKey[3] = noTrans.ol_hot_bit[i]
 
 		if !distRead {
 			_, _, _, err = exec.ReadValue(STOCK, sKey, sKey[0], rb_o_dist, S_DIST_01+d_id, req, isHome)
