@@ -1062,7 +1062,7 @@ func (tpccWL *TPCCWorkload) SetWorkers(coord *Coordinator) {
 
 func (tpccWL *TPCCWorkload) MixConfig(wc []WorkerConfig) {
 	for i := 0; i < len(tpccWL.transGen); i++ {
-		tg := tpccWL.transGen[i]
+		tg := &tpccWL.transGen[i]
 		tg.partRnd = rand.New(rand.NewSource(time.Now().UnixNano() / int64(i+1)))
 		tg.start = make([]int, len(wc))
 		tg.end = make([]int, len(wc))
