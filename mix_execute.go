@@ -30,7 +30,15 @@ func StartMTransaction(w *Worker, nTables int, wc []WorkerConfig) *MTransaction 
 	}
 
 	for i := 0; i < len(wc); i++ {
-		tx.partToExec[i] = int(wc[i].protocol)
+		if *Hybrid {
+			for i := 0; i < len(w.partToExec); i++ {
+				w.partToExec[i] = -1
+			}
+		} else {
+			for i := 0; i < len(w.partToExec); i++ {
+				w.partToExec[i] = int(wc[i].protocol)
+			}
+		}
 	}
 
 	// pcc
