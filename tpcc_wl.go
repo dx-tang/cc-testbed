@@ -358,6 +358,8 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 
 	if *Hybrid {
 		t.d_hot_bit = HOTBIT
+	} else {
+		t.d_hot_bit = 0
 	}
 
 	t.TXN = txn
@@ -373,6 +375,8 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 		t.ol_i_id[i] = i_id_gen.GetPartRank(t.accessParts[j])
 		if *Hybrid && t.ol_i_id[i] < HOTREC/32 { // isHot
 			t.ol_hot_bit[i] = HOTBIT
+		} else {
+			t.ol_hot_bit[i] = 0
 		}
 		j = (j + 1) % len(t.accessParts)
 		t.ol_quantity[i] = 5

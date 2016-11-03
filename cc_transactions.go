@@ -234,7 +234,6 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	k[3] = 0
 
 	distTuple := rec.GetTuple().(*DistrictTuple)
 	d_tax := distTuple.d_tax
@@ -247,6 +246,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	k[3] = 0
 
 	// Get One Record from Customer
 	c_id := noTrans.c_id
