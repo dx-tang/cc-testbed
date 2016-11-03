@@ -31,6 +31,7 @@ var tc = flag.String("tc", "test.conf", "Test Configuration")
 var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var isPart = flag.Bool("p", true, "Whether partition index")
+var dl = flag.String("dl", "layout.conf", "data layout")
 
 const (
 	TRIALS  = 3
@@ -113,9 +114,14 @@ func main() {
 	testCases := testbed.BuildTestCases(*tc, testbed.SMALLBANKWL)
 	tc := &testCases[0]
 
+	wc := testbed.BuildWorkerConfig(*dl)
+	useLatch := testbed.BuildUseLatch(wc)
+
 	clog.Info("Populating Whole Store\n")
-	sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tc.Contention, tc.SBTransper, tc.CR, tc.PS, initMode, false, isPartAlign)
-	coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, testCases, *nsecs, testbed.SMALLBANKWL, sb)
+	sb = testbed.NewSmallBankWL(*wl, nParts, isPartition, nWorkers, tc.Contention, tc.SBTransper, tc.CR, tc.PS, initMode, false, isPartAlign, useLatch)
+	sb.MixConfig(wc)
+
+	coord = testbed.NewCoordinator(nWorkers, sb.GetStore(), sb.GetTableCount(), testbed.PARTITION, *sr, testCases, *nsecs, testbed.SMALLBANKWL, sb, wc)
 
 	sb.SetWorkers(coord)
 
@@ -132,7 +138,7 @@ func main() {
 
 	ts := testbed.TID(0)
 	var wg sync.WaitGroup
-	coord.SetMode(initMode)
+	//coord.SetMode(initMode)
 	coord.Start()
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)

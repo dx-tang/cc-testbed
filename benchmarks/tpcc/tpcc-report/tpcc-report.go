@@ -32,6 +32,7 @@ var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var isPart = flag.Bool("p", true, "Whether partition index")
 var dataDir = flag.String("dd", "../data", "TPCC Data Dir")
+var dl = flag.String("dl", "layout.conf", "data layout")
 
 const (
 	TRIALS  = 3
@@ -117,9 +118,14 @@ func main() {
 
 	testCases := testbed.BuildTestCases(*tc, testbed.TPCCWL)
 
+	wc := testbed.BuildWorkerConfig(*dl)
+	useLatch := testbed.BuildUseLatch(wc)
+
 	clog.Info("Populating Whole Store\n")
-	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode, false, isPartAlign)
-	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL)
+	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode, false, isPartAlign, useLatch)
+	tpccWL.MixConfig(wc)
+
+	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL, wc)
 
 	tpccWL.SetWorkers(coord)
 
@@ -138,7 +144,7 @@ func main() {
 
 	ts := testbed.TID(0)
 	var wg sync.WaitGroup
-	coord.SetMode(initMode)
+	//coord.SetMode(initMode)
 	coord.Start()
 	for i := 0; i < nWorkers; i++ {
 		wg.Add(1)
