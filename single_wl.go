@@ -395,7 +395,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 
 	t.TXN = txn + SINGLEBASE
 
-	if *SysType == ADAPTIVE {
+	if *SysType == ADAPTIVE && !*Hybrid {
 		pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
 	} else {
 		if isPartAlign {
@@ -514,6 +514,9 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	for i := 0; i < len(t.keys); i++ {
 		t.parts[i] = t.accessParts[j]
 		t.keys[i] = gen.GetKey(SINGLE, t.parts[i])
+		if *Hybrid && t.keys[i][0] < HOTREC { // isHot
+			t.keys[i][3] |= HOTBIT
+		}
 		j = (j + 1) % len(t.accessParts)
 	}
 

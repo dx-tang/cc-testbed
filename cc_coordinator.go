@@ -2,7 +2,6 @@ package testbed
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -12,13 +11,6 @@ import (
 
 	"github.com/totemtang/cc-testbed/classifier"
 	"github.com/totemtang/cc-testbed/clog"
-)
-
-// Number of Loaders for Index Partitioning
-// Number of Mergers for Index Merging
-var (
-	NLOADERS = flag.Int("loaders", 1, "Number of Loaders")
-	NMERGERS = flag.Int("mergers", 1, "Number of Mergers")
 )
 
 type TestCase struct {
@@ -403,10 +395,10 @@ func (coord *Coordinator) process() {
 				}
 				return
 			} else if coord.rc%coord.perTest == 0 {
-				if *SysType != ADAPTIVE || coord.curTest == 0 {
-					clog.Info("False Switch")
-					coord.switchCC(coord.mode)
-				}
+				// if *SysType != ADAPTIVE || coord.curTest == 0 {
+				// 	clog.Info("False Switch")
+				// 	coord.switchCC(coord.mode)
+				// }
 
 				coord.curTest++
 				tc := &coord.testCases[coord.curTest]

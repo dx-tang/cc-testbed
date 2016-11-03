@@ -134,7 +134,7 @@ func (m *MTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 		}
 		rec.GetValue(val, colNum)
 		return rec, val, true, nil
-	} else if m.partToExec[partNum] == LOCKING { // 2PL
+	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 { // 2PL
 		var ok bool = false
 		var wr *WriteRec
 		var rr *ReadRec
@@ -315,7 +315,7 @@ func (m *MTransaction) WriteValue(tableID int, k Key, partNum int, val Value, co
 		t.wRecs[n].isDelta = t.wRecs[n].isDelta[0:1]
 		t.wRecs[n].isDelta[0] = isDelta
 		return nil
-	} else if m.partToExec[partNum] == LOCKING {
+	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
 		var ok bool = false
 		var wr *WriteRec
 		var rr *ReadRec
@@ -503,7 +503,7 @@ func (m *MTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record)
 		t.iRecs[n].partNum = partNum
 		t.iRecs[n].rec = rec
 
-	} else if m.partToExec[partNum] == LOCKING {
+	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
 		t := &m.lockTrack[tableID]
 		n := len(t.iRecs)
 		t.iRecs = t.iRecs[0 : n+1]
@@ -539,7 +539,7 @@ func (m *MTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 			return nil, err
 		}
 		return rec, err
-	} else if m.partToExec[partNum] == LOCKING {
+	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
 		var rec Record
 		var err error
 		w := m.w

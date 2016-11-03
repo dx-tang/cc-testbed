@@ -3,7 +3,6 @@ package testbed
 import (
 	"bufio"
 	"errors"
-	"flag"
 	"os"
 	"strconv"
 	"strings"
@@ -72,11 +71,6 @@ var (
 
 type BTYPE int // Basic types: int64, float64, string
 type TID uint64
-
-var NumPart = flag.Int("ncores", 2, "number of partitions; equals to the number of cores")
-var SysType = flag.Int("sys", PARTITION, "System Type we will use")
-var SpinLock = flag.Bool("spinlock", true, "Use spinlock or mutexlock")
-var NoWait = flag.Bool("nw", true, "Use Waitdie or NoWait for 2PL")
 
 type RWMutexPad struct {
 	padding1 [PADDING]byte

@@ -273,6 +273,14 @@ func (or *ORecord) DeltaValue(val Value, col int) {
 	or.tuple.DeltaValue(val, col)
 }
 
+func (or *ORecord) SetHot(hot bool) {
+
+}
+
+func (or *ORecord) GetHot() bool {
+	return false
+}
+
 // Dummy Record
 type DRecord struct {
 	padding1 [PADDING]byte
@@ -358,6 +366,14 @@ func (dr *DRecord) SetTuple(t Tuple) {
 
 func (dr *DRecord) DeltaValue(val Value, col int) {
 	clog.Error("Dummy mode does not support DeltaValue Operation")
+}
+
+func (dr *DRecord) SetHot(hot bool) {
+
+}
+
+func (dr *DRecord) GetHot() bool {
+	return false
 }
 
 type LRecord struct {
@@ -511,6 +527,7 @@ type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
 	mixLock  mixlock.MixLock
+	isHot    bool
 	tuple    Tuple
 	cd       ConfDetector
 	table    Table

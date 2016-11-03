@@ -153,8 +153,14 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		}
 	} else if *SysType == ADAPTIVE {
 		w.E = w.ExecPool[ADAPTIVE]
-		for i := 0; i < len(w.partToExec); i++ {
-			w.partToExec[i] = int(wc[i].protocol)
+		if *Hybrid {
+			for i := 0; i < len(w.partToExec); i++ {
+				w.partToExec[i] = -1
+			}
+		} else {
+			for i := 0; i < len(w.partToExec); i++ {
+				w.partToExec[i] = int(wc[i].protocol)
+			}
 		}
 	} else {
 		clog.Error("System Type %v Not Supported Yet\n", *SysType)
