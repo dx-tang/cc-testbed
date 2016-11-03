@@ -31,12 +31,12 @@ func StartMTransaction(w *Worker, nTables int, wc []WorkerConfig) *MTransaction 
 
 	for i := 0; i < len(wc); i++ {
 		if *Hybrid {
-			for i := 0; i < len(w.partToExec); i++ {
-				w.partToExec[i] = -1
+			for i := 0; i < len(partToExec); i++ {
+				partToExec[i] = -1
 			}
 		} else {
-			for i := 0; i < len(w.partToExec); i++ {
-				w.partToExec[i] = int(wc[i].protocol)
+			for i := 0; i < len(partToExec); i++ {
+				partToExec[i] = int(wc[i].protocol)
 			}
 		}
 	}
