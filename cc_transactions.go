@@ -1187,7 +1187,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 		// 	isRead = false
 		// }
 
-		if part%2 == 0 {
+		if k[0]%10 != 0 {
 			isRead = true
 		} else {
 			isRead = false

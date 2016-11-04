@@ -514,7 +514,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	for i := 0; i < len(t.keys); i++ {
 		t.parts[i] = t.accessParts[j]
 		t.keys[i] = gen.GetKey(SINGLE, t.parts[i])
-		if *Hybrid && t.keys[i][0] < HOTREC && t.parts[i]%2 != 0 { // isHot
+		if *Hybrid && t.keys[i][0] < HOTREC && t.keys[i][0]%10 == 0 { // isHot
 			t.keys[i][3] |= HOTBIT
 		}
 		j = (j + 1) % len(t.accessParts)
