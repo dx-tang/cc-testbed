@@ -35,6 +35,7 @@ var prof = flag.Bool("prof", false, "whether perform CPU profile")
 var sr = flag.Int("sr", 500, "Sample Rate")
 var isPart = flag.Bool("p", true, "Whether index partition")
 var dl = flag.String("dl", "layout.conf", "data layout")
+var hotrec = flag.Int("hr", 100, "Number of Hot Records")
 
 const (
 	TRIALS  = 3
@@ -113,6 +114,8 @@ func main() {
 	if !*testbed.Report {
 		clog.Error("Report Needed for Adaptive CC Execution\n")
 	}
+
+	testbed.HOTREC = *hotrec * (*testbed.NumPart)
 
 	testbed.InitGlobalBuffer()
 
