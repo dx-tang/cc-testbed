@@ -19,7 +19,7 @@ const (
 )
 
 type ETransaction interface {
-	Reset(t Trans)
+	Reset(t Trans, hasPCC bool, hasOCC bool, hasLocking bool)
 	ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error)
 	WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error
 	MayWrite(tableID int, k Key, partNum int, req *LockReq) error
@@ -99,7 +99,7 @@ func StartPTransaction(w *Worker, tableCount int) *PTransaction {
 	return tx
 }
 
-func (p *PTransaction) Reset(t Trans) {
+func (p *PTransaction) Reset(t Trans, hasPCC bool, hasOCC bool, hasLocking bool) {
 
 }
 
@@ -531,7 +531,7 @@ func StartOTransaction(w *Worker, tableCount int) *OTransaction {
 	return tx
 }
 
-func (o *OTransaction) Reset(t Trans) {
+func (o *OTransaction) Reset(t Trans, hasPCC bool, hasOCC bool, hasLocking bool) {
 
 	o.maxSeen = TID(0)
 
@@ -1254,7 +1254,7 @@ func (l *LTransaction) getWriteRec() *WriteRec {
 	return nil
 }
 
-func (l *LTransaction) Reset(t Trans) {
+func (l *LTransaction) Reset(t Trans, hasPCC bool, hasOCC bool, hasLocking bool) {
 	l.maxSeen = TID(0)
 }
 

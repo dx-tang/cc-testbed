@@ -15,6 +15,9 @@ type MTransaction struct {
 	occMaxSeen  TID
 	lockMaxSeen TID
 	partToExec  []int
+	hasPCC      bool
+	hasOCC      bool
+	hasLocking  bool
 	padding     [PADDING]byte
 }
 
@@ -114,9 +117,12 @@ func StartMTransaction(w *Worker, nTables int, wc []WorkerConfig) *MTransaction 
 	return tx
 }
 
-func (m *MTransaction) Reset(t Trans) {
+func (m *MTransaction) Reset(t Trans, hasPCC bool, hasOCC bool, hasLocking bool) {
 	m.occMaxSeen = TID(0)
 	m.lockMaxSeen = TID(0)
+	m.hasOCC = hasOCC
+	m.hasPCC = hasPCC
+	m.hasLocking = hasLocking
 }
 
 func (m *MTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
@@ -628,81 +634,86 @@ func (m *MTransaction) Abort(req *LockReq) TID {
 
 		// Release Writes
 		// PCC
-		for j := 0; j < len(pccT.wRecs); j++ {
-			wr := &pccT.wRecs[j]
-			wr.vals = wr.vals[:0]
-			wr.cols = wr.cols[:0]
-			wr.isDelta = wr.isDelta[:0]
-		}
-		pccT.wRecs = pccT.wRecs[0:0]
-
-		// LOCKING
-		for j, _ := range lockT.rRecs {
-			rr := &lockT.rRecs[j]
-			if rr.exist {
-				//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
-				rr.rec.RUnlock(req)
+		if m.hasPCC {
+			for j := 0; j < len(pccT.wRecs); j++ {
+				wr := &pccT.wRecs[j]
+				wr.vals = wr.vals[:0]
+				wr.cols = wr.cols[:0]
+				wr.isDelta = wr.isDelta[:0]
 			}
+			pccT.wRecs = pccT.wRecs[0:0]
 		}
-		lockT.rRecs = lockT.rRecs[:0]
-		for j, _ := range lockT.wRecs {
-			wr := &lockT.wRecs[j]
-			wr.vals = wr.vals[:0]
-			wr.cols = wr.cols[:0]
-			wr.isDelta = wr.isDelta[:0]
-			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
-			wr.rec.WUnlock(req, m.lockMaxSeen)
-		}
-		lockT.wRecs = lockT.wRecs[:0]
 
-		// OCC
-		occT.rKeys = occT.rKeys[:0]
-		for j := 0; j < len(occT.wKeys); j++ {
-			wk := &occT.wKeys[j]
-			if wk.locked {
-				wk.rec.Unlock(m.occMaxSeen)
+		// LOCKING
+		if m.hasLocking {
+			for j, _ := range lockT.rRecs {
+				rr := &lockT.rRecs[j]
+				if rr.exist {
+					//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
+					rr.rec.RUnlock(req)
+				}
 			}
-		}
-		occT.wKeys = occT.wKeys[:0]
+			lockT.rRecs = lockT.rRecs[:0]
+			for j, _ := range lockT.wRecs {
+				wr := &lockT.wRecs[j]
+				wr.vals = wr.vals[:0]
+				wr.cols = wr.cols[:0]
+				wr.isDelta = wr.isDelta[:0]
+				//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
+				wr.rec.WUnlock(req, m.lockMaxSeen)
+			}
+			lockT.wRecs = lockT.wRecs[:0]
 
-		// For Insert
-		// PCC
-		for j := 0; j < len(pccT.iRecs); j++ {
-			s.ReleaseInsert(i, pccT.iRecs[j].k, pccT.iRecs[j].partNum)
 		}
-		pccT.iRecs = pccT.iRecs[0:0]
-
-		// LOCKING
-		for j := 0; j < len(lockT.iRecs); j++ {
-			s.ReleaseInsert(i, lockT.iRecs[j].k, lockT.iRecs[j].partNum)
-		}
-		lockT.iRecs = lockT.iRecs[:0]
 
 		// OCC
-		for j := 0; j < len(occT.iRecs); j++ {
-			s.ReleaseInsert(i, occT.iRecs[j].k, occT.iRecs[j].partNum)
+		if m.hasOCC {
+			occT.rKeys = occT.rKeys[:0]
+			for j := 0; j < len(occT.wKeys); j++ {
+				wk := &occT.wKeys[j]
+				if wk.locked {
+					wk.rec.Unlock(m.occMaxSeen)
+				}
+			}
+			occT.wKeys = occT.wKeys[:0]
 		}
-		occT.iRecs = occT.iRecs[:0]
 
-		// For Delete
+		// For Insert and Delete
 		// PCC
-		for j := 0; j < len(pccT.dRecs); j++ {
-			s.ReleaseDelete(i, pccT.dRecs[j].k, pccT.dRecs[j].partNum)
+		if m.hasPCC {
+			for j := 0; j < len(pccT.iRecs); j++ {
+				s.ReleaseInsert(i, pccT.iRecs[j].k, pccT.iRecs[j].partNum)
+			}
+			pccT.iRecs = pccT.iRecs[0:0]
+			for j := 0; j < len(pccT.dRecs); j++ {
+				s.ReleaseDelete(i, pccT.dRecs[j].k, pccT.dRecs[j].partNum)
+			}
+			pccT.dRecs = pccT.dRecs[0:0]
 		}
-		pccT.dRecs = pccT.dRecs[0:0]
 
 		// LOCKING
-		for j := 0; j < len(lockT.dRecs); j++ {
-			s.ReleaseDelete(i, lockT.dRecs[j].k, lockT.dRecs[j].partNum)
+		if m.hasLocking {
+			for j := 0; j < len(lockT.iRecs); j++ {
+				s.ReleaseInsert(i, lockT.iRecs[j].k, lockT.iRecs[j].partNum)
+			}
+			lockT.iRecs = lockT.iRecs[:0]
+			for j := 0; j < len(lockT.dRecs); j++ {
+				s.ReleaseDelete(i, lockT.dRecs[j].k, lockT.dRecs[j].partNum)
+			}
+			lockT.dRecs = lockT.dRecs[:0]
 		}
-		lockT.dRecs = lockT.dRecs[:0]
 
 		// OCC
-		for j := 0; j < len(occT.dRecs); j++ {
-			s.ReleaseDelete(i, occT.dRecs[j].k, occT.dRecs[j].partNum)
+		if m.hasOCC {
+			for j := 0; j < len(occT.iRecs); j++ {
+				s.ReleaseInsert(i, occT.iRecs[j].k, occT.iRecs[j].partNum)
+			}
+			occT.iRecs = occT.iRecs[:0]
+			for j := 0; j < len(occT.dRecs); j++ {
+				s.ReleaseDelete(i, occT.dRecs[j].k, occT.dRecs[j].partNum)
+			}
+			occT.dRecs = occT.dRecs[:0]
 		}
-		occT.dRecs = occT.dRecs[:0]
-
 	}
 
 	return 0
@@ -712,198 +723,211 @@ func (m *MTransaction) Commit(req *LockReq, isHome bool) TID {
 	// OCC Validate
 	// Phase 1: Lock all write keys
 	//for _, wk := range o.wKeys {
+	var tid TID
 
-	for j := 0; j < len(m.occTrack); j++ {
-		t := &m.occTrack[j]
-		if occ_wait { // If wait on writes, sort by keys
-			for i := 1; i < len(t.wKeys); i++ {
-				wk := t.wKeys[i]
-				p := i - 1
-				for p >= 0 && Compare(wk.k, t.wKeys[p].k) < 0 {
-					t.wKeys[p+1] = t.wKeys[p]
-					p--
+	if m.hasOCC {
+		for j := 0; j < len(m.occTrack); j++ {
+			t := &m.occTrack[j]
+			if occ_wait { // If wait on writes, sort by keys
+				for i := 1; i < len(t.wKeys); i++ {
+					wk := t.wKeys[i]
+					p := i - 1
+					for p >= 0 && Compare(wk.k, t.wKeys[p].k) < 0 {
+						t.wKeys[p+1] = t.wKeys[p]
+						p--
+					}
+					t.wKeys[p+1] = wk
 				}
-				t.wKeys[p+1] = wk
+			}
+
+			for i := 0; i < len(t.wKeys); i++ {
+				wk := &t.wKeys[i]
+				var former TID
+				var ok bool
+
+				if occ_wait {
+					for !ok {
+						ok, former = wk.rec.Lock()
+					}
+				} else {
+					ok, former = wk.rec.Lock()
+					if !ok {
+						m.w.NStats[NLOCKABORTS]++
+						return m.Abort(req)
+					}
+				}
+				wk.locked = true
+				if former > m.occMaxSeen {
+					m.occMaxSeen = former
+				}
 			}
 		}
 
-		for i := 0; i < len(t.wKeys); i++ {
-			wk := &t.wKeys[i]
-			var former TID
-			var ok bool
+		tid = m.w.commitTID()
+		if tid <= m.occMaxSeen {
+			m.w.ResetTID(m.occMaxSeen)
+			tid = m.w.commitTID()
+			if tid < m.occMaxSeen {
+				clog.Error("%v MaxSeen %v, reset TID but %v<%v", m.w.ID, m.occMaxSeen, tid, m.occMaxSeen)
+			}
+		}
 
-			if occ_wait {
-				for !ok {
-					ok, former = wk.rec.Lock()
+		// Phase 2: Check conflicts
+		//for k, rk := range o.rKeys {
+		for j := 0; j < len(m.occTrack); j++ {
+			t := &m.occTrack[j]
+			for i := 0; i < len(t.rKeys); i++ {
+				k := t.rKeys[i].k
+				rk := &t.rKeys[i]
+				//verify whether TID has changed
+				var ok1, ok2 bool
+				var tmpTID TID
+				ok1, tmpTID = rk.rec.IsUnlocked()
+				if tmpTID != rk.last {
+					m.w.NStats[NRCHANGEABORTS]++
+					return m.Abort(req)
 				}
-			} else {
-				ok, former = wk.rec.Lock()
-				if !ok {
-					m.w.NStats[NLOCKABORTS]++
+
+				// Check whether read key is not in wKeys
+				ok2 = false
+				for p := 0; p < len(t.wKeys); p++ {
+					wk := &t.wKeys[p]
+					if wk.k == k {
+						ok2 = true
+						break
+					}
+				}
+
+				if !ok1 && !ok2 {
+					m.w.NStats[NRWABORTS]++
 					return m.Abort(req)
 				}
 			}
-			wk.locked = true
-			if former > m.occMaxSeen {
-				m.occMaxSeen = former
-			}
 		}
 	}
 
-	tid := m.w.commitTID()
-	if tid <= m.occMaxSeen {
-		m.w.ResetTID(m.occMaxSeen)
-		tid = m.w.commitTID()
-		if tid < m.occMaxSeen {
-			clog.Error("%v MaxSeen %v, reset TID but %v<%v", m.w.ID, m.occMaxSeen, tid, m.occMaxSeen)
-		}
-	}
-
-	// Phase 2: Check conflicts
-	//for k, rk := range o.rKeys {
-	for j := 0; j < len(m.occTrack); j++ {
-		t := &m.occTrack[j]
-		for i := 0; i < len(t.rKeys); i++ {
-			k := t.rKeys[i].k
-			rk := &t.rKeys[i]
-			//verify whether TID has changed
-			var ok1, ok2 bool
-			var tmpTID TID
-			ok1, tmpTID = rk.rec.IsUnlocked()
-			if tmpTID != rk.last {
-				m.w.NStats[NRCHANGEABORTS]++
-				return m.Abort(req)
-			}
-
-			// Check whether read key is not in wKeys
-			ok2 = false
-			for p := 0; p < len(t.wKeys); p++ {
-				wk := &t.wKeys[p]
-				if wk.k == k {
-					ok2 = true
-					break
-				}
-			}
-
-			if !ok1 && !ok2 {
-				m.w.NStats[NRWABORTS]++
-				return m.Abort(req)
-			}
-		}
-	}
-
-	// PCC Commit
 	s := m.Store()
 	w := m.w
 	//for i := 0; i < len(p.tt); i++ {
 	for i := len(m.pccTrack) - 1; i >= 0; i-- {
-		pccT := &m.pccTrack[i]
-		occT := &m.occTrack[i]
-		lockT := &m.lockTrack[i]
 
 		// PCC
-		if len(pccT.iRecs) != 0 {
-			s.InsertRecord(i, pccT.iRecs, w.iaAR[i])
-		}
-		pccT.iRecs = pccT.iRecs[0:0]
+		if m.hasPCC {
+			pccT := &m.pccTrack[i]
+			if len(pccT.iRecs) != 0 {
+				s.InsertRecord(i, pccT.iRecs, w.iaAR[i])
+			}
+			pccT.iRecs = pccT.iRecs[0:0]
 
-		for j := 0; j < len(pccT.dRecs); j++ {
-			s.DeleteRecord(i, pccT.dRecs[j].k, pccT.dRecs[j].partNum)
+			for j := 0; j < len(pccT.dRecs); j++ {
+				s.DeleteRecord(i, pccT.dRecs[j].k, pccT.dRecs[j].partNum)
+			}
+			pccT.dRecs = pccT.dRecs[0:0]
 		}
-		pccT.dRecs = pccT.dRecs[0:0]
 
 		// LOCK
-		if len(lockT.iRecs) != 0 {
-			s.InsertRecord(i, lockT.iRecs, w.iaAR[i])
-		}
-		lockT.iRecs = lockT.iRecs[:0]
+		if m.hasLocking {
+			lockT := &m.lockTrack[i]
+			if len(lockT.iRecs) != 0 {
+				s.InsertRecord(i, lockT.iRecs, w.iaAR[i])
+			}
+			lockT.iRecs = lockT.iRecs[:0]
 
-		for j := 0; j < len(lockT.dRecs); j++ {
-			s.DeleteRecord(i, lockT.dRecs[j].k, lockT.dRecs[j].partNum)
+			for j := 0; j < len(lockT.dRecs); j++ {
+				s.DeleteRecord(i, lockT.dRecs[j].k, lockT.dRecs[j].partNum)
+			}
+			lockT.dRecs = lockT.dRecs[:0]
 		}
-		lockT.dRecs = lockT.dRecs[:0]
 
 		// OCC
-		if len(occT.iRecs) != 0 {
-			s.InsertRecord(i, occT.iRecs, w.iaAR[i])
-		}
-		occT.iRecs = occT.iRecs[:0]
+		if m.hasOCC {
+			occT := &m.occTrack[i]
+			if len(occT.iRecs) != 0 {
+				s.InsertRecord(i, occT.iRecs, w.iaAR[i])
+			}
+			occT.iRecs = occT.iRecs[:0]
 
-		for j := 0; j < len(occT.dRecs); j++ {
-			s.DeleteRecord(i, occT.dRecs[j].k, occT.dRecs[j].partNum)
+			for j := 0; j < len(occT.dRecs); j++ {
+				s.DeleteRecord(i, occT.dRecs[j].k, occT.dRecs[j].partNum)
+			}
+			occT.dRecs = occT.dRecs[:0]
 		}
-		occT.dRecs = occT.dRecs[:0]
 	}
 
 	for i := len(m.pccTrack) - 1; i >= 0; i-- {
-		pccT := &m.pccTrack[i]
-		occT := &m.occTrack[i]
-		lockT := &m.lockTrack[i]
 
 		// PCC
-		for j := 0; j < len(pccT.wRecs); j++ {
-			wr := &pccT.wRecs[j]
-			//rec := s.GetRecByID(i, wr.k, wr.partNum)
-			for p := 0; p < len(wr.cols); p++ {
-				if wr.isDelta[p] {
-					wr.rec.DeltaValue(wr.vals[p], wr.cols[p])
-				} else {
-					wr.rec.SetValue(wr.vals[p], wr.cols[p])
+		if m.hasPCC {
+			pccT := &m.pccTrack[i]
+			for j := 0; j < len(pccT.wRecs); j++ {
+				wr := &pccT.wRecs[j]
+				//rec := s.GetRecByID(i, wr.k, wr.partNum)
+				for p := 0; p < len(wr.cols); p++ {
+					if wr.isDelta[p] {
+						wr.rec.DeltaValue(wr.vals[p], wr.cols[p])
+					} else {
+						wr.rec.SetValue(wr.vals[p], wr.cols[p])
+					}
 				}
+				wr.vals = wr.vals[:0]
+				wr.cols = wr.cols[:0]
+				wr.isDelta = wr.isDelta[:0]
 			}
-			wr.vals = wr.vals[:0]
-			wr.cols = wr.cols[:0]
-			wr.isDelta = wr.isDelta[:0]
+			pccT.wRecs = pccT.wRecs[0:0]
 		}
-		pccT.wRecs = pccT.wRecs[0:0]
 
 		// LOCKING
-		for j, _ := range lockT.rRecs {
-			rr := &lockT.rRecs[j]
-			if rr.exist {
-				//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
-				rr.rec.RUnlock(req)
-			}
-		}
-		lockT.rRecs = lockT.rRecs[:0]
-		for j, _ := range lockT.wRecs {
-			wr := &lockT.wRecs[j]
-			for p := 0; p < len(wr.vals); p++ {
-				if wr.isDelta[p] {
-					wr.rec.DeltaValue(wr.vals[p], wr.cols[p])
-				} else {
-					wr.rec.SetValue(wr.vals[p], wr.cols[p])
+		if m.hasLocking {
+			lockT := &m.lockTrack[i]
+			for j, _ := range lockT.rRecs {
+				rr := &lockT.rRecs[j]
+				if rr.exist {
+					//clog.Info("Worker %v: Trans %v RUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(rr.k, 0))
+					rr.rec.RUnlock(req)
 				}
 			}
-			wr.vals = wr.vals[:0]
-			wr.cols = wr.cols[:0]
-			wr.isDelta = wr.isDelta[:0]
-			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
-			wr.rec.WUnlock(req, m.lockMaxSeen)
+			lockT.rRecs = lockT.rRecs[:0]
+			for j, _ := range lockT.wRecs {
+				wr := &lockT.wRecs[j]
+				for p := 0; p < len(wr.vals); p++ {
+					if wr.isDelta[p] {
+						wr.rec.DeltaValue(wr.vals[p], wr.cols[p])
+					} else {
+						wr.rec.SetValue(wr.vals[p], wr.cols[p])
+					}
+				}
+				wr.vals = wr.vals[:0]
+				wr.cols = wr.cols[:0]
+				wr.isDelta = wr.isDelta[:0]
+				//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
+				wr.rec.WUnlock(req, m.lockMaxSeen)
+			}
+			lockT.wRecs = lockT.wRecs[:0]
 		}
-		lockT.wRecs = lockT.wRecs[:0]
 
 		// OCC
-		for i, _ := range occT.wKeys {
-			wk := &occT.wKeys[i]
-			for j := 0; j < len(wk.vals); j++ {
-				if wk.isDelta[j] {
-					wk.rec.DeltaValue(wk.vals[j], wk.cols[j])
-				} else {
-					wk.rec.SetValue(wk.vals[j], wk.cols[j])
+		if m.hasOCC {
+			occT := &m.occTrack[i]
+			for i, _ := range occT.wKeys {
+				wk := &occT.wKeys[i]
+				for j := 0; j < len(wk.vals); j++ {
+					if wk.isDelta[j] {
+						wk.rec.DeltaValue(wk.vals[j], wk.cols[j])
+					} else {
+						wk.rec.SetValue(wk.vals[j], wk.cols[j])
+					}
 				}
+
+				wk.vals = wk.vals[:0]
+				wk.cols = wk.cols[:0]
+				wk.isDelta = wk.isDelta[:0]
+
+				wk.rec.Unlock(tid)
+				wk.locked = false
 			}
-
-			wk.vals = wk.vals[:0]
-			wk.cols = wk.cols[:0]
-			wk.isDelta = wk.isDelta[:0]
-
-			wk.rec.Unlock(tid)
-			wk.locked = false
+			occT.rKeys = occT.rKeys[:0]
+			occT.wKeys = occT.wKeys[:0]
 		}
-		occT.rKeys = occT.rKeys[:0]
-		occT.wKeys = occT.wKeys[:0]
-
 	}
 
 	return 1

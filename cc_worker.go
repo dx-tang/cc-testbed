@@ -85,6 +85,9 @@ type Worker struct {
 	preIAAR      []IndexAlloc
 	partitioner  []Partitioner
 	partToExec   []int
+	hasOCC       bool
+	hasPCC       bool
+	hasLock      bool
 	padding2     [PADDING]byte
 }
 
@@ -317,7 +320,15 @@ func (w *Worker) doTxn(t Trans) (Value, error) {
 	}
 	w.NStats[NTXN]++
 
-	w.E.Reset(t)
+	if *SysType == ADAPTIVE {
+		if *Hybrid {
+			w.E.Reset(t, false, true, true)
+		} else {
+			w.E.Reset(t, w.hasPCC, w.hasOCC, w.hasLock)
+		}
+	} else {
+		w.E.Reset(t, false, false, false)
+	}
 
 	x, err := w.txns[txn](t, w.E)
 
@@ -381,9 +392,18 @@ func (w *Worker) One(t Trans) (Value, error) {
 			w.NStats[NCROSSTXN]++
 		}
 
+		w.hasOCC = false
+		w.hasPCC = false
+		w.hasLock = false
+
 		for _, p := range ap {
 			if w.partToExec[p] == PARTITION {
+				w.hasPCC = true
 				s.spinLock[p].Lock()
+			} else if w.partToExec[p] == OCC {
+				w.hasOCC = true
+			} else {
+				w.hasLock = true
 			}
 		}
 	}
