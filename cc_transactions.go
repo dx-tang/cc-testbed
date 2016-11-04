@@ -1181,13 +1181,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 		k = singleTrans.keys[i]
 		part = singleTrans.parts[i]
 
-		// if singleTrans.rnd.Intn(100) < singleTrans.rr {
-		// 	isRead = true
-		// } else {
-		// 	isRead = false
-		// }
-
-		if k[0]%10 != 0 {
+		if singleTrans.rnd.Intn(100) < singleTrans.rr {
 			isRead = true
 		} else {
 			isRead = false
