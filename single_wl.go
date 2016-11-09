@@ -348,6 +348,7 @@ type SingleTransGen struct {
 	start           []int
 	end             []int
 	partRnd         *rand.Rand
+	protocol        int
 	padding2        [PADDING]byte
 }
 
@@ -396,7 +397,11 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	t.TXN = txn + SINGLEBASE
 
 	if *SysType == ADAPTIVE && !*Hybrid {
-		pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
+		if s.protocol == PARTITION {
+			pi = s.partIndex
+		} else {
+			pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
+		}
 	} else {
 		if isPartAlign {
 			pi = s.partIndex
@@ -881,5 +886,6 @@ func (singleWL *SingelWorkload) MixConfig(wc []WorkerConfig) {
 			tg.clusterNPart[j] = tg.end[j] - tg.start[j] + 1
 			tg.otherNPart[j] = *NumPart - tg.clusterNPart[j]
 		}
+		tg.protocol = int(wc[i].protocol)
 	}
 }
