@@ -384,7 +384,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	//nParts := s.nParts
 	isPartAlign := s.isPartAlign
 	tlen := s.tlen
-	mp := s.mp
+	//mp := s.mp
 
 	txn := rnd.Intn(100)
 	for i, v := range s.transPercentage {
@@ -410,6 +410,59 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 		}
 	}
 
+	// 100% PCC
+	t.accessParts = t.accessParts[:3]
+	if cr == 0 {
+		pi = 0
+		t.accessParts[0] = pi
+		t.accessParts[1] = pi + 1
+		t.accessParts[2] = pi + 2
+	} else if cr == 1 { // 100% OCC
+		pi = 10
+		t.accessParts[0] = pi
+		t.accessParts[1] = pi + 1
+		t.accessParts[2] = pi + 2
+	} else if cr == 2 { // 100% 2PL
+		pi = 20
+		t.accessParts[0] = pi
+		t.accessParts[1] = pi + 1
+		t.accessParts[2] = pi + 2
+	} else if cr == 3 { //50% PCC + 50% OCC
+		if rnd.Intn(100) < 50 {
+			t.accessParts[0] = 0
+			t.accessParts[1] = 1
+			t.accessParts[2] = 10
+		} else {
+			t.accessParts[0] = 0
+			t.accessParts[1] = 10
+			t.accessParts[2] = 11
+		}
+	} else if cr == 4 { // 50% PCC + 50% 2PL
+		if rnd.Intn(100) < 50 {
+			t.accessParts[0] = 0
+			t.accessParts[1] = 1
+			t.accessParts[2] = 20
+		} else {
+			t.accessParts[0] = 0
+			t.accessParts[1] = 20
+			t.accessParts[2] = 21
+		}
+	} else if cr == 5 { // 50% OCC + 50% 2PL
+		if rnd.Intn(100) < 50 {
+			t.accessParts[0] = 10
+			t.accessParts[1] = 11
+			t.accessParts[2] = 20
+		} else {
+			t.accessParts[0] = 10
+			t.accessParts[1] = 20
+			t.accessParts[2] = 21
+		}
+	} else { // OCC 2PL PCC mix
+		t.accessParts[0] = 0
+		t.accessParts[1] = 10
+		t.accessParts[2] = 20
+	}
+
 	t.homePart = pi
 
 	if pi == s.partIndex {
@@ -418,100 +471,100 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 		t.home = false
 	}
 
-	if rnd.Intn(100) < cr && mp > 1 {
-		//if *SysType == ADAPTIVE {
-		t.accessParts = t.accessParts[:2]
-		tmpPi := (s.end[pi] + s.partRnd.Intn(s.otherNPart[pi]) + 1) % *NumPart
-		if tmpPi > pi {
-			t.accessParts[0] = pi
-			t.accessParts[1] = tmpPi
-		} else {
-			t.accessParts[0] = tmpPi
-			t.accessParts[1] = pi
-		}
-		//}
+	// if rnd.Intn(100) < cr && mp > 1 {
+	// 	//if *SysType == ADAPTIVE {
+	// 	t.accessParts = t.accessParts[:2]
+	// 	tmpPi := (s.end[pi] + s.partRnd.Intn(s.otherNPart[pi]) + 1) % *NumPart
+	// 	if tmpPi > pi {
+	// 		t.accessParts[0] = pi
+	// 		t.accessParts[1] = tmpPi
+	// 	} else {
+	// 		t.accessParts[0] = tmpPi
+	// 		t.accessParts[1] = pi
+	// 	}
+	//}
 
-		/*else {
-			ap := nParts
-			if ap > mp {
-				ap = mp
+	/*else {
+		ap := nParts
+		if ap > mp {
+			ap = mp
+		}
+		if ap > tlen {
+			ap = tlen
+		}
+		t.accessParts = t.accessParts[:ap]
+		start := gen.GenOnePart()
+		//start := rnd.Intn(nParts)
+		end := (start + ap - 1) % nParts
+		wrap := false
+		if start >= end {
+			wrap = true
+		}
+		//clog.Info("start %v; end %v; pi %v", start, end, pi)
+		if (!wrap && pi >= start && pi < end) || (wrap && (pi >= start || pi < end)) { // The Extending Parts Includes the Home Partition
+			if start+ap <= nParts {
+				for i := 0; i < ap; i++ {
+					t.accessParts[i] = start + i
+				}
+			} else {
+				for i := 0; i < ap; i++ {
+					tmp := start + i
+					if tmp >= nParts {
+						t.accessParts[tmp-nParts] = tmp - nParts
+					} else {
+						t.accessParts[ap-nParts+start+i] = tmp
+					}
+				}
 			}
-			if ap > tlen {
-				ap = tlen
-			}
-			t.accessParts = t.accessParts[:ap]
-			start := gen.GenOnePart()
-			//start := rnd.Intn(nParts)
-			end := (start + ap - 1) % nParts
-			wrap := false
-			if start >= end {
-				wrap = true
-			}
-			//clog.Info("start %v; end %v; pi %v", start, end, pi)
-			if (!wrap && pi >= start && pi < end) || (wrap && (pi >= start || pi < end)) { // The Extending Parts Includes the Home Partition
-				if start+ap <= nParts {
-					for i := 0; i < ap; i++ {
+		} else {
+			if !wrap { // Conseculative Partitions; No Wrap
+				if pi < start { // pi to the left
+					t.accessParts[0] = pi
+					for i := 0; i < ap-1; i++ {
+						t.accessParts[i+1] = start + i
+					}
+				} else { // pi to the right
+					t.accessParts[ap-1] = pi
+					for i := 0; i < ap-1; i++ {
 						t.accessParts[i] = start + i
 					}
-				} else {
-					for i := 0; i < ap; i++ {
-						tmp := start + i
-						if tmp >= nParts {
-							t.accessParts[tmp-nParts] = tmp - nParts
-						} else {
-							t.accessParts[ap-nParts+start+i] = tmp
-						}
-					}
 				}
-			} else {
-				if !wrap { // Conseculative Partitions; No Wrap
-					if pi < start { // pi to the left
-						t.accessParts[0] = pi
-						for i := 0; i < ap-1; i++ {
-							t.accessParts[i+1] = start + i
-						}
-					} else { // pi to the right
-						t.accessParts[ap-1] = pi
-						for i := 0; i < ap-1; i++ {
-							t.accessParts[i] = start + i
-						}
-					}
-				} else { // Wrap
-					t.accessParts[ap-nParts+start-1] = pi
-					for i := 0; i < ap-1; i++ {
-						tmp := start + i
-						if tmp >= nParts {
-							t.accessParts[tmp-nParts] = tmp - nParts
-						} else {
-							t.accessParts[ap-nParts+start+i] = tmp
-						}
+			} else { // Wrap
+				t.accessParts[ap-nParts+start-1] = pi
+				for i := 0; i < ap-1; i++ {
+					tmp := start + i
+					if tmp >= nParts {
+						t.accessParts[tmp-nParts] = tmp - nParts
+					} else {
+						t.accessParts[ap-nParts+start+i] = tmp
 					}
 				}
 			}
-		}*/
-
-	} else {
-		if s.clusterNPart[pi] >= 2 {
-			t.accessParts = t.accessParts[:2]
-			var tmpPi int
-			for {
-				tmpPi = s.start[pi] + s.partRnd.Intn(s.clusterNPart[pi])
-				if tmpPi != pi {
-					break
-				}
-			}
-			if tmpPi > pi {
-				t.accessParts[0] = pi
-				t.accessParts[1] = tmpPi
-			} else {
-				t.accessParts[0] = tmpPi
-				t.accessParts[1] = pi
-			}
-		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = pi
 		}
-	}
+	}*/
+
+	// } else {
+	// 	if s.clusterNPart[pi] >= 2 {
+	// 		t.accessParts = t.accessParts[:2]
+	// 		var tmpPi int
+	// 		for {
+	// 			tmpPi = s.start[pi] + s.partRnd.Intn(s.clusterNPart[pi])
+	// 			if tmpPi != pi {
+	// 				break
+	// 			}
+	// 		}
+	// 		if tmpPi > pi {
+	// 			t.accessParts[0] = pi
+	// 			t.accessParts[1] = tmpPi
+	// 		} else {
+	// 			t.accessParts[0] = tmpPi
+	// 			t.accessParts[1] = pi
+	// 		}
+	// 	} else {
+	// 		t.accessParts = t.accessParts[:1]
+	// 		t.accessParts[0] = pi
+	// 	}
+	// }
 
 	t.keys = t.keys[:tlen]
 	t.parts = t.parts[:tlen]
