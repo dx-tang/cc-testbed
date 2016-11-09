@@ -363,11 +363,11 @@ func (coord *Coordinator) process() {
 
 			setReport(ri, summary)
 
-			for i := 1; i < len(coord.reports); i++ {
+			/*for i := 1; i < len(coord.reports); i++ {
 				ri = <-coord.reports[i]
 				fmt.Printf("%v\t%.4f\t%.4f\n", i, ri.txn-ri.aborts, REPORTPERIOD/PERMINISEC-ri.genTime.Seconds())
 				collectReport(ri, summary)
-			}
+			}*/
 
 			execTime := float64(*NumPart*REPORTPERIOD/PERMINISEC) - summary.genTime.Seconds()
 
@@ -393,9 +393,9 @@ func (coord *Coordinator) process() {
 			// Done
 			if coord.rc == coord.reportCount {
 				// Done with tests
-				for i := 0; i < len(coord.Workers); i++ {
-					coord.Workers[i].done <- true
-				}
+				//for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[0].done <- true
+				//}
 				return
 			} else if coord.rc%coord.perTest == 0 {
 				// if *SysType != ADAPTIVE || coord.curTest == 0 {
