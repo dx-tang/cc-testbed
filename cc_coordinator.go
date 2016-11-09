@@ -359,10 +359,13 @@ func (coord *Coordinator) process() {
 		select {
 		case ri = <-coord.reports[0]:
 
+			fmt.Printf("%v\t%.4f\t%.4f\n", 0, ri.txn-ri.aborts, REPORTPERIOD/PERMINISEC-ri.genTime.Seconds())
+
 			setReport(ri, summary)
 
 			for i := 1; i < len(coord.reports); i++ {
 				ri = <-coord.reports[i]
+				fmt.Printf("%v\t%.4f\t%.4f\n", i, ri.txn-ri.aborts, REPORTPERIOD/PERMINISEC-ri.genTime.Seconds())
 				collectReport(ri, summary)
 			}
 
