@@ -6,6 +6,7 @@ package testbed
 
 import (
 	"github.com/totemtang/cc-testbed/clog"
+	"runtime/debug"
 )
 
 const (
@@ -168,5 +169,7 @@ func (ht *HashTable) Get(k Key) (Record, bool) {
 		ht.latches[bucketIndex%LATCHNUM].RUnlock()
 	}
 	clog.Info("%v %v %v %v %v %v", k, bucketIndex, ht.useLatch, ht.bucket[bucketIndex].keyArray, ht.bucket[bucketIndex].cur, ht.bucketNum)
+	debug.PrintStack()
+	clog.Error("End")
 	return nil, false
 }

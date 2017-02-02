@@ -18,6 +18,28 @@ type WorkerConfig struct {
 	padding2 [PADDING]byte
 }
 
+func BuildDefaultPCC() []WorkerConfig {
+	wc := make([]WorkerConfig, *NumPart)
+	for i := int64(0); i < int64(*NumPart); i++ {
+		wc[i].ID = int(i)
+		wc[i].start = i
+		wc[i].end = i
+		wc[i].protocol = PARTITION
+	}
+	return wc
+}
+
+func BuildDefaultNonPCC() []WorkerConfig {
+	wc := make([]WorkerConfig, *NumPart)
+	for i := int64(0); i < int64(*NumPart); i++ {
+		wc[i].ID = int(i)
+		wc[i].start = i
+		wc[i].end = i
+		wc[i].protocol = OCC
+	}
+	return wc
+}
+
 func BuildWorkerConfig(f string) []WorkerConfig {
 	wc := make([]WorkerConfig, *NumPart)
 

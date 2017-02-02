@@ -25,6 +25,7 @@ type NewOrderTable struct {
 	padding1    [PADDING]byte
 	head        []*NoEntry
 	tail        []*NoEntry
+	orgHead     []*NoEntry
 	initKeys    []int
 	nKeys       int
 	isPartition bool
@@ -50,6 +51,8 @@ func MakeNewOrderTable(warehouse int, isPartition bool, useLatch []bool) *NewOrd
 	noTable.head = noTable.head[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
 	noTable.tail = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
 	noTable.tail = noTable.tail[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
+	noTable.orgHead = make([]*NoEntry, warehouse*DIST_COUNT+2*PADDINGINT64)
+	noTable.orgHead = noTable.orgHead[PADDINGINT64 : PADDINGINT64+warehouse*DIST_COUNT]
 	noTable.useLatch = make([]bool, len(useLatch))
 
 	for i := 0; i < warehouse; i++ {
@@ -63,6 +66,7 @@ func MakeNewOrderTable(warehouse int, isPartition bool, useLatch []bool) *NewOrd
 			entry.t = 0
 
 			noTable.head[i*DIST_COUNT+j] = entry
+			noTable.orgHead[i*DIST_COUNT+j] = noTable.head[i*DIST_COUNT+j]
 			noTable.tail[i*DIST_COUNT+j] = entry
 		}
 	}
@@ -121,19 +125,19 @@ func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
 
 	entry := no.head[index]
 
-	if !no.isPartition {
-		entry.rec.WLock(nil)
-	}
+	// if !no.isPartition {
+	// 	entry.rec.WLock(nil)
+	// }
 
 	if entry.h != entry.t {
 		noTuple := entry.rec.GetTuple().(*NewOrderTuple)
 		noTuple.no_o_id = entry.o_id_array[entry.h]
 		return entry.rec, nil
 	} else {
-		if !no.isPartition {
-			entry.rec.WUnlock(nil, 0)
-			no.delLock[index].Unlock()
-		}
+		// if !no.isPartition {
+		// 	entry.rec.WUnlock(nil, 0)
+		// 	no.delLock[index].Unlock()
+		// }
 		return nil, ENODEL
 	}
 }
@@ -141,7 +145,7 @@ func (no *NewOrderTable) PrepareDelete(k Key, partNum int) (Record, error) {
 func (no *NewOrderTable) ReleaseDelete(k Key, partNum int) {
 	if !no.isPartition {
 		index := k[KEY0]*DIST_COUNT + k[KEY1]
-		no.head[index].rec.WUnlock(nil, 0)
+		// no.head[index].rec.WUnlock(nil, 0)
 		no.delLock[index].Unlock()
 	}
 }
@@ -150,13 +154,17 @@ func (no *NewOrderTable) DeleteRecord(k Key, partNum int) error {
 	index := k[KEY0]*DIST_COUNT + k[KEY1]
 	entry := no.head[index]
 	entry.h++
-	if entry.h == CAP_NEWORDER_ENTRY && entry.next != nil { //No Data in this entry
-		no.head[index] = entry.next
-		entry.next = nil
+	if entry.h == CAP_NEWORDER_ENTRY { //All records delected in this entry
+		if entry.next != nil {
+			no.head[index] = entry.next
+		} else {
+			no.head[index].h = 0
+			no.tail[index].t = 0
+		}
 	}
 
 	if !no.isPartition {
-		entry.rec.WUnlock(nil, 0)
+		// entry.rec.WUnlock(nil, 0)
 		no.delLock[index].Unlock()
 	}
 
@@ -267,6 +275,8 @@ func (no *NewOrderTable) MergeLoad(table Table, ia IndexAlloc, begin int, end in
 func (no *NewOrderTable) Reset() {
 	for i := 0; i < len(no.head); i++ {
 		initKeys := no.initKeys[i]
+		no.head[i] = no.orgHead[i]
+		no.head[i].h = 0
 		head := no.head[i]
 		for {
 			if initKeys >= CAP_NEWORDER_ENTRY {
@@ -1372,7 +1382,7 @@ func (ol *OrderLineTable) GetRecByID(k Key, partNum int) (Record, Bucket, uint64
 	for tail != nil {
 		for i := tail.t - 1; i >= 0; i-- {
 			if tail.keys[i] == k {
-				if ol.useLatch {
+				if ol.data[partNum].useLatch {
 					bucket.RUnlock()
 				}
 				return tail.oRecs[i], nil, 0, nil

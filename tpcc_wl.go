@@ -34,7 +34,7 @@ var lastToIndex map[string]int
 const (
 	MAXOLCNT             = 15
 	MINOLCNT             = 5
-	TPCCTRANSNUM         = 6
+	TPCCTRANSNUM         = 7
 	TPCCTABLENUM         = 9
 	C_ID_PER_DIST        = 3000
 	C_LAST_PER_DIST      = 1000
@@ -176,9 +176,14 @@ type OrderStatusTrans struct {
 type DeliveryTrans struct {
 	padding1 [PADDING]byte
 	BaseTrans
-	w_id         int
-	o_carrier_id int
-	padding2     [PADDING]byte
+	w_id            int
+	d_id            int
+	o_carrier_id    int
+	wb_o_carrier    IntValue
+	wb_ol_amount    FloatValue
+	wb_delivery_cnt IntValue
+	wb_date_ar      [MAXOLCNT]DateValue
+	padding2        [PADDING]byte
 }
 
 // Even Distribution D_ID
@@ -274,6 +279,8 @@ func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
 		t = genOrderStatusTrans(tg, txn, true)
 	case TPCC_STOCKLEVEL:
 		t = genStockLevelTrans(tg, txn)
+	case TPCC_DELIVERY:
+		t = genDeliveryTrans(tg, txn)
 	default:
 		clog.Error("TPCC does not support transaction %v\n", txn)
 	}
@@ -306,7 +313,11 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 
 	var tmpPi int
 	if *SysType == ADAPTIVE && !*Hybrid {
-		t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		if isPartAlign {
+			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	} else {
 		if isPartAlign {
 			t.w_id = pi
@@ -398,13 +409,17 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	w_id_gen := tg.w_id_gen
 
 	pi := tg.partIndex
-	isPart := tg.isPartition
+	isPartAlign := tg.partAlign
 	cr := int(tg.cr)
 
 	if *SysType == ADAPTIVE {
-		t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		if isPartAlign {
+			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	} else {
-		if isPart {
+		if isPartAlign {
 			t.w_id = pi
 		} else {
 			t.w_id = w_id_gen.GetWholeRank()
@@ -517,9 +532,13 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	t.isLast = isLast
 
 	if *SysType == ADAPTIVE {
-		t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		if tg.partAlign {
+			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	} else {
-		if tg.isPartition {
+		if tg.partAlign {
 			t.w_id = pi
 		} else {
 			t.w_id = w_id_gen.GetWholeRank()
@@ -588,9 +607,13 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
 	t.TXN = txn
 
 	if *SysType == ADAPTIVE {
-		t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		if tg.partAlign {
+			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
 	} else {
-		if tg.isPartition {
+		if tg.partAlign {
 			t.w_id = tg.partIndex
 		} else {
 			t.w_id = w_id_gen.GetWholeRank()
@@ -608,6 +631,47 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
 	t.d_id = rnd.Intn(DIST_COUNT)
 	t.threshold = 10 + rnd.Intn(11)
 	t.i_id_ar = t.i_id_ar[:0]
+
+	return t
+}
+
+func genDeliveryTrans(tg *TPCCTransGen, txn int) Trans {
+	txnIndex := txn - TPCC_BASE - 1
+	t := tg.transBuf[txnIndex][tg.head[txnIndex]].(*DeliveryTrans)
+	tg.head[txnIndex] = (tg.head[txnIndex] + 1) % QUEUESIZE
+
+	w_id_gen := tg.w_id_gen
+
+	rnd := &tg.rnd
+	pi := tg.partIndex
+	t.accessParts = t.accessParts[:1]
+	t.accessParts[0] = pi
+	t.TXN = txn
+
+	if *SysType == ADAPTIVE {
+		if tg.partAlign {
+			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
+	} else {
+		if tg.partAlign {
+			t.w_id = tg.partIndex
+		} else {
+			t.w_id = w_id_gen.GetWholeRank()
+		}
+	}
+
+	t.homePart = t.w_id
+
+	if t.homePart == pi {
+		t.home = true
+	} else {
+		t.home = false
+	}
+
+	t.d_id = rnd.Intn(DIST_COUNT)
+	t.o_carrier_id = -1
 
 	return t
 }
@@ -833,6 +897,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 			tg.transBuf[TPCC_ORDERSTATUS_ID-TPCC_NEWORDER][j] = makeOrderStatusTrans(tg.rnd, i)
 			tg.transBuf[TPCC_ORDERSTATUS_LAST-TPCC_NEWORDER][j] = makeOrderStatusTrans(tg.rnd, i)
 			tg.transBuf[TPCC_STOCKLEVEL-TPCC_NEWORDER][j] = makeStockLevelTrans(tg.rnd, i)
+			tg.transBuf[TPCC_DELIVERY-TPCC_NEWORDER][j] = makeDeliveryTrans(tg.rnd, i)
 		}
 
 		tg.tail[TPCC_NEWORDER-TPCC_NEWORDER] = -1
@@ -841,6 +906,7 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		tg.tail[TPCC_ORDERSTATUS_ID-TPCC_NEWORDER] = -1
 		tg.tail[TPCC_ORDERSTATUS_LAST-TPCC_NEWORDER] = -1
 		tg.tail[TPCC_STOCKLEVEL-TPCC_NEWORDER] = -1
+		tg.tail[TPCC_DELIVERY-TPCC_NEWORDER] = -1
 
 		tg.cr = cr
 		tg.partIndex = i
@@ -1089,6 +1155,18 @@ func (tpccWL *TPCCWorkload) MixConfig(wc []WorkerConfig) {
 	}
 }
 
+func (tpccWL *TPCCWorkload) ResetMixConfig(wc []WorkerConfig) {
+	for i := 0; i < len(tpccWL.transGen); i++ {
+		tg := &tpccWL.transGen[i]
+		for j := 0; j < len(wc); j++ {
+			tg.start[j] = int(wc[j].start)
+			tg.end[j] = int(wc[j].end)
+			tg.clusterNPart[j] = tg.end[j] - tg.start[j] + 1
+			tg.otherNPart[j] = *NumPart - tg.clusterNPart[j]
+		}
+	}
+}
+
 func makeNewOrderTrans(rnd rand.Rand, id int, rec Record) *NewOrderTrans {
 	trans := &NewOrderTrans{
 		BaseTrans: BaseTrans{
@@ -1154,6 +1232,18 @@ func makeStockLevelTrans(rnd rand.Rand, id int) *StockLevelTrans {
 	trans.accessParts = trans.accessParts[PADDINGINT : PADDINGINT+TPCC_MAXPART]
 	trans.i_id_ar = make([]int, STOCKLEVEL_DISTITEMS+2*PADDINGINT)
 	trans.i_id_ar = trans.i_id_ar[PADDINGINT : PADDINGINT+STOCKLEVEL_DISTITEMS]
+	trans.req.id = id
+	return trans
+}
+
+func makeDeliveryTrans(rnd rand.Rand, id int) *DeliveryTrans {
+	trans := &DeliveryTrans{
+		BaseTrans: BaseTrans{
+			rnd: rnd,
+		},
+	}
+	trans.accessParts = make([]int, TPCC_MAXPART+PADDINGINT*2)
+	trans.accessParts = trans.accessParts[PADDINGINT : PADDINGINT+TPCC_MAXPART]
 	trans.req.id = id
 	return trans
 }

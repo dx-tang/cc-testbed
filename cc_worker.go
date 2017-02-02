@@ -226,6 +226,7 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.Register(TPCC_ORDERSTATUS_ID, OrderStatus)
 	w.Register(TPCC_ORDERSTATUS_LAST, OrderStatus)
 	w.Register(TPCC_STOCKLEVEL, StockLevel)
+	w.Register(TPCC_DELIVERY, Delivery)
 
 	return w
 }
@@ -410,28 +411,28 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	w.Lock()
 
-	// if *SysType == ADAPTIVE {
-	// 	if t.isHome() {
-	// 		w.st.sampleCount++
-	// 		if w.st.sampleCount >= w.st.sampleRate {
-	// 			//w.riMaster.txnSample++
-	// 			w.st.sampleCount = 0
-	// 			w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
-	// 		}
-	// 	}
-	// 	w.st.trueCounter++
-	// 	if w.st.trueCounter == PARTVARRATE {
-	// 		w.st.trueCounter = 0
-	// 		if w.st.isPartAlign {
-	// 			w.riMaster.partStat[w.ID]++
-	// 		} else {
-	// 			//for _, p := range t.GetAccessParts() {
-	// 			//	w.riMaster.partStat[p]++
-	// 			//}
-	// 			w.riMaster.partStat[t.getHome()]++
-	// 		}
-	// 	}
-	// }
+	if *SysType == ADAPTIVE {
+		if t.isHome() {
+			w.st.sampleCount++
+			if w.st.sampleCount >= w.st.sampleRate {
+				//w.riMaster.txnSample++
+				w.st.sampleCount = 0
+				w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
+			}
+		}
+		w.st.trueCounter++
+		if w.st.trueCounter == PARTVARRATE {
+			w.st.trueCounter = 0
+			if w.st.isPartAlign {
+				w.riMaster.partStat[w.ID]++
+			} else {
+				//for _, p := range t.GetAccessParts() {
+				//	w.riMaster.partStat[p]++
+				//}
+				w.riMaster.partStat[t.getHome()]++
+			}
+		}
+	}
 
 	r, err := w.doTxn(t)
 

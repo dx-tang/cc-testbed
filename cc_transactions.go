@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/totemtang/cc-testbed/clog"
+
+	//"runtime/debug"
 )
 
 const (
@@ -32,6 +34,7 @@ const (
 	TPCC_ORDERSTATUS_ID
 	TPCC_ORDERSTATUS_LAST
 	TPCC_STOCKLEVEL
+	TPCC_DELIVERY
 
 	LAST_TXN
 )
@@ -615,6 +618,83 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 }
 
 func Delivery(t Trans, exec ETransaction) (Value, error) {
+	deliveryTrans := t.(*DeliveryTrans)
+
+	var k Key
+
+	var rec Record
+	var err error
+	var val Value
+
+	intRB := &deliveryTrans.intRB
+	req := &deliveryTrans.req
+
+	partNum := deliveryTrans.w_id
+
+	isHome := t.isHome()
+
+	k[0] = deliveryTrans.w_id
+	k[1] = deliveryTrans.d_id
+	rec, err = exec.DeleteRecord(NEWORDER, k, partNum)
+	if err != nil {
+		if err == ENODEL {
+			return nil, nil
+		} else {
+			return nil, err
+		}
+	}
+
+	o_id := rec.GetTuple().(*NewOrderTuple).no_o_id
+
+	// Update ORDER Table
+	k[2] = o_id
+	rec, err = exec.GetRecord(ORDER, k, partNum, req, isHome)
+	if err != nil {
+		return nil, err
+	}
+	rec.GetValue(intRB, O_C_ID)
+	c_id := intRB.intVal
+
+	rec.GetValue(intRB, O_OL_CNT)
+	ol_cnt := intRB.intVal
+
+	err = exec.WriteValue(ORDER, k, partNum, &deliveryTrans.wb_o_carrier, O_CARRIER_ID, req, false, isHome, rec)
+	if err != nil {
+		return nil, err
+	}
+
+	floatRB := &deliveryTrans.floatRB
+	ol_amount := float32(0)
+	for i := 0; i < ol_cnt; i++ {
+		k[3] = i
+		rec, val, _, err = exec.ReadValue(ORDERLINE, k, partNum, floatRB, OL_AMOUNT, req, isHome)
+		if err != nil {
+			return nil, err
+		}
+		ol_amount += val.(*FloatValue).floatVal
+		err = exec.WriteValue(ORDERLINE, k, partNum, &deliveryTrans.wb_date_ar[i], OL_DELIVERY_D, req, false, isHome, rec)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	k[2] = c_id
+	k[3] = 0
+	wb_ol_amount := &deliveryTrans.wb_ol_amount
+	wb_ol_amount.floatVal = ol_amount
+	err = exec.WriteValue(CUSTOMER, k, partNum, wb_ol_amount, C_BALANCE, req, true, isHome, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	wb_delivery_cnt := &deliveryTrans.wb_delivery_cnt
+	wb_delivery_cnt.intVal = 1
+	err = exec.WriteValue(CUSTOMER, k, partNum, wb_delivery_cnt, C_DELIVERY_CNT, req, true, isHome, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 

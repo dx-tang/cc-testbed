@@ -291,25 +291,24 @@ func (s *Store) GetRecByID(tableID int, k Key, partNum int) (Record, Bucket, uin
 	}
 }
 
-// Delete Not Supported
 func (s *Store) PrepareDelete(tableID int, k Key, partNum int) (Record, error) {
-	//table := s.priTables[tableID]
-	//return table.PrepareDelete(k, partNum)
-	clog.Error("Delete Not Support Yet")
-	return nil, nil
+	table := s.priTables[tableID]
+	return table.PrepareDelete(k, partNum)
+	//clog.Error("Delete Not Support Yet")
+	//return nil, nil
 }
 
 func (s *Store) DeleteRecord(tableID int, k Key, partNum int) error {
-	//table := s.priTables[tableID]
-	//return table.DeleteRecord(k, partNum)
-	clog.Error("Delete Not Support Yet")
-	return nil
+	table := s.priTables[tableID]
+	return table.DeleteRecord(k, partNum)
+	//clog.Error("Delete Not Support Yet")
+	//return nil
 }
 
 func (s *Store) ReleaseDelete(tableID int, k Key, partNum int) {
-	//table := s.priTables[tableID]
-	//table.ReleaseDelete(k, partNum)
-	clog.Error("Delete Not Support Yet")
+	table := s.priTables[tableID]
+	table.ReleaseDelete(k, partNum)
+	//clog.Error("Delete Not Support Yet")
 }
 
 func (s *Store) PrepareInsert(tableID int, k Key, partNum int) error {

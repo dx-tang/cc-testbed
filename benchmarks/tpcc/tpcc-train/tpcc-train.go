@@ -26,8 +26,8 @@ const (
 	PERFDIFF   = 0.03
 )
 
-var NOTP = [6]int{100, 100, 100, 100, 100, 100}
-var PAYTP = "0:50:50:0:0:0"
+var NOTP = [7]int{100, 100, 100, 100, 100, 100, 100}
+var PAYTP = "0:50:50:0:0:0:0"
 var WARMCONTENTION = 1.5
 
 var nsecs = flag.Int("nsecs", 2, "number of seconds to run")
@@ -43,6 +43,9 @@ var cr []float64
 var ps []float64
 var contention []float64
 var transper []string
+
+var pccWC []testbed.WorkerConfig
+var nonpccWC []testbed.WorkerConfig
 
 const (
 	TRIALS  = 3
@@ -150,6 +153,11 @@ func main() {
 		isPartition = true
 	}
 
+	// Build Worker Config
+	pccWC = testbed.BuildDefaultPCC()
+	nonpccWC = testbed.BuildDefaultNonPCC()
+	useLatch := testbed.BuildUseLatch(pccWC)
+
 	clog.Info("Number of workers %v \n", nWorkers)
 	clog.Info("Adaptive CC Training\n")
 
@@ -220,16 +228,17 @@ func main() {
 
 			if tpccWL == nil {
 				// Warm up
-				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.OCC, double, partAlign)
-				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpccWL)
+				tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, WARMCONTENTION, NOTP, float64(0), 0, *dataDir, testbed.OCC, double, partAlign, useLatch)
+				tpccWL.MixConfig(pccWC)
+				coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), testbed.PARTITION, *sr, nil, -1, testbed.TPCCWL, tpccWL, pccWC)
 
 				tpccWL.SetWorkers(coord)
 
-				clog.Info("Begin warming up")
+				/*clog.Info("Begin warming up")
 				oneTest(tpccWL, coord, ft, nWorkers, tm)
 				tpccWL.ResetConf(PAYTP, float64(0), coord, true, 0, false)
 				oneTest(tpccWL, coord, ft, nWorkers, tm)
-				clog.Info("End warming up")
+				clog.Info("End warming up")*/
 
 				if *prof {
 					f, err := os.Create("tpcc.prof")
@@ -397,6 +406,7 @@ func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*t
 			if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 				if j == testbed.OCC {
 					//tpccWL.Switch(*testbed.NumPart, false, testbed.NOPARTSKEW)
+					//tpccWL.ResetMixConfig(nonpccWC)
 					tpccWL.ResetPartAlign(false)
 					coord.ResetPartAlign(false)
 				}
@@ -483,6 +493,7 @@ func oneTest(tpccWL *testbed.TPCCWorkload, coord *testbed.Coordinator, ft [][]*t
 
 		if tm == testbed.TRAINPCC || tm == testbed.TESTING {
 			//tpccWL.Switch(*testbed.NumPart, true, curPS)
+			//tpccWL.ResetMixConfig(pccWC)
 			tpccWL.ResetPartAlign(true)
 			coord.ResetPartAlign(true)
 		}
