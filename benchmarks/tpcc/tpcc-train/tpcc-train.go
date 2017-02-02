@@ -234,11 +234,11 @@ func main() {
 
 				tpccWL.SetWorkers(coord)
 
-				/*clog.Info("Begin warming up")
+				clog.Info("Begin warming up")
 				oneTest(tpccWL, coord, ft, nWorkers, tm)
 				tpccWL.ResetConf(PAYTP, float64(0), coord, true, 0, false)
 				oneTest(tpccWL, coord, ft, nWorkers, tm)
-				clog.Info("End warming up")*/
+				clog.Info("End warming up")
 
 				if *prof {
 					f, err := os.Create("tpcc.prof")
