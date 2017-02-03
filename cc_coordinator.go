@@ -553,20 +553,21 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 		head = HEAD
 	}
 
-	for i, p := range summary.partStat {
-		if i < head {
-			sum += float64(p)
-		}
-	}
+	// for i, p := range summary.partStat {
+	// 	if i < head {
+	// 		sum += float64(p)
+	// 	}
+	// }
 
-	for i, p := range summary.partStat {
-		if i < head {
-			sumpow += float64(p*p) / (sum * sum)
-		}
-	}
+	// for i, p := range summary.partStat {
+	// 	if i < head {
+	// 		sumpow += float64(p*p) / (sum * sum)
+	// 	}
+	// }
 
 	n := float64(head)
-	partVar := (sumpow/n - 1/(n*n)) * 1000
+	//partVar := (sumpow/n - 1/(n*n)) * 1000
+	partVar := float64(0)
 
 	var recAvg float64
 	sum = float64(summary.readCount + summary.writeCount)
@@ -856,14 +857,14 @@ func setReport(ri *ReportInfo, summary *ReportInfo) {
 	summary.txn = ri.txn
 	summary.aborts = ri.aborts
 	summary.genTime = ri.genTime
-	summary.totalLatency = ri.totalLatency
+	//summary.totalLatency = ri.totalLatency
 
 	if *SysType == ADAPTIVE {
 		summary.txnSample = ri.txnSample
 
-		for i, ps := range ri.partStat {
-			summary.partStat[i] = ps
-		}
+		// for i, ps := range ri.partStat {
+		// 	summary.partStat[i] = ps
+		// }
 
 		summary.readCount = ri.readCount
 		summary.writeCount = ri.writeCount
@@ -888,14 +889,14 @@ func collectReport(ri *ReportInfo, summary *ReportInfo) {
 	summary.txn += ri.txn
 	summary.aborts += ri.aborts
 	summary.genTime += ri.genTime
-	summary.totalLatency += ri.totalLatency
+	//summary.totalLatency += ri.totalLatency
 
 	if *SysType == ADAPTIVE {
 		summary.txnSample += ri.txnSample
 
-		for i, ps := range ri.partStat {
-			summary.partStat[i] += ps
-		}
+		// for i, ps := range ri.partStat {
+		// 	summary.partStat[i] += ps
+		// }
 
 		summary.readCount += ri.readCount
 		summary.writeCount += ri.writeCount
@@ -1256,6 +1257,8 @@ func (coord *Coordinator) GetFeature() *Feature {
 	//n := float64(len(summary.partStat) - head)
 	n := float64(head)
 	partVar := (sumpow/n - 1/(n*n)) * 1000
+	// Set Part Var to 0
+	partVar = 0
 
 	//f.WriteString(fmt.Sprintf("%.3f %.3f\n", partAvg, partVar))
 	//partLenVar := float64(summary.partLenStat*txn)/float64(sum*sum) - 1

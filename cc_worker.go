@@ -415,21 +415,8 @@ func (w *Worker) One(t Trans) (Value, error) {
 		if t.isHome() {
 			w.st.sampleCount++
 			if w.st.sampleCount >= w.st.sampleRate {
-				//w.riMaster.txnSample++
 				w.st.sampleCount = 0
 				w.st.onePartSample(t.GetAccessParts(), w.riMaster, w.ID)
-			}
-		}
-		w.st.trueCounter++
-		if w.st.trueCounter == PARTVARRATE {
-			w.st.trueCounter = 0
-			if w.st.isPartAlign {
-				w.riMaster.partStat[w.ID]++
-			} else {
-				//for _, p := range t.GetAccessParts() {
-				//	w.riMaster.partStat[p]++
-				//}
-				w.riMaster.partStat[t.getHome()]++
 			}
 		}
 	}
