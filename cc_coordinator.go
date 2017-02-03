@@ -544,14 +544,14 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	txn := summary.txnSample
 
 	var sum float64
-	var sumpow float64
+	//var sumpow float64
 
-	var head int
-	if coord.store.isPartition {
-		head = *NumPart
-	} else {
-		head = HEAD
-	}
+	// var head int
+	// if coord.store.isPartition {
+	// 	head = *NumPart
+	// } else {
+	// 	head = HEAD
+	// }
 
 	// for i, p := range summary.partStat {
 	// 	if i < head {
@@ -565,7 +565,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	// 	}
 	// }
 
-	n := float64(head)
+	//n := float64(head)
 	//partVar := (sumpow/n - 1/(n*n)) * 1000
 	partVar := float64(0)
 

@@ -593,7 +593,7 @@ func (m *MTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, er
 			return nil, err
 		}
 
-		t := &m.tt[tableID]
+		t := &m.pccTrack[tableID]
 		n := len(t.dRecs)
 		t.dRecs = t.dRecs[0 : n+1]
 		t.dRecs[n].k = k
@@ -607,7 +607,7 @@ func (m *MTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, er
 			return nil, err
 		}
 
-		t := &m.rt[tableID]
+		t := &m.lockTrack[tableID]
 		n := len(t.dRecs)
 		t.dRecs = t.dRecs[0 : n+1]
 		t.dRecs[n].k = k
@@ -621,7 +621,7 @@ func (m *MTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, er
 			return nil, err
 		}
 
-		t := &m.tt[tableID]
+		t := &m.occTrack[tableID]
 		n := len(t.dRecs)
 		t.dRecs = t.dRecs[0 : n+1]
 		t.dRecs[n].k = k
