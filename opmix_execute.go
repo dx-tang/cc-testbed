@@ -144,6 +144,7 @@ func (op *OPTransaction) ReadValue(tableID int, k Key, partNum int, val Value, c
 	}
 
 	if !ok {
+		rec.RUnlock(req)
 		op.Abort(req)
 		op.w.NStats[NREADABORTS]++
 		return nil, nil, true, EABORT
@@ -333,6 +334,7 @@ func (op *OPTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq
 	}
 
 	if !ok {
+		rec.RUnlock(req)
 		op.w.NStats[NREADABORTS]++
 		return nil, EABORT
 	}

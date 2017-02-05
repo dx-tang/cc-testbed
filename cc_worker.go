@@ -254,6 +254,12 @@ func (w *Worker) run() {
 				replica.prevTxn = w.NStats[NTXN]
 				replica.prevAborts = w.NStats[NABORTS]
 
+				clog.Info("%v, NREADABORTS %v, NLOCKABORTS %v, NRCHANGEABORTS %v, NRWABORTS %v",
+					w.ID, w.NStats[NREADABORTS], w.NStats[NLOCKABORTS], w.NStats[NRCHANGEABORTS], w.NStats[NRWABORTS])
+
+				clog.Info("NRLOCKABORTS %v, NWLOCKABORTS %v, NUPGRADEABORTS %v",
+					w.NStats[NRLOCKABORTS], w.NStats[NWLOCKABORTS], w.NStats[NUPGRADEABORTS])
+
 				w.coord.reports[w.ID] <- replica
 			} else {
 				//replica.execTime = w.NExecute - w.riMaster.prevExec
