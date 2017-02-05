@@ -86,6 +86,9 @@ var occ_wait bool = true
 // For DBx1000 version 2PL, use 2PL-waitdie or 2PL-nowait
 var locking_wait bool = false
 
+// Use Mediated Switch or not
+var mediated_switch bool = true
+
 // Max waiters for DBx1000 2PL-waitdie
 const (
 	maxwaiters = 10

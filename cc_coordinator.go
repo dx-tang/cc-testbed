@@ -379,13 +379,13 @@ func (coord *Coordinator) process() {
 			coord.rc++
 
 			// Switch
-			// if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE {
-			// 	if !coord.justReconfig {
-			// 		coord.predict(summary)
-			// 	} else {
-			// 		coord.justReconfig = false
-			// 	}
-			// }
+			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE {
+				if !coord.justReconfig {
+					coord.predict(summary)
+				} else {
+					coord.justReconfig = false
+				}
+			}
 
 			// Done
 			if coord.rc == coord.reportCount {
@@ -635,7 +635,12 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 			if coord.mode == PCC { // Start Merging
 				coord.PCCtoOthers(execType - 2)
 			} else {
-				coord.switchCC(execType - 2)
+				if mediated_switch {
+					coord.switchCC(MEDIATED)
+					coord.switchCC(execType - 2)
+				} else {
+					coord.switchCC(execType - 2)
+				}
 			}
 		} else { // Use Partitioned Index
 			coord.OtherstoPCC()
@@ -793,10 +798,20 @@ func (coord *Coordinator) switchCC(mode int) {
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].modeChange <- true
 	}
-	for i := 0; i < len(coord.Workers); i++ {
-		<-coord.changeACK[i]
-		coord.Workers[i].modeChan <- coord.mode
+	if mediated_switch {
+		for i := 0; i < len(coord.Workers); i++ {
+			<-coord.changeACK[i]
+			coord.Workers[i].modeChan <- coord.mode
+		}
+	} else {
+		for i := 0; i < len(coord.Workers); i++ {
+			<-coord.changeACK[i]
+		}
+		for i := 0; i < len(coord.Workers); i++ {
+			coord.Workers[i].modeChan <- coord.mode
+		}
 	}
+
 }
 
 func (coord *Coordinator) indexReorganize(isMerge bool) {
