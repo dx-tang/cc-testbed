@@ -526,8 +526,8 @@ func (lr *LRecord) DeltaValue(val Value, col int) {
 type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
-	mixLock  mixlock.MixLock
-	isHot    bool
+	pessLock mixlock.MixLock
+	optLock  mixlock.MixLock
 	tuple    Tuple
 	cd       ConfDetector
 	table    Table
@@ -535,14 +535,14 @@ type ARecord struct {
 }
 
 func (ar *ARecord) Lock() (bool, TID) {
-	b, x := ar.mixLock.Lock()
+	b, x := ar.optLock.Lock()
 	//b, x := ar.last.Lock()
 	return b, TID(x)
 }
 
 func (ar *ARecord) Unlock(tid TID) {
 	//ar.last.Unlock(uint64(tid))
-	ar.mixLock.Unlock(uint64(tid))
+	ar.optLock.Unlock(uint64(tid))
 }
 
 func (ar *ARecord) IsUnlocked() (bool, TID) {
@@ -550,7 +550,7 @@ func (ar *ARecord) IsUnlocked() (bool, TID) {
 	//if x&wfmutex.LOCKED != 0 {
 	//	return false, TID(x & wfmutex.TIDMASK)
 	//}
-	x := ar.mixLock.Read()
+	x := ar.optLock.Read()
 	if x&mixlock.LOCKED != 0 {
 		return false, TID(x >> mixlock.LOCKBITS)
 	}
@@ -575,7 +575,7 @@ func (ar *ARecord) SetValue(val Value, colNum int) {
 
 func (ar *ARecord) GetTID() TID {
 	//return TID(ar.last.Read())
-	return TID(ar.mixLock.Read() >> mixlock.LOCKBITS)
+	return TID(ar.optLock.Read() >> mixlock.LOCKBITS)
 }
 func (ar *ARecord) SetTID(tid TID) {
 	clog.Error("Adaptive mode does not support SetTID Operation")
@@ -601,7 +601,7 @@ func (ar *ARecord) WLock(req *LockReq) (bool, TID) {
 			}
 		}
 	}*/
-	b, x := ar.mixLock.Lock()
+	b, x := ar.pessLock.Lock()
 	return b, TID(x)
 }
 
@@ -613,7 +613,7 @@ func (ar *ARecord) WUnlock(req *LockReq, tid TID) {
 			req.reqType = LOCK_EX
 			ar.wdLock.Unlock(req)
 		}*/
-	ar.Unlock(tid)
+	ar.pessLock.Unlock(uint64(tid))
 }
 
 func (ar *ARecord) RLock(req *LockReq) (bool, TID) {
@@ -639,7 +639,7 @@ func (ar *ARecord) RLock(req *LockReq) (bool, TID) {
 			}
 		}
 	*/
-	b, x := ar.mixLock.RLock()
+	b, x := ar.pessLock.RLock()
 	return b, TID(x)
 }
 
@@ -650,7 +650,7 @@ func (ar *ARecord) RUnlock(req *LockReq) {
 		req.reqType = LOCK_SH
 		ar.wdLock.Unlock(req)
 	}*/
-	ar.mixLock.RUnlock()
+	ar.pessLock.RUnlock()
 }
 
 func (ar *ARecord) Upgrade(req *LockReq) bool {
@@ -676,7 +676,7 @@ func (ar *ARecord) Upgrade(req *LockReq) bool {
 			}
 		}
 	*/
-	return ar.mixLock.Upgrade()
+	return ar.pessLock.Upgrade()
 }
 
 func (ar *ARecord) GetTuple() Tuple {

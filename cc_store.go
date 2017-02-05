@@ -29,6 +29,7 @@ const (
 	OCC
 	LOCKING
 	ADAPTIVE
+	MEDIATED
 
 	LAST_MODE
 )

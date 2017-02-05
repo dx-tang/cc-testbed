@@ -133,11 +133,12 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.needLock = false
 	}
 
-	w.ExecPool = make([]ETransaction, ADAPTIVE-PARTITION+1)
+	w.ExecPool = make([]ETransaction, LAST_MODE-PARTITION)
 	w.ExecPool[PARTITION] = StartPTransaction(w, tableCount)
 	w.ExecPool[OCC] = StartOTransaction(w, tableCount)
 	w.ExecPool[LOCKING] = StartLTransaction(w, tableCount)
 	w.ExecPool[ADAPTIVE] = StartMTransaction(w, tableCount, wc)
+	w.ExecPool[MEDIATED] = StartOPTransaction(w, tableCount, wc)
 
 	if *SysType == PARTITION {
 		w.E = w.ExecPool[mode]
