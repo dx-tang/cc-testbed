@@ -139,6 +139,61 @@ func BuildTestCases(f string, workload int) []TestCase {
 	return testCases
 }
 
+var tpccWrite []int = [7]int{50, 50, 0, 0, 0, 0, 0}
+var tpccRead []int = [7]int{0, 0, 0, 100, 0, 0, 0}
+
+func BuildMixTestCases(f string, workload int) [][]TestCase {
+	tf, err := os.OpenFile(f, os.O_RDONLY, 0600)
+	if err != nil {
+		clog.Error("Open File Error %s\n", err.Error())
+	}
+	defer tf.Close()
+
+	reader := bufio.NewReader(tf)
+
+	var data []byte
+	var splits []string
+
+	data, _, err = reader.ReadLine()
+	if err != nil {
+		clog.Error("Read Couter Error %v", err.Error())
+	}
+
+	count, _ := strconv.Atoi(string(data))
+
+	ts := make([][]TestCase, count)
+	for i := 0; i < count; i++ {
+		ts[i] = make([]TestCase, *NumPart)
+	}
+
+	for i := 0; i < *NumPart; i++ {
+		_, _, err = reader.ReadLine()
+		if err != nil {
+			clog.Error("Read Empty Line Error %v", err.Error())
+		}
+		for j := 0; j < count; j++ {
+			data, _, err = reader.ReadLine()
+			if err != nil {
+				clog.Error("Read Configuration Error %v", err.Error())
+			}
+			splits = strings.Split(string(data), "\t")
+			if strings.Compare(splits[0], "true") { // Whether CR
+				ts[j][i].CR = 0
+			} else {
+				ts[j][i].CR = 50
+			}
+
+			if strings.Compare(splits[1], "true") { // Whether Read-only
+				ts[j][i].TPCCTransPer = tpccRead
+			} else {
+				ts[j][i].TPCCTransPer = tpccWrite
+			}
+		}
+	}
+
+	return ts
+}
+
 type Coordinator struct {
 	padding0         [PADDING]byte
 	Workers          []*Worker
