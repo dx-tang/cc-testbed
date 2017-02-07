@@ -703,15 +703,15 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 
 	if curType != execType {
 		clog.Info("Worker %v Switch from %v to %v Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", id, curType, execType, confRate, homeConfRate, recAvg, rr, partConf, partVar)
-		if execType > 2 { // Use Shared Index
-			if coord.mode == PCC { // Start Merging
-				coord.PCCtoOthers(execType-2, id)
+		if execType > 0 { // Use Shared Index
+			if curType == 0 { // Start Merging
+				coord.PCCtoOthers(execType, id)
 			} else {
 				if mediated_switch {
 					coord.switchCC(MEDIATED)
-					coord.switchCC(execType - 2)
+					coord.switchCC(execType)
 				} else {
-					coord.switchCC(execType - 2)
+					coord.switchCC(execType)
 				}
 			}
 		} else { // Use Partitioned Index
