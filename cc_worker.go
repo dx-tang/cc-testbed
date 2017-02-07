@@ -456,6 +456,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 	for _, p := range ap {
 		if w.isLocked[p] {
 			s.spinLock[p].Unlock()
+			w.isLocked[p] = false
 		}
 	}
 
