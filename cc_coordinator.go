@@ -690,15 +690,21 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 
 	// Use Classifier to Predict Features
 	//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
-	curType := coord.mode
+	/*curType := coord.mode
 	if !coord.isPartAlign {
 		curType += 2
-	}
-	clog.Info("Predict Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", confRate, homeConfRate, recAvg, rr, partConf, partVar)
+	}*/
 
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
 
+	if execType >= 3 {
+		execType -= 2
+	}
+
+	curType := coord.Workers[id].partToExec[id]
+
 	if curType != execType {
+		clog.Info("Worker %v Switch from %v to %v Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", id, curType, execType, confRate, homeConfRate, recAvg, rr, partConf, partVar)
 		if execType > 2 { // Use Shared Index
 			if coord.mode == PCC { // Start Merging
 				coord.PCCtoOthers(execType-2, id)

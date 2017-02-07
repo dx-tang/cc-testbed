@@ -174,7 +174,9 @@ func (bt *BasicTable) SetLatch(useLatch bool) {
 }
 
 func (bt *BasicTable) SetMixLatch(useLatch bool, id int) {
-	bt.data[id].ht.SetLatch(useLatch)
+	if bt.isPartition {
+		bt.data[id].ht.SetLatch(useLatch)
+	}
 }
 
 func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
