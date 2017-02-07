@@ -829,6 +829,13 @@ func (m *MTransaction) Abort(req *LockReq) TID {
 }
 
 func (m *MTransaction) Commit(req *LockReq, isHome bool) TID {
+	if isHome && m.w.st.sampleCount == 0 {
+		m.w.riMaster.txnSample++
+		m.w.riMaster.readCount += m.w.st.readCount
+		m.w.riMaster.writeCount += m.w.st.writeCount
+		m.w.st.readCount = 0
+		m.w.st.writeCount = 0
+	}
 	// OCC Validate
 	// Phase 1: Lock all write keys
 	//for _, wk := range o.wKeys {
