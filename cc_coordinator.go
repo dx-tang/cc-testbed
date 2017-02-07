@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"runtime/debug"
 
 	"github.com/totemtang/cc-testbed/classifier"
 	"github.com/totemtang/cc-testbed/clog"
@@ -379,7 +380,7 @@ func (coord *Coordinator) process() {
 			coord.rc++
 
 			// Switch
-			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE {
+			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE && coord.rc != 1 {
 				if !coord.justReconfig {
 					coord.predict(summary)
 				} else {
@@ -395,10 +396,18 @@ func (coord *Coordinator) process() {
 				}
 				return
 			} else if coord.rc%coord.perTest == 0 {
-				// if *SysType != ADAPTIVE || coord.curTest == 0 {
-				// 	clog.Info("False Switch")
-				// 	coord.switchCC(coord.mode)
-				// }
+				if coord.curTest == 0 {	
+					for i := 0; i < 31; i++ {
+						coord.Workers[i].modeChange <- true
+					}
+					for i := 0; i < 31; i++ {
+						<-coord.changeACK[i]
+					}
+					for i := 0; i < 31; i++ {
+						coord.Workers[i].modeChan <- 2
+					}
+				 	clog.Info("False Switch")
+				}
 
 				coord.curTest++
 				tc := &coord.testCases[coord.curTest]
@@ -597,7 +606,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 		}
 	}
 
-	latency := float64(0)
+	//latency := float64(0)
 
 	// if !coord.store.isPartition {
 	// 	if latency <= 350 {
@@ -624,26 +633,35 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	// Use Classifier to Predict Features
 	//mode := coord.clf.Predict(partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
 	curType := coord.mode
-	if !coord.isPartAlign {
+	/*if !coord.isPartAlign {
 		curType += 2
-	}
-	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
+	}*/
+	//execType := coord.clf.Predict(curType, partConf, partVar, recAvg, float64(0), rr, homeConfRate, confRate)
+	execType := 1
 	clog.Info("Switching from %v to %v, Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", curType, execType, confRate, homeConfRate, recAvg, rr, partConf, partVar)
 
 	if curType != execType {
-		if execType > 2 { // Use Shared Index
-			if coord.mode == PCC { // Start Merging
-				coord.PCCtoOthers(execType - 2)
-			} else {
-				if mediated_switch {
-					coord.switchCC(MEDIATED)
-					coord.switchCC(execType - 2)
-				} else {
-					coord.switchCC(execType - 2)
-				}
+		if mediated_switch {
+			/*coord.switchCC(MEDIATED)
+			coord.switchCC(execType)*/
+			coord.mode = execType
+			for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[i].modeChange <- true
 			}
-		} else { // Use Partitioned Index
-			coord.OtherstoPCC()
+			for i := 0; i < len(coord.Workers); i++ {
+				<-coord.changeACK[i]
+				coord.Workers[i].modeChan <- MEDIATED
+
+			}
+			for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[i].modeChange <- true
+			}
+			for i := 0; i < len(coord.Workers); i++ {
+				<-coord.changeACK[i]
+				coord.Workers[i].modeChan <- execType
+			}
+		} else {
+			coord.switchCC(execType)
 		}
 	}
 
@@ -801,6 +819,10 @@ func (coord *Coordinator) switchCC(mode int) {
 	if mediated_switch {
 		for i := 0; i < len(coord.Workers); i++ {
 			<-coord.changeACK[i]
+			if i == 0 {
+				debug.PrintStack()
+				clog.Info("Send mode %v", mode)
+			}
 			coord.Workers[i].modeChan <- coord.mode
 		}
 	} else {

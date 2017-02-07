@@ -265,6 +265,7 @@ type SingleTrans struct {
 	start       time.Time
 	home        bool
 	homePart    int
+	isLong      bool
 	padding2    [PADDING]byte
 }
 
@@ -396,7 +397,8 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	t.TXN = txn + SINGLEBASE
 
 	if *SysType == ADAPTIVE && !*Hybrid {
-		pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
+		//pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
+		pi = gen.GenOnePart()
 	} else {
 		if isPartAlign {
 			pi = s.partIndex
@@ -521,6 +523,12 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	}
 
 	t.rr = s.rr
+
+	if s.w.ID == 31 {
+		t.isLong = true
+	} else {
+		t.isLong = false
+	}
 
 	return t
 }

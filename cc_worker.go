@@ -254,11 +254,11 @@ func (w *Worker) run() {
 				replica.prevTxn = w.NStats[NTXN]
 				replica.prevAborts = w.NStats[NABORTS]
 
-				// clog.Info("%v, NREADABORTS %v, NLOCKABORTS %v, NRCHANGEABORTS %v, NRWABORTS %v",
-				// 	w.ID, w.NStats[NREADABORTS], w.NStats[NLOCKABORTS], w.NStats[NRCHANGEABORTS], w.NStats[NRWABORTS])
+				 //clog.Info("%v, NREADABORTS %v, NLOCKABORTS %v, NRCHANGEABORTS %v, NRWABORTS %v",
+				 //	w.ID, w.NStats[NREADABORTS], w.NStats[NLOCKABORTS], w.NStats[NRCHANGEABORTS], w.NStats[NRWABORTS])
 
-				// clog.Info("NRLOCKABORTS %v, NWLOCKABORTS %v, NUPGRADEABORTS %v",
-				// 	w.NStats[NRLOCKABORTS], w.NStats[NWLOCKABORTS], w.NStats[NUPGRADEABORTS])
+				 //clog.Info("NRLOCKABORTS %v, NWLOCKABORTS %v, NUPGRADEABORTS %v",
+				 //	w.NStats[NRLOCKABORTS], w.NStats[NWLOCKABORTS], w.NStats[NUPGRADEABORTS])
 
 				w.coord.reports[w.ID] <- replica
 			} else {
@@ -369,6 +369,9 @@ func (w *Worker) One(t Trans) (Value, error) {
 	case <-w.modeChange:
 		w.coord.changeACK[w.ID] <- true
 		w.mode = <-w.modeChan
+		if w.ID == 0 {
+			clog.Info("Mode %v", w.mode)
+		}
 		w.E = w.ExecPool[w.mode]
 	case action := <-w.actionTrans:
 		s := w.coord.store

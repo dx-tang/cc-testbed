@@ -6,6 +6,7 @@ import (
 
 	"github.com/totemtang/cc-testbed/clog"
 
+
 	//"runtime/debug"
 )
 
@@ -1265,6 +1266,12 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 			isRead = true
 		} else {
 			isRead = false
+		}
+
+		if singleTrans.isLong {
+			exec.Worker().Unlock()
+			time.Sleep(24 * time.Millisecond)
+			exec.Worker().Lock()
 		}
 
 		_, val, _, err = exec.ReadValue(SINGLE, k, part, strRB, col, req, isHome)
