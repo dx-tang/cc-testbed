@@ -69,7 +69,8 @@ type Worker struct {
 	end          time.Time
 	finished     bool
 	mode         int
-	needLock     bool
+	needLock     []bool
+	isLocked     []bool
 	done         chan bool
 	modeChange   chan bool
 	modeChan     chan int
@@ -127,11 +128,16 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.riMaster = NewReportInfo(*NumPart, tableCount)
 	w.riReplica = NewReportInfo(*NumPart, tableCount)
 
-	if mode == PARTITION {
-		w.needLock = true
-	} else {
-		w.needLock = false
-	}
+	// if mode == PARTITION {
+	// 	w.needLock = true
+	// } else {
+	// 	w.needLock = false
+	// }
+
+	w.needLock = make([]bool, *NumPart+2*PADDINGBOOL)
+	w.needLock = w.needLock[PADDINGBOOL : *NumPart+PADDINGBOOL]
+	w.isLocked = make([]bool, *NumPart+2*PADDINGBOOL)
+	w.isLocked = w.isLocked[PADDINGBOOL : *NumPart+PADDINGBOOL]
 
 	w.ExecPool = make([]ETransaction, LAST_MODE-PARTITION)
 	w.ExecPool[PARTITION] = StartPTransaction(w, tableCount)
@@ -164,6 +170,12 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		} else {
 			for i := 0; i < len(w.partToExec); i++ {
 				w.partToExec[i] = int(wc[i].protocol)
+				if w.partToExec[i] == PARTITION {
+					w.needLock[i] = true
+				} else {
+					w.needLock[i] = false
+				}
+				w.isLocked[i] = false
 			}
 		}
 	} else {
@@ -313,11 +325,11 @@ func (w *Worker) SetMode(mode int) {
 	//}
 	w.mode = mode
 	w.E = w.ExecPool[mode]
-	if mode == PARTITION {
+	/*if mode == PARTITION {
 		w.needLock = true
 	} else {
 		w.needLock = false
-	}
+	}*/
 }
 
 func (w *Worker) doTxn(t Trans) (Value, error) {
@@ -366,10 +378,20 @@ func (w *Worker) One(t Trans) (Value, error) {
 	select {
 	case <-w.done:
 		return nil, FINISHED
-	case <-w.modeChange:
+	case realChange := <-w.modeChange:
 		w.coord.changeACK[w.ID] <- true
-		w.mode = <-w.modeChan
-		w.E = w.ExecPool[w.mode]
+		if realChange {
+			mode := <-w.modeChan
+			if mode != -1 {
+				w.mode = <-w.modeChan
+				w.E = w.ExecPool[w.mode]
+			}
+		} else {
+			w.mode = <-w.modeChan
+			id := (w.mode & WORKERNUMMASK) >> WORKERSHIFT
+			w.mode = w.mode & MODEMASK
+			w.partToExec[id] = w.mode
+		}
 	case action := <-w.actionTrans:
 		s := w.coord.store
 		if action.actionType == INDEX_ACTION_MERGE {
@@ -387,32 +409,31 @@ func (w *Worker) One(t Trans) (Value, error) {
 		return nil, nil
 	}
 
-	needLock := w.needLock
+	// Acquire all locks
+	s := w.store
 
-	if needLock {
-		// Acquire all locks
-		s := w.store
+	ap = t.GetAccessParts()
+	w.NLockAcquire += int64(len(ap))
 
-		ap = t.GetAccessParts()
-		w.NLockAcquire += int64(len(ap))
+	if len(ap) > 1 {
+		w.NStats[NCROSSTXN]++
+	}
 
-		if len(ap) > 1 {
-			w.NStats[NCROSSTXN]++
+	w.hasOCC = false
+	w.hasPCC = false
+	w.hasLock = false
+
+	for _, p := range ap {
+		if w.needLock[p] {
+			s.spinLock[p].Lock()
+			w.isLocked[p] = true
 		}
-
-		w.hasOCC = false
-		w.hasPCC = false
-		w.hasLock = false
-
-		for _, p := range ap {
-			if w.partToExec[p] == PARTITION {
-				w.hasPCC = true
-				s.spinLock[p].Lock()
-			} else if w.partToExec[p] == OCC {
-				w.hasOCC = true
-			} else {
-				w.hasLock = true
-			}
+		if w.partToExec[p] == PARTITION {
+			w.hasPCC = true
+		} else if w.partToExec[p] == OCC {
+			w.hasOCC = true
+		} else {
+			w.hasLock = true
 		}
 	}
 
@@ -432,12 +453,9 @@ func (w *Worker) One(t Trans) (Value, error) {
 
 	w.Unlock()
 
-	if needLock {
-		s := w.store
-		for _, p := range ap {
-			if w.partToExec[p] == PARTITION {
-				s.spinLock[p].Unlock()
-			}
+	for _, p := range ap {
+		if w.isLocked[p] {
+			s.spinLock[p].Unlock()
 		}
 	}
 

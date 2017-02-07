@@ -123,14 +123,15 @@ func main() {
 	var tpccWL *testbed.TPCCWorkload = nil
 	var coord *testbed.Coordinator = nil
 
-	testCases := testbed.BuildTestCases(*tc, testbed.TPCCWL)
+	testCases := testbed.BuildMixTestCases(*tc, testbed.TPCCWL)
 
 	wc := testbed.BuildWorkerConfig(*dl)
 	useLatch := testbed.BuildUseLatch(wc)
 
 	clog.Info("Populating Whole Store\n")
-	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, testCases[0].Contention, testCases[0].TPCCTransPer, testCases[0].CR, testCases[0].PS, *dataDir, initMode, false, isPartAlign, useLatch)
+	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, 1.01, testCases[0][0].TPCCTransPer, 0, 0, *dataDir, initMode, false, isPartAlign, useLatch)
 	tpccWL.MixConfig(wc)
+	tpccWL.OnlineMixReconf(testCases[0])
 
 	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL, wc)
 
@@ -147,7 +148,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	clog.Info("CR %v PS %v Contention %v TransPer %v \n", testCases[0].CR, testCases[0].PS, testCases[0].Contention, testCases[0].TPCCTransPer)
+	// clog.Info("CR %v PS %v Contention %v TransPer %v \n", testCases[0].CR, testCases[0].PS, testCases[0].Contention, testCases[0].TPCCTransPer)
 
 	ts := testbed.TID(0)
 	var wg sync.WaitGroup

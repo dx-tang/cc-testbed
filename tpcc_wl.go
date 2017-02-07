@@ -229,6 +229,8 @@ type TPCCTransGen struct {
 	start           []int
 	end             []int
 	partRnd         *rand.Rand
+	crMix           []float64
+	transPerMix     [][TPCCTRANSNUM]int
 	padding2        [PADDING]byte
 }
 
@@ -236,20 +238,32 @@ func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
 	tg.w.Lock()
 	defer tg.w.Unlock()
 
-	start := time.Now()
+	//start := time.Now()
 
-	if !tg.timeInit {
-		tg.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
-		tg.validTime = start.Add(time.Duration(TIMESLICE*tg.validProb) * time.Millisecond)
-		tg.timeInit = true
-	}
+	// if !tg.timeInit {
+	// 	tg.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+	// 	tg.validTime = start.Add(time.Duration(TIMESLICE*tg.validProb) * time.Millisecond)
+	// 	tg.timeInit = true
+	// }
 
-	if start.After(tg.validTime) {
-		if start.Before(tg.endTime) { // Issue Dummy Trans
-			return &tg.dt
+	// if start.After(tg.validTime) {
+	// 	if start.Before(tg.endTime) { // Issue Dummy Trans
+	// 		return &tg.dt
+	// 	} else {
+	// 		tg.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
+	// 		tg.validTime = start.Add(time.Duration(TIMESLICE*tg.validProb) * time.Millisecond)
+	// 	}
+	// }
+
+	w_id := 0
+
+	if *SysType == ADAPTIVE {
+		w_id = tg.partIndex
+	} else {
+		if tg.partAlign {
+			w_id = tg.partIndex
 		} else {
-			tg.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
-			tg.validTime = start.Add(time.Duration(TIMESLICE*tg.validProb) * time.Millisecond)
+			w_id = tg.w_id_gen.GetWholeRank()
 		}
 	}
 
@@ -257,7 +271,7 @@ func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
 	rnd := &tg.rnd
 
 	txn := rnd.Intn(100)
-	for i, v := range tg.transPercentage {
+	for i, v := range tg.transPerMix[w_id] {
 		if txn < v {
 			txn = i
 			break
@@ -268,19 +282,19 @@ func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
 
 	switch txn {
 	case TPCC_NEWORDER:
-		t = genNewOrderTrans(tg, txn)
+		t = genNewOrderTrans(tg, txn, w_id)
 	case TPCC_PAYMENT_ID:
-		t = genPaymentTrans(tg, txn, false)
+		t = genPaymentTrans(tg, txn, false, w_id)
 	case TPCC_PAYMENT_LAST:
-		t = genPaymentTrans(tg, txn, true)
+		t = genPaymentTrans(tg, txn, true, w_id)
 	case TPCC_ORDERSTATUS_ID:
-		t = genOrderStatusTrans(tg, txn, false)
+		t = genOrderStatusTrans(tg, txn, false, w_id)
 	case TPCC_ORDERSTATUS_LAST:
-		t = genOrderStatusTrans(tg, txn, true)
+		t = genOrderStatusTrans(tg, txn, true, w_id)
 	case TPCC_STOCKLEVEL:
-		t = genStockLevelTrans(tg, txn)
+		t = genStockLevelTrans(tg, txn, w_id)
 	case TPCC_DELIVERY:
-		t = genDeliveryTrans(tg, txn)
+		t = genDeliveryTrans(tg, txn, w_id)
 	default:
 		clog.Error("TPCC does not support transaction %v\n", txn)
 	}
@@ -295,36 +309,20 @@ func (tg *TPCCTransGen) ReleaseOneTrans(t Trans) {
 	tg.transBuf[txnIndex][tg.tail[txnIndex]] = t
 }
 
-func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
+func genNewOrderTrans(tg *TPCCTransGen, txn int, w_id int) Trans {
 	txnIndex := txn - TPCC_BASE - 1
 	t := tg.transBuf[txnIndex][tg.head[txnIndex]].(*NewOrderTrans)
 	tg.head[txnIndex] = (tg.head[txnIndex] + 1) % QUEUESIZE
 
 	rnd := &tg.rnd
 	i_id_gen := tg.i_id_gen
-	w_id_gen := tg.w_id_gen
 
 	pi := tg.partIndex
-	isPartAlign := tg.partAlign
-	cr := int(tg.cr)
-
 	oa := &tg.oa
 	ola := &tg.ola
 
 	var tmpPi int
-	if *SysType == ADAPTIVE && !*Hybrid {
-		if isPartAlign {
-			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	} else {
-		if isPartAlign {
-			t.w_id = pi
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	}
+	t.w_id = w_id
 
 	t.homePart = t.w_id
 
@@ -334,7 +332,7 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 		t.home = false
 	}
 
-	if rnd.Intn(100) < cr {
+	if rnd.Intn(100) < int(tg.crMix[t.w_id]) {
 		t.accessParts = t.accessParts[:2]
 		tmpPi = (tg.end[t.w_id] + tg.partRnd.Intn(tg.otherNPart[t.w_id]) + 1) % *NumPart
 		if tmpPi > t.w_id {
@@ -398,7 +396,7 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int) Trans {
 
 }
 
-func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
+func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans {
 	txnIndex := txn - TPCC_BASE - 1
 	t := tg.transBuf[txnIndex][tg.head[txnIndex]].(*PaymentTrans)
 	tg.head[txnIndex] = (tg.head[txnIndex] + 1) % QUEUESIZE
@@ -406,26 +404,9 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	rnd := &tg.rnd
 	c_id_gen := tg.c_id_gen
 	c_last_gen := tg.c_last_gen
-	w_id_gen := tg.w_id_gen
 
 	pi := tg.partIndex
-	isPartAlign := tg.partAlign
-	cr := int(tg.cr)
-
-	if *SysType == ADAPTIVE {
-		if isPartAlign {
-			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	} else {
-		if isPartAlign {
-			t.w_id = pi
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	}
-
+	t.w_id = w_id
 	tmpPi := t.w_id
 
 	t.homePart = t.w_id
@@ -436,7 +417,7 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 		t.home = false
 	}
 
-	if rnd.Intn(100) < cr {
+	if rnd.Intn(100) < int(tg.crMix[t.w_id]) {
 		t.accessParts = t.accessParts[:2]
 		tmpPi = (tg.end[t.w_id] + tg.partRnd.Intn(tg.otherNPart[t.w_id]) + 1) % *NumPart
 		if tmpPi > t.w_id {
@@ -515,12 +496,11 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	return t
 }
 
-func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
+func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans {
 	txnIndex := txn - TPCC_BASE - 1
 	t := tg.transBuf[txnIndex][tg.head[txnIndex]].(*OrderStatusTrans)
 	tg.head[txnIndex] = (tg.head[txnIndex] + 1) % QUEUESIZE
 
-	w_id_gen := tg.w_id_gen
 	c_id_gen := tg.c_id_gen
 	c_last_gen := tg.c_last_gen
 
@@ -531,19 +511,7 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	t.TXN = txn
 	t.isLast = isLast
 
-	if *SysType == ADAPTIVE {
-		if tg.partAlign {
-			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	} else {
-		if tg.partAlign {
-			t.w_id = pi
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	}
+	t.w_id = w_id
 
 	t.homePart = t.w_id
 
@@ -593,12 +561,10 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool) Trans {
 	return t
 }
 
-func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
+func genStockLevelTrans(tg *TPCCTransGen, txn int, w_id int) Trans {
 	txnIndex := txn - TPCC_BASE - 1
 	t := tg.transBuf[txnIndex][tg.head[txnIndex]].(*StockLevelTrans)
 	tg.head[txnIndex] = (tg.head[txnIndex] + 1) % QUEUESIZE
-
-	w_id_gen := tg.w_id_gen
 
 	rnd := &tg.rnd
 	pi := tg.partIndex
@@ -606,19 +572,7 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
 	t.accessParts[0] = pi
 	t.TXN = txn
 
-	if *SysType == ADAPTIVE {
-		if tg.partAlign {
-			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	} else {
-		if tg.partAlign {
-			t.w_id = tg.partIndex
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	}
+	t.w_id = w_id
 
 	t.homePart = t.w_id
 
@@ -635,12 +589,10 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int) Trans {
 	return t
 }
 
-func genDeliveryTrans(tg *TPCCTransGen, txn int) Trans {
+func genDeliveryTrans(tg *TPCCTransGen, txn int, w_id int) Trans {
 	txnIndex := txn - TPCC_BASE - 1
 	t := tg.transBuf[txnIndex][tg.head[txnIndex]].(*DeliveryTrans)
 	tg.head[txnIndex] = (tg.head[txnIndex] + 1) % QUEUESIZE
-
-	w_id_gen := tg.w_id_gen
 
 	rnd := &tg.rnd
 	pi := tg.partIndex
@@ -648,19 +600,7 @@ func genDeliveryTrans(tg *TPCCTransGen, txn int) Trans {
 	t.accessParts[0] = pi
 	t.TXN = txn
 
-	if *SysType == ADAPTIVE {
-		if tg.partAlign {
-			t.w_id = tg.start[tg.partIndex] + tg.partRnd.Intn(tg.clusterNPart[tg.partIndex])
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	} else {
-		if tg.partAlign {
-			t.w_id = tg.partIndex
-		} else {
-			t.w_id = w_id_gen.GetWholeRank()
-		}
-	}
+	t.w_id = w_id
 
 	t.homePart = t.w_id
 
@@ -928,6 +868,11 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 		tg.ola.OneAllocate()
 		tg.ha.OneAllocate()
 
+		tg.crMix = make([]float64, *NumPart+PADDINGINT64*2)
+		tg.crMix = tg.crMix[PADDINGINT64 : *NumPart+PADDINGINT64]
+		tg.transPerMix = make([][TPCCTRANSNUM]int, *NumPart+PADDINGINT*2)
+		tg.transPerMix = tg.transPerMix[PADDINGINT : *NumPart+PADDINGINT]
+
 	}
 
 	clog.Info("Generating Trans Pool %.2fs", time.Since(start).Seconds())
@@ -1115,6 +1060,20 @@ func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, 
 		tg.w_id_gen = partGens[i]
 		tg.cr = cr
 		tg.transPercentage = transper
+		tg.w.Unlock()
+		tg.validProb = tpccWL.zp.GetProb(i)
+		tg.timeInit = false
+	}
+}
+
+func (tpccWL *TPCCWorkload) OnlineMixReconf(tc []TestCase) {
+	for i := 0; i < tpccWL.nWorkers; i++ {
+		tg := &tpccWL.transGen[i]
+		tg.w.Lock()
+		for j := 0; j < len(tc); j++ {
+			tg.crMix[j] = tc[j].CR
+			tg.transPerMix[j] = tc[j].TPCCTransPer
+		}
 		tg.w.Unlock()
 		tg.validProb = tpccWL.zp.GetProb(i)
 		tg.timeInit = false

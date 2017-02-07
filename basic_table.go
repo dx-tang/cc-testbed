@@ -27,6 +27,7 @@ type Table interface {
 	InsertRecord(recs []InsertRec, ia IndexAlloc) error
 	ReleaseInsert(k Key, partNum int)
 	SetLatch(useLatch bool)
+	SetMixLatch(useLatch bool, id int)
 	BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	MergeLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner)
 	Reset()
@@ -170,6 +171,10 @@ func (bt *BasicTable) SetLatch(useLatch bool) {
 	for i, _ := range bt.data {
 		bt.data[i].ht.SetLatch(useLatch)
 	}
+}
+
+func (bt *BasicTable) SetMixLatch(useLatch bool, id int) {
+	bt.data[id].ht.SetLatch(useLatch)
 }
 
 func (bt *BasicTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {

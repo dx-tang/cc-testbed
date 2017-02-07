@@ -239,6 +239,10 @@ func (no *NewOrderTable) SetLatch(useLatch bool) {
 	}
 }
 
+func (no *NewOrderTable) SetMixLatch(useLatch bool, id int) {
+	no.useLatch[id] = useLatch
+}
+
 func (no *NewOrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	var compKey Key
 	tuple := &NewOrderTuple{}
@@ -669,6 +673,11 @@ func (o *OrderTable) SetLatch(useLatch bool) {
 		o.data[i].uselatch = useLatch
 	}
 }
+
+func (o *OrderTable) SetMixLatch(useLatch bool, id int) {
+	o.data[id].uselatch = useLatch
+}
+
 func (o *OrderTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	iRecs := make([]InsertRec, 1)
 	start := time.Now()
@@ -1030,6 +1039,11 @@ func (c *CustomerTable) SetLatch(useLatch bool) {
 	}
 }
 
+func (c *CustomerTable) SetMixLatch(useLatch bool, id int) {
+	c.secIndex[id].useLatch = useLatch
+	c.data[id].ht.SetLatch(useLatch)
+}
+
 func (c *CustomerTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {
 	recs := make([]InsertRec, 1)
 	start := time.Now()
@@ -1211,6 +1225,10 @@ func (h *HistoryTable) GetValueBySec(k Key, partNum int, val Value) error {
 }
 
 func (h *HistoryTable) SetLatch(useLatch bool) {
+	return
+}
+
+func (h *HistoryTable) SetMixLatch(useLatch bool, id int) {
 	return
 }
 
@@ -1470,6 +1488,10 @@ func (ol *OrderLineTable) SetLatch(useLatch bool) {
 	for i := 0; i < len(ol.data); i++ {
 		ol.data[i].useLatch = useLatch
 	}
+}
+
+func (ol *OrderLineTable) SetMixLatch(useLatch bool, id int) {
+	ol.data[id].useLatch = useLatch
 }
 
 func (ol *OrderLineTable) BulkLoad(table Table, ia IndexAlloc, begin int, end int, partitioner Partitioner) {

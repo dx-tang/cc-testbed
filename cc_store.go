@@ -348,6 +348,12 @@ func (s *Store) SetLatch(useLatch bool) {
 	}
 }
 
+func (s *Store) SetMixLatch(useLatch bool, id int) {
+	for _, t := range s.priTables {
+		t.SetMixLatch(useLatch, id)
+	}
+}
+
 func (s *Store) GetTables() []Table {
 	return s.priTables
 }

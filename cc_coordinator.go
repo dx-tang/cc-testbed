@@ -13,6 +13,12 @@ import (
 	"github.com/totemtang/cc-testbed/clog"
 )
 
+const (
+	WORKERSHIFT   = 5
+	MODEMASK      = 1<<WORKERSHIFT - 1
+	WORKERNUMMASK = 255 << WORKERSHIFT
+)
+
 type TestCase struct {
 	padding1     [PADDING]byte
 	CR           float64
@@ -139,8 +145,8 @@ func BuildTestCases(f string, workload int) []TestCase {
 	return testCases
 }
 
-var tpccWrite []int = [7]int{50, 50, 0, 0, 0, 0, 0}
-var tpccRead []int = [7]int{0, 0, 0, 100, 0, 0, 0}
+var tpccWrite [7]int = [7]int{50, 50, 0, 0, 0, 0, 0}
+var tpccRead [7]int = [7]int{0, 0, 0, 100, 0, 0, 0}
 
 func BuildMixTestCases(f string, workload int) [][]TestCase {
 	tf, err := os.OpenFile(f, os.O_RDONLY, 0600)
@@ -177,13 +183,13 @@ func BuildMixTestCases(f string, workload int) [][]TestCase {
 				clog.Error("Read Configuration Error %v", err.Error())
 			}
 			splits = strings.Split(string(data), "\t")
-			if strings.Compare(splits[0], "true") { // Whether CR
+			if strings.Compare(splits[0], "true") == 0 { // Whether CR
 				ts[j][i].CR = 0
 			} else {
 				ts[j][i].CR = 50
 			}
 
-			if strings.Compare(splits[1], "true") { // Whether Read-only
+			if strings.Compare(splits[1], "true") == 0 { // Whether Read-only
 				ts[j][i].TPCCTransPer = tpccRead
 			} else {
 				ts[j][i].TPCCTransPer = tpccWrite
@@ -228,7 +234,7 @@ type Coordinator struct {
 	workload         int
 	indexpart        bool
 	isMerge          bool
-	testCases        []TestCase
+	testCases        [][]TestCase
 	tpccWL           *TPCCWorkload
 	singleWL         *SingelWorkload
 	sbWL             *SBWorkload
@@ -249,7 +255,7 @@ const (
 	REPORTPERIOD = 1000
 )
 
-func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, testCases []TestCase, nsecs int, workload int, wl interface{}, wc []WorkerConfig) *Coordinator {
+func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sampleRate int, testCases [][]TestCase, nsecs int, workload int, wl interface{}, wc []WorkerConfig) *Coordinator {
 	coordinator := &Coordinator{
 		Workers:        make([]*Worker, nWorkers),
 		store:          store,
@@ -294,27 +300,28 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, SINGLEWL)
 			}
 			coordinator.singleWL = wl.(*SingelWorkload)
-			single := coordinator.singleWL
-			basic := single.GetBasicWL()
-			for i, _ := range testCases {
-				tc := &testCases[i]
-				keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
-				if !ok1 {
-					keyGens = basic.NewKeyGen(tc.Contention)
-					coordinator.keyGenPool[tc.Contention] = keyGens
-				}
+			/*
+				single := coordinator.singleWL
+				basic := single.GetBasicWL()
+				for i, _ := range testCases {
+					tc := &testCases[i]
+					keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
+					if !ok1 {
+						keyGens = basic.NewKeyGen(tc.Contention)
+						coordinator.keyGenPool[tc.Contention] = keyGens
+					}
 
-				partGens, ok2 := coordinator.partGenPool[tc.PS]
-				if !ok2 {
-					partGens = basic.NewPartGen(tc.PS)
-					coordinator.partGenPool[tc.PS] = partGens
+					partGens, ok2 := coordinator.partGenPool[tc.PS]
+					if !ok2 {
+						partGens = basic.NewPartGen(tc.PS)
+						coordinator.partGenPool[tc.PS] = partGens
+					}
 				}
-			}
-			partGens, ok := coordinator.partGenPool[NOPARTSKEW]
-			if !ok {
-				partGens = basic.NewPartGen(NOPARTSKEW)
-				coordinator.partGenPool[NOPARTSKEW] = partGens
-			}
+				partGens, ok := coordinator.partGenPool[NOPARTSKEW]
+				if !ok {
+					partGens = basic.NewPartGen(NOPARTSKEW)
+					coordinator.partGenPool[NOPARTSKEW] = partGens
+				}*/
 		} else if workload == SMALLBANKWL {
 			if *SysType == ADAPTIVE {
 				partFile := CLASSIFERPATH + "/" + SBPARTTRAIN
@@ -324,27 +331,29 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, SMALLBANKWL)
 			}
 			coordinator.sbWL = wl.(*SBWorkload)
-			sb := coordinator.sbWL
-			basic := sb.GetBasicWL()
-			for i, _ := range testCases {
-				tc := &testCases[i]
-				keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
-				if !ok1 {
-					keyGens = basic.NewKeyGen(tc.Contention)
-					coordinator.keyGenPool[tc.Contention] = keyGens
-				}
+			/*
+				sb := coordinator.sbWL
+				basic := sb.GetBasicWL()
+				for i, _ := range testCases {
+					tc := &testCases[i]
+					keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
+					if !ok1 {
+						keyGens = basic.NewKeyGen(tc.Contention)
+						coordinator.keyGenPool[tc.Contention] = keyGens
+					}
 
-				partGens, ok2 := coordinator.partGenPool[tc.PS]
-				if !ok2 {
-					partGens = basic.NewPartGen(tc.PS)
-					coordinator.partGenPool[tc.PS] = partGens
+					partGens, ok2 := coordinator.partGenPool[tc.PS]
+					if !ok2 {
+						partGens = basic.NewPartGen(tc.PS)
+						coordinator.partGenPool[tc.PS] = partGens
+					}
 				}
-			}
-			partGens, ok := coordinator.partGenPool[NOPARTSKEW]
-			if !ok {
-				partGens = basic.NewPartGen(NOPARTSKEW)
-				coordinator.partGenPool[NOPARTSKEW] = partGens
-			}
+				partGens, ok := coordinator.partGenPool[NOPARTSKEW]
+				if !ok {
+					partGens = basic.NewPartGen(NOPARTSKEW)
+					coordinator.partGenPool[NOPARTSKEW] = partGens
+				}
+			*/
 		} else if workload == TPCCWL {
 			if *SysType == ADAPTIVE {
 				partFile := CLASSIFERPATH + "/" + TPCCPARTTRAIN
@@ -354,7 +363,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, TPCCWL)
 			}
 			coordinator.tpccWL = wl.(*TPCCWorkload)
-			tpccWL := coordinator.tpccWL
+			/*tpccWL := coordinator.tpccWL
 			for i, _ := range testCases {
 				tc := &testCases[i]
 				keyGens, ok1 := coordinator.keyGenPool[tc.Contention]
@@ -373,7 +382,7 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 			if !ok {
 				partGens = tpccWL.NewPartGen(NOPARTSKEW)
 				coordinator.tpccPartPool[NOPARTSKEW] = partGens
-			}
+			}*/
 		} else {
 			clog.Error("Workload %v Not Supported", workload)
 		}
@@ -416,8 +425,16 @@ func (coord *Coordinator) process() {
 
 			setReport(ri, summary)
 
+			// Switch
+			if *SysType == ADAPTIVE {
+				coord.predict(ri, 0)
+			}
+
 			for i := 1; i < len(coord.reports); i++ {
 				ri = <-coord.reports[i]
+				if *SysType == ADAPTIVE {
+					coord.predict(ri, i)
+				}
 				collectReport(ri, summary)
 			}
 
@@ -433,15 +450,6 @@ func (coord *Coordinator) process() {
 
 			coord.rc++
 
-			// Switch
-			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE {
-				if !coord.justReconfig {
-					coord.predict(summary)
-				} else {
-					coord.justReconfig = false
-				}
-			}
-
 			// Done
 			if coord.rc == coord.reportCount {
 				// Done with tests
@@ -456,41 +464,45 @@ func (coord *Coordinator) process() {
 				// }
 
 				coord.curTest++
-				tc := &coord.testCases[coord.curTest]
-				if coord.workload == SINGLEWL {
-					single := coord.singleWL
-					keyGens := coord.keyGenPool[tc.Contention]
-					if single.basic.isPartition {
-						partGens := coord.partGenPool[NOPARTSKEW]
-						single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR, tc.PS)
-					} else {
-						partGens := coord.partGenPool[tc.PS]
-						single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR, NOPARTSKEW)
+				tc := coord.testCases[coord.curTest]
+				/*
+					if coord.workload == SINGLEWL {
+						single := coord.singleWL
+						keyGens := coord.keyGenPool[tc.Contention]
+						if single.basic.isPartition {
+							partGens := coord.partGenPool[NOPARTSKEW]
+							single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR, tc.PS)
+						} else {
+							partGens := coord.partGenPool[tc.PS]
+							single.OnlineReconf(keyGens, partGens, tc.CR, tc.MP, tc.Tlen, tc.RR, NOPARTSKEW)
+						}
+						clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tc.CR, tc.MP, tc.PS, tc.Contention, tc.Tlen, tc.RR)
+					} else if coord.workload == SMALLBANKWL {
+						sb := coord.sbWL
+						keygens := coord.keyGenPool[tc.Contention]
+						if sb.basic.isPartition {
+							partGens := coord.partGenPool[NOPARTSKEW]
+							sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper, tc.PS)
+						} else {
+							partGens := coord.partGenPool[tc.PS]
+							sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper, NOPARTSKEW)
+						}
+						clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.SBTransper)
+					} else { // TPCCWL
+						tpccWL := coord.tpccWL
+						keygens := coord.keyGenPool[tc.Contention]
+						if tpccWL.isPartition {
+							partGens := coord.tpccPartPool[NOPARTSKEW]
+							tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer, tc.PS)
+						} else {
+							partGens := coord.tpccPartPool[tc.PS]
+							tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer, NOPARTSKEW)
+						}
+						clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.TPCCTransPer)
 					}
-					clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tc.CR, tc.MP, tc.PS, tc.Contention, tc.Tlen, tc.RR)
-				} else if coord.workload == SMALLBANKWL {
-					sb := coord.sbWL
-					keygens := coord.keyGenPool[tc.Contention]
-					if sb.basic.isPartition {
-						partGens := coord.partGenPool[NOPARTSKEW]
-						sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper, tc.PS)
-					} else {
-						partGens := coord.partGenPool[tc.PS]
-						sb.OnlineReconf(keygens, partGens, tc.CR, tc.SBTransper, NOPARTSKEW)
-					}
-					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.SBTransper)
-				} else { // TPCCWL
-					tpccWL := coord.tpccWL
-					keygens := coord.keyGenPool[tc.Contention]
-					if tpccWL.isPartition {
-						partGens := coord.tpccPartPool[NOPARTSKEW]
-						tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer, tc.PS)
-					} else {
-						partGens := coord.tpccPartPool[tc.PS]
-						tpccWL.OnlineReconf(keygens, partGens, tc.CR, tc.TPCCTransPer, NOPARTSKEW)
-					}
-					clog.Info("CR %v PS %v Contention %v TransPer %v \n", tc.CR, tc.PS, tc.Contention, tc.TPCCTransPer)
-				}
+				*/
+				tpccWL := coord.tpccWL
+				tpccWL.OnlineMixReconf(tc)
 			}
 		case <-coord.indexActionACK[coord.startWorker]:
 
@@ -573,7 +585,7 @@ func (coord *Coordinator) process() {
 				}
 				for i := 0; i < len(coord.Workers); i++ {
 					<-coord.changeACK[i]
-					coord.Workers[i].needLock = true
+					//coord.Workers[i].needLock = true // Legacy Code
 					coord.Workers[i].modeChan <- coord.mode
 				}
 
@@ -594,7 +606,7 @@ func (coord *Coordinator) process() {
 	}
 }
 
-func (coord *Coordinator) predict(summary *ReportInfo) {
+func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 	// Compute Features
 	txn := summary.txnSample
 
@@ -688,7 +700,7 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 	if curType != execType {
 		if execType > 2 { // Use Shared Index
 			if coord.mode == PCC { // Start Merging
-				coord.PCCtoOthers(execType - 2)
+				coord.PCCtoOthers(execType-2, id)
 			} else {
 				if mediated_switch {
 					coord.switchCC(MEDIATED)
@@ -698,13 +710,13 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 				}
 			}
 		} else { // Use Partitioned Index
-			coord.OtherstoPCC()
+			coord.OtherstoPCC(id)
 		}
 	}
 
 }
 
-func (coord *Coordinator) OtherstoPCC() {
+func (coord *Coordinator) OtherstoPCC(id int) {
 	// store := coord.store
 	// Stop all workers; change meta data
 	// for i := 0; i < len(coord.Workers); i++ {
@@ -723,115 +735,143 @@ func (coord *Coordinator) OtherstoPCC() {
 
 	//coord.indexReorganize(false)
 
-	for i := 0; i < len(coord.Workers); i++ {
-		coord.Workers[i].Lock()
-	}
+	/*	for i := 0; i < len(coord.Workers); i++ {
+			coord.Workers[i].Lock()
+		}
 
-	if coord.workload == SINGLEWL {
-		single := coord.singleWL
-		single.ResetPartAlign(true)
-		coord.ResetPartAlign(true)
-	} else if coord.workload == SMALLBANKWL {
-		sb := coord.sbWL
-		sb.ResetPartAlign(true)
-		coord.ResetPartAlign(true)
-	} else { // TPCCWL
-		tpccWL := coord.tpccWL
-		tpccWL.ResetPartAlign(true)
-		coord.ResetPartAlign(true)
-	}
+		if coord.workload == SINGLEWL {
+			single := coord.singleWL
+			single.ResetPartAlign(true)
+			coord.ResetPartAlign(true)
+		} else if coord.workload == SMALLBANKWL {
+			sb := coord.sbWL
+			sb.ResetPartAlign(true)
+			coord.ResetPartAlign(true)
+		} else { // TPCCWL
+			tpccWL := coord.tpccWL
+			tpccWL.ResetPartAlign(true)
+			coord.ResetPartAlign(true)
+		}
 
-	for i := 0; i < len(coord.Workers); i++ {
-		coord.Workers[i].Unlock()
-	}
+		for i := 0; i < len(coord.Workers); i++ {
+			coord.Workers[i].Unlock()
+		}
+	*/
 
 	// UseLocks
 	for i := 0; i < len(coord.Workers); i++ {
-		coord.Workers[i].modeChange <- true
-	}
-	for i := 0; i < len(coord.Workers); i++ {
-		<-coord.changeACK[i]
-		coord.Workers[i].needLock = true
-		coord.Workers[i].modeChan <- coord.mode
-	}
-
-	coord.store.SetLatch(false)
-
-	// Change CC
-	coord.mode = PARTITION
-	for i := 0; i < len(coord.Workers); i++ {
-		coord.Workers[i].modeChange <- true
-	}
-	for i := 0; i < len(coord.Workers); i++ {
-		<-coord.changeACK[i]
-		coord.Workers[i].modeChan <- coord.mode
-	}
-}
-
-func (coord *Coordinator) PCCtoOthers(mode int) {
-	store := coord.store
-	// Stop all workers; change meta data
-	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Lock()
 	}
-
-	if coord.workload == SINGLEWL {
-		single := coord.singleWL
-		//single.ResetPart(1, false)
-		//single.zp.Reconf(NOPARTSKEW)
-		//for i := 0; i < len(single.transGen); i++ {
-		//	tg := single.transGen[i]
-		//	tg.validProb = single.zp.GetProb(i)
-		//	tg.timeInit = false
-		//}
-		//basic := single.GetBasicWL()
-		//partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
-		//basic.SetPartGen(partGens)
-		//coord.ResetPart(false)
-		single.ResetPartAlign(false)
-		coord.ResetPartAlign(false)
-	} else if coord.workload == SMALLBANKWL {
-		sb := coord.sbWL
-		// sb.ResetPart(1, false)
-		// sb.zp.Reconf(NOPARTSKEW)
-		// for i := 0; i < len(sb.transGen); i++ {
-		// 	tg := sb.transGen[i]
-		// 	tg.validProb = sb.zp.GetProb(i)
-		// 	tg.timeInit = false
-		// }
-		// basic := sb.GetBasicWL()
-		// partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
-		// basic.SetPartGen(partGens)
-		// coord.ResetPart(false)
-		sb.ResetPartAlign(false)
-		coord.ResetPartAlign(false)
-	} else { // TPCCWL
-		tpccWL := coord.tpccWL
-		// tpccWL.ResetPart(1, false)
-		// tpccWL.zp.Reconf(NOPARTSKEW)
-		// for i := 0; i < len(tpccWL.transGen); i++ {
-		// 	tg := &tpccWL.transGen[i]
-		// 	tg.validProb = tpccWL.zp.GetProb(i)
-		// 	tg.timeInit = false
-		// }
-		// partGens := tpccWL.NewPartGen(coord.testCases[coord.curTest].PS)
-		// tpccWL.SetPartGens(partGens)
-		//coord.ResetPart(false)
-		tpccWL.ResetPartAlign(false)
-		coord.ResetPartAlign(false)
-	}
-
-	store.SetLatch(true)
-
 	for i := 0; i < len(coord.Workers); i++ {
+		coord.Workers[i].needLock[id] = true
 		coord.Workers[i].Unlock()
 	}
 
-	coord.switchCC(mode)
+	coord.store.SetMixLatch(false, id)
+
+	// Change CC
+	//coord.mode = PARTITION
+	for i := 0; i < len(coord.Workers); i++ {
+		if i == id {
+			coord.Workers[i].modeChange <- true
+		} else {
+			coord.Workers[i].modeChange <- false
+		}
+	}
+
+	for i := 0; i < len(coord.Workers); i++ {
+		<-coord.changeACK[i]
+		if i == id {
+			coord.Workers[i].modeChan <- PARTITION
+		} else {
+			mode := i<<WORKERSHIFT + PARTITION
+			coord.Workers[i].modeChan <- mode
+		}
+	}
+}
+
+func (coord *Coordinator) PCCtoOthers(mode int, id int) {
+	store := coord.store
+	// Stop all workers; change meta data
+	/*
+		for i := 0; i < len(coord.Workers); i++ {
+			coord.Workers[i].Lock()
+		}
+
+		if coord.workload == SINGLEWL {
+			single := coord.singleWL
+			//single.ResetPart(1, false)
+			//single.zp.Reconf(NOPARTSKEW)
+			//for i := 0; i < len(single.transGen); i++ {
+			//	tg := single.transGen[i]
+			//	tg.validProb = single.zp.GetProb(i)
+			//	tg.timeInit = false
+			//}
+			//basic := single.GetBasicWL()
+			//partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
+			//basic.SetPartGen(partGens)
+			//coord.ResetPart(false)
+			single.ResetPartAlign(false)
+			coord.ResetPartAlign(false)
+		} else if coord.workload == SMALLBANKWL {
+			sb := coord.sbWL
+			// sb.ResetPart(1, false)
+			// sb.zp.Reconf(NOPARTSKEW)
+			// for i := 0; i < len(sb.transGen); i++ {
+			// 	tg := sb.transGen[i]
+			// 	tg.validProb = sb.zp.GetProb(i)
+			// 	tg.timeInit = false
+			// }
+			// basic := sb.GetBasicWL()
+			// partGens := basic.NewPartGen(coord.testCases[coord.curTest].PS)
+			// basic.SetPartGen(partGens)
+			// coord.ResetPart(false)
+			sb.ResetPartAlign(false)
+			coord.ResetPartAlign(false)
+		} else { // TPCCWL
+			tpccWL := coord.tpccWL
+			// tpccWL.ResetPart(1, false)
+			// tpccWL.zp.Reconf(NOPARTSKEW)
+			// for i := 0; i < len(tpccWL.transGen); i++ {
+			// 	tg := &tpccWL.transGen[i]
+			// 	tg.validProb = tpccWL.zp.GetProb(i)
+			// 	tg.timeInit = false
+			// }
+			// partGens := tpccWL.NewPartGen(coord.testCases[coord.curTest].PS)
+			// tpccWL.SetPartGens(partGens)
+			//coord.ResetPart(false)
+			tpccWL.ResetPartAlign(false)
+			coord.ResetPartAlign(false)
+		}
+
+
+		for i := 0; i < len(coord.Workers); i++ {
+			coord.Workers[i].Unlock()
+		}*/
+
+	store.SetMixLatch(true, id)
+
+	for i := 0; i < len(coord.Workers); i++ {
+		if i == id {
+			coord.Workers[i].modeChange <- true
+		} else {
+			coord.Workers[i].modeChange <- false
+		}
+	}
+
+	for i := 0; i < len(coord.Workers); i++ {
+		<-coord.changeACK[i]
+		if i == id {
+			coord.Workers[i].modeChan <- mode
+		} else {
+			tmpMode := i<<WORKERSHIFT + mode
+			coord.Workers[i].modeChan <- tmpMode
+		}
+	}
 
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Lock()
-		coord.Workers[i].needLock = false
+		coord.Workers[i].needLock[id] = false
 	}
 
 	// store.state = INDEX_CHANGING
