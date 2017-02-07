@@ -694,8 +694,9 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 	if !coord.isPartAlign {
 		curType += 2
 	}
+	clog.Info("Predict Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", confRate, homeConfRate, recAvg, rr, partConf, partVar)
+
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
-	clog.Info("Switching from %v to %v, Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", curType, execType, confRate, homeConfRate, recAvg, rr, partConf, partVar)
 
 	if curType != execType {
 		if execType > 2 { // Use Shared Index
