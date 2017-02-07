@@ -695,13 +695,13 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 		curType += 2
 	}*/
 
+	curType := coord.Workers[id].partToExec[id]
+
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
 
 	if execType >= 3 {
 		execType -= 2
 	}
-
-	curType := coord.Workers[id].partToExec[id]
 
 	if curType != execType {
 		clog.Info("Worker %v Switch from %v to %v Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", id, curType, execType, confRate, homeConfRate, recAvg, rr, partConf, partVar)
