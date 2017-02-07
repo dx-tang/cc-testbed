@@ -414,28 +414,26 @@ func (coord *Coordinator) ResetPartAlign(isPartAlign bool) {
 
 func (coord *Coordinator) process() {
 	summary := coord.summary
-	var ri *ReportInfo
+	var ri []*ReportInfo = make([]*ReportInfo, *NumPart)
 	timeFile, err := os.OpenFile("timeFile.out", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		clog.Error("%v", err)
 	}
 	for {
 		select {
-		case ri = <-coord.reports[0]:
+		case ri[0] = <-coord.reports[0]:
 
-			setReport(ri, summary)
-
-			// Switch
-			if *SysType == ADAPTIVE {
-				coord.predict(ri, 0)
-			}
+			setReport(ri[0], summary)
 
 			for i := 1; i < len(coord.reports); i++ {
-				ri = <-coord.reports[i]
-				if *SysType == ADAPTIVE {
-					coord.predict(ri, i)
+				ri[i] = <-coord.reports[i]
+				collectReport(ri[i], summary)
+			}
+
+			if *SysType == ADAPTIVE {
+				for i := 0; i < len(coord.reports); i++ {
+					coord.predict(ri[i], i)
 				}
-				collectReport(ri, summary)
 			}
 
 			execTime := float64(*NumPart*REPORTPERIOD/PERMINISEC) - summary.genTime.Seconds()
