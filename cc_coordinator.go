@@ -145,8 +145,8 @@ func BuildTestCases(f string, workload int) []TestCase {
 	return testCases
 }
 
-var tpccWrite [7]int = [7]int{50, 50, 0, 0, 0, 0, 0}
-var tpccRead [7]int = [7]int{0, 0, 0, 100, 0, 0, 0}
+var tpccWrite [7]int = [7]int{50, 100, 100, 100, 100, 100, 100}
+var tpccRead [7]int = [7]int{0, 0, 0, 100, 100, 100, 100}
 
 func BuildMixTestCases(f string, workload int) [][]TestCase {
 	tf, err := os.OpenFile(f, os.O_RDONLY, 0600)

@@ -131,11 +131,11 @@ func main() {
 	clog.Info("Populating Whole Store\n")
 	tpccWL = testbed.NewTPCCWL(*wl, nParts, isPartition, nWorkers, 1.01, testCases[0][0].TPCCTransPer, 0, 0, *dataDir, initMode, false, isPartAlign, useLatch)
 	tpccWL.MixConfig(wc)
-	tpccWL.OnlineMixReconf(testCases[0])
 
 	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL, wc)
 
 	tpccWL.SetWorkers(coord)
+	tpccWL.OnlineMixReconf(testCases[0])
 
 	// Populate Key Gen and Part Gen
 	clog.Info("Populating Key Generators and Part Generators\n")
