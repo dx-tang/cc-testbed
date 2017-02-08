@@ -150,22 +150,30 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 		w.E = w.ExecPool[mode]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = PARTITION
+			w.needLock[i] = true
+			w.isLocked[i] = false
 		}
 	} else if *SysType == OCC {
 		w.E = w.ExecPool[mode]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = OCC
+			w.needLock[i] = false
+			w.isLocked[i] = false
 		}
 	} else if *SysType == LOCKING {
 		w.E = w.ExecPool[mode]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = LOCKING
+			w.needLock[i] = false
+			w.isLocked[i] = false
 		}
 	} else if *SysType == ADAPTIVE {
 		w.E = w.ExecPool[ADAPTIVE]
 		if *Hybrid {
 			for i := 0; i < len(w.partToExec); i++ {
 				w.partToExec[i] = -1
+				w.needLock[i] = false
+				w.isLocked[i] = false
 			}
 		} else {
 			for i := 0; i < len(w.partToExec); i++ {
@@ -383,14 +391,15 @@ func (w *Worker) One(t Trans) (Value, error) {
 		if realChange {
 			mode := <-w.modeChan
 			if mode != -1 {
-				w.mode = <-w.modeChan
+				w.mode = mode
 				w.E = w.ExecPool[w.mode]
+				w.partToExec[w.ID] = w.mode
 			}
 		} else {
-			w.mode = <-w.modeChan
-			id := (w.mode & WORKERNUMMASK) >> WORKERSHIFT
-			w.mode = w.mode & MODEMASK
-			w.partToExec[id] = w.mode
+			tmpMode := <-w.modeChan
+			id := (tmpMode & WORKERNUMMASK) >> WORKERSHIFT
+			tmpMode = tmpMode & MODEMASK
+			w.partToExec[id] = tmpMode
 		}
 	case action := <-w.actionTrans:
 		s := w.coord.store

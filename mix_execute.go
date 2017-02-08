@@ -793,11 +793,12 @@ func (m *MTransaction) Abort(req *LockReq) TID {
 			for j := 0; j < len(pccT.iRecs); j++ {
 				s.ReleaseInsert(i, pccT.iRecs[j].k, pccT.iRecs[j].partNum)
 			}
-			pccT.iRecs = pccT.iRecs[0:0]
+			pccT.iRecs = pccT.iRecs[:0]
+
 			for j := 0; j < len(pccT.dRecs); j++ {
 				s.ReleaseDelete(i, pccT.dRecs[j].k, pccT.dRecs[j].partNum)
 			}
-			pccT.dRecs = pccT.dRecs[0:0]
+			pccT.dRecs = pccT.dRecs[:0]
 		}
 
 		// LOCKING

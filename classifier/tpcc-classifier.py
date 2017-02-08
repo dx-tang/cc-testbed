@@ -17,8 +17,8 @@ READRATE = 4
 HOMECONF = 5
 CONFRATE = 6
 
-threshold = 0.8
-threshold_part = 0.7
+threshold = 0
+threshold_part = 0
 
 class TPCC(object):
 
@@ -44,8 +44,8 @@ class TPCC(object):
 				Y.extend([0])
 			else:
 				Y.extend([1])
-		#partclf = tree.DecisionTreeClassifier(max_depth=6)
-		partclf = RandomForestClassifier(max_depth=6, n_estimators=10, max_features=3)
+		partclf = tree.DecisionTreeClassifier(max_depth=6)
+		#partclf = RandomForestClassifier(max_depth=6, n_estimators=10, max_features=3)
 		partclf = partclf.fit(np.array(X), np.array(Y))
 		return partclf
 
@@ -66,8 +66,8 @@ class TPCC(object):
 				if y == 2:
 					X.append(tmp)
 					Y.extend([2])
-		#occclf = tree.DecisionTreeClassifier(max_depth=4)
-		occclf = RandomForestClassifier(max_depth=4, n_estimators=10, max_features=1)
+		occclf = tree.DecisionTreeClassifier(max_depth=4)
+		#occclf = RandomForestClassifier(max_depth=4, n_estimators=10, max_features=1)
 		occclf = occclf.fit(np.array(X), np.array(Y))
 		return occclf
 

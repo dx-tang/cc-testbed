@@ -230,6 +230,7 @@ type TPCCTransGen struct {
 	end             []int
 	partRnd         *rand.Rand
 	crMix           []float64
+	crRange         int
 	transPerMix     [][TPCCTRANSNUM]int
 	padding2        [PADDING]byte
 }
@@ -332,9 +333,9 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int, w_id int) Trans {
 		t.home = false
 	}
 
-	if rnd.Intn(100) < int(tg.crMix[t.w_id]) {
+	if tg.crRange > 1 && t.w_id < tg.crRange && rnd.Intn(100) < int(tg.crMix[t.w_id]) {
 		t.accessParts = t.accessParts[:2]
-		tmpPi = (tg.end[t.w_id] + tg.partRnd.Intn(tg.otherNPart[t.w_id]) + 1) % *NumPart
+		tmpPi = t.w_id + tg.partRnd.Intn(tg.crRange-1)%tg.crRange
 		if tmpPi > t.w_id {
 			t.accessParts[0] = t.w_id
 			t.accessParts[1] = tmpPi
@@ -343,26 +344,8 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int, w_id int) Trans {
 			t.accessParts[1] = t.w_id
 		}
 	} else {
-		if tg.clusterNPart[t.w_id] >= 2 {
-			t.accessParts = t.accessParts[:2]
-			var tmpPi int
-			for {
-				tmpPi = tg.start[t.w_id] + tg.partRnd.Intn(tg.clusterNPart[t.w_id])
-				if tmpPi != t.w_id {
-					break
-				}
-			}
-			if tmpPi > t.w_id {
-				t.accessParts[0] = t.w_id
-				t.accessParts[1] = tmpPi
-			} else {
-				t.accessParts[0] = tmpPi
-				t.accessParts[1] = t.w_id
-			}
-		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = t.w_id
-		}
+		t.accessParts = t.accessParts[:1]
+		t.accessParts[0] = t.w_id
 	}
 
 	if *Hybrid {
@@ -417,9 +400,9 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans {
 		t.home = false
 	}
 
-	if rnd.Intn(100) < int(tg.crMix[t.w_id]) {
+	if tg.crRange > 1 && t.w_id < tg.crRange && rnd.Intn(100) < int(tg.crMix[t.w_id]) {
 		t.accessParts = t.accessParts[:2]
-		tmpPi = (tg.end[t.w_id] + tg.partRnd.Intn(tg.otherNPart[t.w_id]) + 1) % *NumPart
+		tmpPi = t.w_id + tg.partRnd.Intn(tg.crRange-1)%tg.crRange
 		if tmpPi > t.w_id {
 			t.accessParts[0] = t.w_id
 			t.accessParts[1] = tmpPi
@@ -428,27 +411,10 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans {
 			t.accessParts[1] = t.w_id
 		}
 	} else {
-		if tg.clusterNPart[t.w_id] >= 2 {
-			t.accessParts = t.accessParts[:2]
-			var tmpPi int
-			for {
-				tmpPi = tg.start[t.w_id] + tg.partRnd.Intn(tg.clusterNPart[t.w_id])
-				if tmpPi != t.w_id {
-					break
-				}
-			}
-			if tmpPi > t.w_id {
-				t.accessParts[0] = t.w_id
-				t.accessParts[1] = tmpPi
-			} else {
-				t.accessParts[0] = tmpPi
-				t.accessParts[1] = t.w_id
-			}
-		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = t.w_id
-		}
+		t.accessParts = t.accessParts[:1]
+		t.accessParts[0] = t.w_id
 	}
+
 	t.c_w_id = tmpPi
 
 	t.TXN = txn
@@ -1074,6 +1040,7 @@ func (tpccWL *TPCCWorkload) OnlineMixReconf(tc []TestCase) {
 			tg.crMix[j] = tc[j].CR
 			tg.transPerMix[j] = tc[j].TPCCTransPer
 		}
+		tg.crRange = tc[0].Range
 		tg.w.Unlock()
 		tg.validProb = tpccWL.zp.GetProb(i)
 		tg.timeInit = false

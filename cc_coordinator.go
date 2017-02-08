@@ -27,6 +27,7 @@ type TestCase struct {
 	Contention   float64
 	Tlen         int
 	RR           int
+	Range        int
 	SBTransper   [SBTRANSNUM]int
 	TPCCTransPer [TPCCTRANSNUM]int
 	padding2     [PADDING]byte
@@ -158,7 +159,6 @@ func BuildMixTestCases(f string, workload int) [][]TestCase {
 	reader := bufio.NewReader(tf)
 
 	var data []byte
-	var splits []string
 
 	data, _, err = reader.ReadLine()
 	if err != nil {
@@ -172,29 +172,40 @@ func BuildMixTestCases(f string, workload int) [][]TestCase {
 		ts[i] = make([]TestCase, *NumPart)
 	}
 
-	for i := 0; i < *NumPart; i++ {
-		_, _, err = reader.ReadLine()
-		if err != nil {
-			clog.Error("Read Empty Line Error %v", err.Error())
-		}
-		for j := 0; j < count; j++ {
-			data, _, err = reader.ReadLine()
-			if err != nil {
-				clog.Error("Read Configuration Error %v", err.Error())
-			}
-			splits = strings.Split(string(data), "\t")
-			if strings.Compare(splits[0], "true") == 0 { // Whether CR
-				ts[j][i].CR = 0
-			} else {
-				ts[j][i].CR = 50
-			}
+	var tempCR float64
+	var tempRange int
+	var tempTransMix [7]int
 
-			if strings.Compare(splits[1], "true") == 0 { // Whether Read-only
-				ts[j][i].TPCCTransPer = tpccRead
+	for j := 0; j < count; j++ {
+		data, _, err = reader.ReadLine()
+		if err != nil {
+			clog.Error("Read Configuration Error %v", err.Error())
+		}
+		splits := strings.Split(string(data), "\t")
+		tempCR, _ = strconv.ParseFloat(splits[0], 64)
+		tempRange, _ = strconv.Atoi(splits[1])
+		tp := strings.Split(splits[2], ":")
+		if len(tp) != TPCCTRANSNUM {
+			clog.Error("Wrong format of transaction percentage string %s\n", splits[2])
+		}
+		for j, str := range tp {
+			per, err := strconv.Atoi(str)
+			if err != nil {
+				clog.Error("TransPercentage Format Error %s\n", str)
+			}
+			if j != 0 {
+				tempTransMix[j] = tempTransMix[j-1] + per
 			} else {
-				ts[j][i].TPCCTransPer = tpccWrite
+				tempTransMix[j] = per
 			}
 		}
+
+		for i := 0; i < *NumPart; i++ {
+			ts[j][i].CR = tempCR
+			ts[j][i].Range = tempRange
+			ts[j][i].TPCCTransPer = tempTransMix
+		}
+
 	}
 
 	return ts
@@ -694,6 +705,7 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 	}*/
 
 	curType := coord.Workers[id].partToExec[id]
+	clog.Info("Worker %v Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", id, confRate, homeConfRate, recAvg, rr, partConf, partVar)
 
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
 
@@ -702,7 +714,7 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 	}
 
 	if curType != execType {
-		clog.Info("Worker %v Switch from %v to %v Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", id, curType, execType, confRate, homeConfRate, recAvg, rr, partConf, partVar)
+		clog.Info("Worker %v Switch from %v to %v \n", id, curType, execType)
 		if execType > 0 { // Use Shared Index
 			if curType == 0 { // Start Merging
 				coord.PCCtoOthers(execType, id)
@@ -765,11 +777,13 @@ func (coord *Coordinator) OtherstoPCC(id int) {
 
 	// UseLocks
 	for i := 0; i < len(coord.Workers); i++ {
-		coord.Workers[i].Lock()
+		coord.Workers[i].modeChange <- true
 	}
+
 	for i := 0; i < len(coord.Workers); i++ {
+		<-coord.changeACK[i]
 		coord.Workers[i].needLock[id] = true
-		coord.Workers[i].Unlock()
+		coord.Workers[i].modeChan <- -1
 	}
 
 	coord.store.SetMixLatch(false, id)
@@ -854,7 +868,7 @@ func (coord *Coordinator) PCCtoOthers(mode int, id int) {
 			coord.Workers[i].Unlock()
 		}*/
 
-	store.SetMixLatch(true, id)
+	//store.SetMixLatch(true, id)
 
 	for i := 0; i < len(coord.Workers); i++ {
 		if i == id {
@@ -869,13 +883,16 @@ func (coord *Coordinator) PCCtoOthers(mode int, id int) {
 		if i == id {
 			coord.Workers[i].modeChan <- mode
 		} else {
-			tmpMode := i<<WORKERSHIFT + mode
+			tmpMode := id<<WORKERSHIFT + mode
 			coord.Workers[i].modeChan <- tmpMode
 		}
 	}
 
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Lock()
+	}
+
+	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].needLock[id] = false
 	}
 
@@ -884,6 +901,8 @@ func (coord *Coordinator) PCCtoOthers(mode int, id int) {
 	// store.priTables = store.secTables
 	// store.secTables = tmpTables
 	// store.isPartition = false
+
+	store.SetMixLatch(true, id)
 
 	for i := 0; i < len(coord.Workers); i++ {
 		coord.Workers[i].Unlock()
@@ -1431,6 +1450,9 @@ func (coord *Coordinator) GetFeature() *Feature {
 	}*/
 	latency := float64(0)
 	partVar = math.Sqrt(partVar)
+	if summary.partSuccess == 0 {
+		summary.partSuccess = 1
+	}
 	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
 	//coord.feature.PartAvg = partAvg
