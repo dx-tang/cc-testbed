@@ -402,7 +402,7 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans {
 
 	if tg.crRange > 1 && t.w_id < tg.crRange && rnd.Intn(100) < int(tg.crMix[t.w_id]) {
 		t.accessParts = t.accessParts[:2]
-		tmpPi = t.w_id + tg.partRnd.Intn(tg.crRange-1)%tg.crRange
+		tmpPi = (t.w_id + tg.partRnd.Intn(tg.crRange-1) + 1) % tg.crRange
 		if tmpPi > t.w_id {
 			t.accessParts[0] = t.w_id
 			t.accessParts[1] = tmpPi
