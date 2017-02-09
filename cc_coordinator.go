@@ -693,6 +693,9 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 	// 	}
 	// }
 	partVar = math.Sqrt(partVar)
+	if summary.partSuccess == 0 {
+		summary.partSuccess = 1
+	}
 	partConf := float64(summary.partAccess) / float64(summary.partSuccess)
 
 	//clog.Info("%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n", partAvg, partVar, partLenVar, recAvg, hitRate, rr, confRate)
