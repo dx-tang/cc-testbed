@@ -380,7 +380,7 @@ func (coord *Coordinator) process() {
 			coord.rc++
 
 			// Switch
-			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE && coord.rc != 1 {
+			if *SysType == ADAPTIVE && coord.store.state == INDEX_NONE && coord.rc > 3 {
 				if !coord.justReconfig {
 					coord.predict(summary)
 				} else {
@@ -404,7 +404,7 @@ func (coord *Coordinator) process() {
 						<-coord.changeACK[i]
 					}
 					for i := 0; i < 31; i++ {
-						coord.Workers[i].modeChan <- 2
+						coord.Workers[i].modeChan <- 0
 					}
 				 	clog.Info("False Switch")
 				}
@@ -651,7 +651,6 @@ func (coord *Coordinator) predict(summary *ReportInfo) {
 			for i := 0; i < len(coord.Workers); i++ {
 				<-coord.changeACK[i]
 				coord.Workers[i].modeChan <- MEDIATED
-
 			}
 			for i := 0; i < len(coord.Workers); i++ {
 				coord.Workers[i].modeChange <- true

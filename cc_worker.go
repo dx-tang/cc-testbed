@@ -240,19 +240,16 @@ func (w *Worker) run() {
 		select {
 		case <-tm: // Report Information within One Period
 			w.Lock()
-			replica := w.riMaster
-			w.riMaster = w.riReplica
-			w.riReplica = replica
-			if *SysType == ADAPTIVE {
-				//replica.execTime = w.NExecute - w.riMaster.prevExec
+			replica := &ReportInfo{}
+			//if *SysType == ADAPTIVE {
 				replica.genTime = w.NGen - w.riMaster.prevGen
 				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
 				replica.aborts = w.NStats[NABORTS] - w.riMaster.prevAborts
 
 				//replica.prevExec = w.NExecute
-				replica.prevGen = w.NGen
-				replica.prevTxn = w.NStats[NTXN]
-				replica.prevAborts = w.NStats[NABORTS]
+				w.riMaster.prevGen = w.NGen
+				w.riMaster.prevTxn = w.NStats[NTXN]
+				w.riMaster.prevAborts = w.NStats[NABORTS]
 
 				 //clog.Info("%v, NREADABORTS %v, NLOCKABORTS %v, NRCHANGEABORTS %v, NRWABORTS %v",
 				 //	w.ID, w.NStats[NREADABORTS], w.NStats[NLOCKABORTS], w.NStats[NRCHANGEABORTS], w.NStats[NRWABORTS])
@@ -261,7 +258,7 @@ func (w *Worker) run() {
 				 //	w.NStats[NRLOCKABORTS], w.NStats[NWLOCKABORTS], w.NStats[NUPGRADEABORTS])
 
 				w.coord.reports[w.ID] <- replica
-			} else {
+			/*} else {
 				//replica.execTime = w.NExecute - w.riMaster.prevExec
 				replica.genTime = w.NGen - w.riMaster.prevGen
 				replica.txn = w.NStats[NTXN] - w.riMaster.prevTxn
@@ -273,8 +270,8 @@ func (w *Worker) run() {
 				replica.prevAborts = w.NStats[NABORTS]
 
 				w.coord.reports[w.ID] <- replica
-			}
-			w.riMaster.Reset()
+			}*/
+			//w.riMaster.Reset()
 			w.Unlock()
 		case <-w.indexStart:
 			w.Lock()

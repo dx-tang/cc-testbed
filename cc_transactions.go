@@ -1270,7 +1270,7 @@ func UpdateInt(t Trans, exec ETransaction) (Value, error) {
 
 		if singleTrans.isLong {
 			exec.Worker().Unlock()
-			time.Sleep(24 * time.Millisecond)
+			time.Sleep(299 * time.Millisecond)
 			exec.Worker().Lock()
 		}
 

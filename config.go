@@ -78,14 +78,14 @@ const (
 	CACHESIZE    = 1000
 	BUFSIZE      = 5
 	TRIAL        = 20
-	RECSR        = 2000
+	RECSR        = 80
 )
 
 // OCC waits on write locks or not
 var occ_wait bool = true
 
 // Use Mediated Switch or not
-var mediated_switch bool = true
+var mediated_switch bool = false
 
 // For DBx1000 version 2PL, use 2PL-waitdie or 2PL-nowait
 var locking_wait bool = false
