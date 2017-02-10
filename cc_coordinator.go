@@ -806,8 +806,8 @@ func (coord *Coordinator) OtherstoPCC(id int) {
 		if i == id {
 			coord.Workers[i].modeChan <- PARTITION
 		} else {
-			mode := i<<WORKERSHIFT + PARTITION
-			coord.Workers[i].modeChan <- mode
+			tempMode := id<<WORKERSHIFT + PARTITION
+			coord.Workers[i].modeChan <- tempMode
 		}
 	}
 }
