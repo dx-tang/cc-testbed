@@ -708,7 +708,7 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 	}*/
 
 	curType := coord.Workers[id].partToExec[id]
-	clog.Info("Worker %v Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", id, confRate, homeConfRate, recAvg, rr, partConf, partVar)
+	//clog.Info("Worker %v Conf %.4f, Home %.4f, RecAvg %.4f, RR %.4f, PConf %.4f, PVar %.4f\n", id, confRate, homeConfRate, recAvg, rr, partConf, partVar)
 
 	execType := coord.clf.Predict(curType, partConf, partVar, recAvg, latency, rr, homeConfRate, confRate)
 

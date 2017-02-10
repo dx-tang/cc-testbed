@@ -108,8 +108,8 @@ func MakeRecord(table Table, k Key, tuple Tuple) Record {
 type PRecord struct {
 	padding1 [PADDING]byte
 	key      Key
-	tuple    Tuple
 	table    Table
+	tuple    Tuple
 	padding2 [PADDING]byte
 }
 
@@ -526,11 +526,11 @@ func (lr *LRecord) DeltaValue(val Value, col int) {
 type ARecord struct {
 	padding1 [PADDING]byte
 	key      Key
-	pessLock mixlock.MixLock
-	optLock  mixlock.MixLock
+	table    Table
 	tuple    Tuple
 	cd       ConfDetector
-	table    Table
+	pessLock mixlock.MixLock
+	optLock  mixlock.MixLock
 	padding2 [PADDING]byte
 }
 

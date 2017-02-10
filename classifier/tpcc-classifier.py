@@ -36,7 +36,7 @@ class TPCC(object):
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
 			tmp = []
-			tmp.extend(columns[PARTAVG:RECAVG])
+			tmp.extend(columns[PARTAVG:PARTSKEW])
 			tmp.extend(columns[RECAVG:LATENCY])
 			tmp.extend(columns[READRATE:CONFRATE])
 			X.append(tmp)
@@ -58,7 +58,7 @@ class TPCC(object):
 			tmp = []
 			tmp.extend(columns[RECAVG:LATENCY])
 			tmp.extend(columns[READRATE:HOMECONF])
-			tmp.extend(columns[CONFRATE:FEATURELEN])
+			tmp.extend(columns[HOMECONF:CONFRATE])
 			for _, y in enumerate(columns[FEATURELEN:]):
 				if y == 1:
 					X.append(tmp)
@@ -72,7 +72,7 @@ class TPCC(object):
 		return occclf
 
 	def Predict(self, curType, partAvg, partSkew, recAvg, latency, readRate, homeconf, confRate):
-		testPart = [[partAvg, partSkew, recAvg, readRate, homeconf]]
+		testPart = [[partAvg, recAvg, readRate, homeconf]]
 		result = self.partclf.predict(testPart)
 		self.partprob = self.partclf.predict_proba(testPart)[0][result[0]]
 		self.totalprob = self.partprob
@@ -86,7 +86,7 @@ class TPCC(object):
 		if cur == 0:
 			return 0
 		else:
-			testOCC = [[recAvg, readRate, confRate]]
+			testOCC = [[recAvg, readRate, homeconf]]
 			result = self.occclf.predict(testOCC)
 			self.occprob = self.occclf.predict_proba(testOCC)[0][result[0] - 1]
 			return result[0] + 2
