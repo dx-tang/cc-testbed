@@ -19,7 +19,8 @@ var NoWait = flag.Bool("nw", true, "Use Waitdie or NoWait for 2PL")
 var Hybrid = flag.Bool("hybrid", false, "Use 2PL/OCC Hybrid")
 
 var (
-	HOTREC  = 1000 * 32
-	HOTBIT  = 1 << 31
-	HOTMASK = HOTBIT - 1
+	HOTREC       = 1000 * 32
+	HOTREC_SMALL = 100
+	HOTBIT       = 1 << 31
+	HOTMASK      = HOTBIT - 1
 )

@@ -121,6 +121,8 @@ type NewOrderTrans struct {
 	o_entry_d       time.Time
 	ol_cnt          int
 	d_hot_bit       int
+	w_hot_bit       int
+	c_hot_bit       int
 	ol_i_id         [MAXOLCNT]int
 	ol_hot_bit      [MAXOLCNT]int
 	ol_quantity     [MAXOLCNT]int
@@ -150,6 +152,9 @@ type PaymentTrans struct {
 	c_id             int
 	c_last           int
 	c_w_id           int
+	d_hot_bit        int
+	w_hot_bit        int
+	c_hot_bit        int
 	h_amount         float32
 	wb_w_ytd         FloatValue
 	wb_d_ytd         FloatValue
@@ -165,12 +170,13 @@ type PaymentTrans struct {
 type OrderStatusTrans struct {
 	padding1 [PADDING]byte
 	BaseTrans
-	w_id     int
-	d_id     int
-	isLast   bool
-	c_id     int
-	c_last   int
-	padding2 [PADDING]byte
+	w_id      int
+	d_id      int
+	isLast    bool
+	c_id      int
+	c_hot_bit int
+	c_last    int
+	padding2  [PADDING]byte
 }
 
 type DeliveryTrans struct {
@@ -192,6 +198,7 @@ type StockLevelTrans struct {
 	BaseTrans
 	w_id      int
 	d_id      int
+	d_hot_bit int
 	threshold int
 	i_id_ar   []int
 	padding2  [PADDING]byte
@@ -349,14 +356,19 @@ func genNewOrderTrans(tg *TPCCTransGen, txn int, w_id int) Trans {
 	}
 
 	if *Hybrid {
+		t.w_hot_bit = HOTBIT
 		t.d_hot_bit = HOTBIT
 	} else {
 		t.d_hot_bit = 0
+		t.w_hot_bit = 0
 	}
 
 	t.TXN = txn
 	t.d_id = rnd.Intn(DIST_COUNT)
 	t.c_id = rnd.Intn(C_ID_PER_DIST)
+	if *Hybrid && t.c_id < HOTREC_SMALL {
+		t.c_hot_bit = HOTBIT
+	}
 	t.o_entry_d = time.Now()
 	t.ol_cnt = MINOLCNT + rnd.Intn(MAXOLCNT-MINOLCNT)
 	t.oRec = oa.genOrderRec()
@@ -420,6 +432,14 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans {
 	t.TXN = txn
 	t.isLast = isLast
 
+	if *Hybrid {
+		t.w_hot_bit = HOTBIT
+		t.d_hot_bit = HOTBIT
+	} else {
+		t.d_hot_bit = 0
+		t.w_hot_bit = 0
+	}
+
 	if isLast {
 		dist_cust := c_last_gen.GetWholeRank()
 		t.d_id = dist_cust / C_LAST_PER_DIST
@@ -452,6 +472,11 @@ func genPaymentTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans {
 			}*/
 	} else {
 		dist_cust := c_id_gen.GetWholeRank()
+		if *Hybrid && dist_cust < HOTREC_SMALL {
+			t.c_hot_bit = HOTBIT
+		} else {
+			t.c_hot_bit = 0
+		}
 		t.d_id = dist_cust / C_ID_PER_DIST
 		t.c_id = dist_cust % C_ID_PER_DIST
 	}
@@ -520,6 +545,11 @@ func genOrderStatusTrans(tg *TPCCTransGen, txn int, isLast bool, w_id int) Trans
 		*/
 	} else {
 		dist_cust := c_id_gen.GetWholeRank()
+		if *Hybrid && dist_cust < HOTREC_SMALL {
+			t.c_hot_bit = HOTBIT
+		} else {
+			t.c_hot_bit = 0
+		}
 		t.d_id = dist_cust / C_ID_PER_DIST
 		t.c_id = dist_cust % C_ID_PER_DIST
 	}
@@ -549,6 +579,11 @@ func genStockLevelTrans(tg *TPCCTransGen, txn int, w_id int) Trans {
 	}
 
 	t.d_id = rnd.Intn(DIST_COUNT)
+	if *Hybrid {
+		t.d_hot_bit = HOTBIT
+	} else {
+		t.d_hot_bit = 0
+	}
 	t.threshold = 10 + rnd.Intn(11)
 	t.i_id_ar = t.i_id_ar[:0]
 

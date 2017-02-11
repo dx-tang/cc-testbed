@@ -222,6 +222,7 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	// Get W_TAX
 	w_id := noTrans.w_id
 	k[0] = w_id
+	k[3] = noTrans.w_hot_bit
 	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
@@ -249,15 +250,16 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	k[3] = 0
 
 	// Get One Record from Customer
 	c_id := noTrans.c_id
 	k[2] = c_id
+	k[3] = noTrans.c_hot_bit
 	rec, err = exec.GetRecord(CUSTOMER, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
+	k[3] = 0
 
 	rec.GetValue(floatRB, C_DISCOUNT)
 	c_discount := floatRB.floatVal
@@ -425,6 +427,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 
 	// Increment w_ytd in warehouse
 	k[0] = payTrans.w_id
+	k[3] = payTrans.w_hot_bit
 	rec, err = exec.GetRecord(WAREHOUSE, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
@@ -438,6 +441,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 
 	// Increment D_YTD in district
 	k[1] = payTrans.d_id
+	k[3] = payTrans.d_hot_bit
 	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
@@ -448,6 +452,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	k[3] = 0
 
 	k[0] = payTrans.c_w_id
 	k[1] = payTrans.d_id
@@ -461,8 +466,14 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 			return nil, err
 		}
 		k[2] = intRB.intVal
+		if *Hybrid && k[2] < HOTREC_SMALL {
+			k[3] = HOTBIT
+		} else {
+			k[3] = 0
+		}
 	} else {
 		k[2] = payTrans.c_id
+		k[3] = payTrans.c_hot_bit
 	}
 	rec, err = exec.GetRecord(CUSTOMER, k, remotePart, req, isHome)
 	if err != nil {
@@ -488,6 +499,7 @@ func Payment(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	k[3] = 0
 
 	// 10 %
 	if payTrans.rnd.Intn(100) < 10 {
@@ -576,13 +588,18 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 			return nil, err
 		}
 		k[2] = intRB.intVal
+		if *Hybrid && k[2] < HOTREC_SMALL {
+			k[3] = HOTBIT
+		}
 	} else {
 		k[2] = orderTrans.c_id
+		k[3] = orderTrans.c_hot_bit
 	}
 	_, err = exec.GetRecord(CUSTOMER, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
+	k[3] = 0
 
 	// Select one row from orders
 	err = exec.GetKeysBySecIndex(ORDER, k, partNum, intRB)
@@ -680,7 +697,11 @@ func Delivery(t Trans, exec ETransaction) (Value, error) {
 	}
 
 	k[2] = c_id
-	k[3] = 0
+	if *Hybrid && k[2] < HOTREC_SMALL {
+		k[3] = HOTBIT
+	} else {
+		k[3] = 0
+	}
 	wb_ol_amount := &deliveryTrans.wb_ol_amount
 	wb_ol_amount.floatVal = ol_amount
 	err = exec.WriteValue(CUSTOMER, k, partNum, wb_ol_amount, C_BALANCE, req, true, isHome, nil)
@@ -715,11 +736,13 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 	// Select one row from District Table
 	k[0] = stockTrans.w_id
 	k[1] = stockTrans.d_id
+	k[3] = stockTrans.d_hot_bit
 	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, isHome)
 	if err != nil {
 		return nil, err
 	}
 	next_o_id := rec.GetTuple().(*DistrictTuple).d_next_o_id
+	k[3] = 0
 
 	threshold := stockTrans.threshold
 	i_id_ar := stockTrans.i_id_ar
@@ -763,10 +786,14 @@ func StockLevel(t Trans, exec ETransaction) (Value, error) {
 
 			// Check threshold; Read s_quantity from Stock Table
 			s_k[1] = i_id
+			if *Hybrid && i_id < HOTREC {
+				s_k[3] = HOTBIT
+			}
 			rec, err = exec.GetRecord(STOCK, s_k, partNum, req, isHome)
 			if err != nil {
 				return nil, err
 			}
+			s_k[3] = 0
 			if rec.GetTuple().(*StockTuple).s_quantity < threshold {
 				count++
 			}
