@@ -266,7 +266,11 @@ func (tg *TPCCTransGen) GenOneTrans(mode int) Trans {
 	w_id := 0
 
 	if *SysType == ADAPTIVE {
-		w_id = tg.partIndex
+		if *Hybrid {
+			w_id = tg.w_id_gen.GetWholeRank()
+		} else {
+			w_id = tg.partIndex
+		}
 	} else {
 		if tg.partAlign {
 			w_id = tg.partIndex

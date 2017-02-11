@@ -126,24 +126,26 @@ func (m *MTransaction) Reset(t Trans, hasPCC bool, hasOCC bool, hasLocking bool)
 }
 
 func (m *MTransaction) ReadValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isHome bool) (Record, Value, bool, error) {
-	if isHome {
-		if m.st.sampleCount == 0 {
-			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-				m.st.readCount += WAREHOUSEWEIGHT
-			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-				m.st.readCount += DISTRICTWEIGHT
-			} else {
-				m.st.readCount++
+	if !*Hybrid {
+		if isHome {
+			if m.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					m.st.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					m.st.readCount += DISTRICTWEIGHT
+				} else {
+					m.st.readCount++
+				}
 			}
-		}
-		sample := &m.st.homeSample
-		if sample.state == 0 { // Not Enough locks acquired
-			m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
-		} else {
-			sample.sampleAccess++
-			if sample.sampleAccess >= sample.recRate {
+			sample := &m.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
 				m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
-				sample.sampleAccess = 0
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
 			}
 		}
 	}
@@ -312,24 +314,26 @@ func (m *MTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 }
 
 func (m *MTransaction) WriteValue(tableID int, k Key, partNum int, val Value, colNum int, req *LockReq, isDelta bool, isHome bool, inputRec Record) error {
-	if isHome {
-		if m.st.sampleCount == 0 {
-			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-				m.st.writeCount += WAREHOUSEWEIGHT
-			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-				m.st.writeCount += DISTRICTWEIGHT
-			} else {
-				m.st.writeCount++
+	if !*Hybrid {
+		if isHome {
+			if m.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					m.st.writeCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					m.st.writeCount += DISTRICTWEIGHT
+				} else {
+					m.st.writeCount++
+				}
 			}
-		}
-		sample := &m.st.homeSample
-		if sample.state == 0 { // Not Enough locks acquired
-			m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
-		} else {
-			sample.sampleAccess++
-			if sample.sampleAccess >= sample.recRate {
+			sample := &m.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
 				m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
-				sample.sampleAccess = 0
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
 			}
 		}
 	}
@@ -637,24 +641,26 @@ func (m *MTransaction) GetKeysBySecIndex(tableID int, k Key, partNum int, val Va
 
 func (m *MTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, isHome bool) (Record, error) {
 
-	if isHome {
-		if m.st.sampleCount == 0 {
-			if WLTYPE == TPCCWL && tableID == WAREHOUSE {
-				m.st.readCount += WAREHOUSEWEIGHT
-			} else if WLTYPE == TPCCWL && tableID == DISTRICT {
-				m.st.readCount += DISTRICTWEIGHT
-			} else {
-				m.st.readCount++
+	if !*Hybrid {
+		if isHome {
+			if m.st.sampleCount == 0 {
+				if WLTYPE == TPCCWL && tableID == WAREHOUSE {
+					m.st.readCount += WAREHOUSEWEIGHT
+				} else if WLTYPE == TPCCWL && tableID == DISTRICT {
+					m.st.readCount += DISTRICTWEIGHT
+				} else {
+					m.st.readCount++
+				}
 			}
-		}
-		sample := &m.st.homeSample
-		if sample.state == 0 { // Not Enough locks acquired
-			m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
-		} else {
-			sample.sampleAccess++
-			if sample.sampleAccess >= sample.recRate {
+			sample := &m.st.homeSample
+			if sample.state == 0 { // Not Enough locks acquired
 				m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
-				sample.sampleAccess = 0
+			} else {
+				sample.sampleAccess++
+				if sample.sampleAccess >= sample.recRate {
+					m.st.oneSampleConf(tableID, k, partNum, m.s, m.w.riMaster, true)
+					sample.sampleAccess = 0
+				}
 			}
 		}
 	}
