@@ -441,7 +441,7 @@ func (coord *Coordinator) process() {
 				collectReport(ri[i], summary)
 			}
 
-			if *SysType == ADAPTIVE {
+			if *SysType == ADAPTIVE && !*Hybrid {
 				for i := 0; i < len(coord.reports); i++ {
 					coord.predict(ri[i], i)
 				}
