@@ -116,8 +116,6 @@ func main() {
 		clog.Error("Report Needed for Adaptive CC Execution\n")
 	}
 
-	testbed.HOTREC = *hotrec * (*testbed.NumPart)
-
 	testbed.InitGlobalBuffer()
 
 	clog.Info("Number of workers %v \n", nWorkers)

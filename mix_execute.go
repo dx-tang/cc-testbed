@@ -32,17 +32,17 @@ func StartMTransaction(w *Worker, nTables int, wc []WorkerConfig) *MTransaction 
 		partToExec: make([]int, len(wc)),
 	}
 
-	for i := 0; i < len(wc); i++ {
-		if *Hybrid {
-			for i := 0; i < len(tx.partToExec); i++ {
-				tx.partToExec[i] = -1
-			}
-		} else {
-			for i := 0; i < len(tx.partToExec); i++ {
-				tx.partToExec[i] = int(wc[i].protocol)
-			}
-		}
-	}
+	// for i := 0; i < len(wc); i++ {
+	// 	if *Hybrid {
+	// 		for i := 0; i < len(tx.partToExec); i++ {
+	// 			tx.partToExec[i] = -1
+	// 		}
+	// 	} else {
+	// 		for i := 0; i < len(tx.partToExec); i++ {
+	// 			tx.partToExec[i] = int(wc[i].protocol)
+	// 		}
+	// 	}
+	// }
 
 	// pcc
 	for i := 0; i < len(tx.pccTrack); i++ {
@@ -150,7 +150,7 @@ func (m *MTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 		}
 	}
 
-	if m.partToExec[partNum] == PARTITION {
+	if m.w.partToExec[partNum] == PARTITION {
 		t := &m.pccTrack[tableID]
 		for i := 0; i < len(t.wRecs); i++ {
 			wr := &t.wRecs[i]
@@ -172,7 +172,7 @@ func (m *MTransaction) ReadValue(tableID int, k Key, partNum int, val Value, col
 		}
 		rec.GetValue(val, colNum)
 		return rec, val, true, nil
-	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 { // 2PL
+	} else if m.w.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 { // 2PL
 		k[3] = k[3] & HOTMASK
 		var ok bool = false
 		var wr *WriteRec
@@ -338,7 +338,7 @@ func (m *MTransaction) WriteValue(tableID int, k Key, partNum int, val Value, co
 		}
 	}
 
-	if m.partToExec[partNum] == PARTITION {
+	if m.w.partToExec[partNum] == PARTITION {
 		t := &m.pccTrack[tableID]
 		for i := 0; i < len(t.wRecs); i++ {
 			wr := &t.wRecs[i]
@@ -378,7 +378,7 @@ func (m *MTransaction) WriteValue(tableID int, k Key, partNum int, val Value, co
 		t.wRecs[n].isDelta = t.wRecs[n].isDelta[0:1]
 		t.wRecs[n].isDelta[0] = isDelta
 		return nil
-	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
+	} else if m.w.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
 		k[3] = k[3] & HOTMASK
 		var ok bool = false
 		var wr *WriteRec
@@ -559,7 +559,7 @@ func (m *MTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record)
 	if err != nil {
 		return err
 	}
-	if m.partToExec[partNum] == PARTITION {
+	if m.w.partToExec[partNum] == PARTITION {
 		t := &m.pccTrack[tableID]
 		n := len(t.iRecs)
 		t.iRecs = t.iRecs[0 : n+1]
@@ -567,7 +567,7 @@ func (m *MTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record)
 		t.iRecs[n].partNum = partNum
 		t.iRecs[n].rec = rec
 
-	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
+	} else if m.w.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
 		k[3] = k[3] & HOTMASK
 		t := &m.lockTrack[tableID]
 		n := len(t.iRecs)
@@ -590,7 +590,7 @@ func (m *MTransaction) InsertRecord(tableID int, k Key, partNum int, rec Record)
 }
 
 func (m *MTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, error) {
-	if m.partToExec[partNum] == PARTITION {
+	if m.w.partToExec[partNum] == PARTITION {
 		s := m.s
 		rec, err := s.PrepareDelete(tableID, k, partNum)
 		if err != nil {
@@ -604,7 +604,7 @@ func (m *MTransaction) DeleteRecord(tableID int, k Key, partNum int) (Record, er
 		t.dRecs[n].partNum = partNum
 
 		return rec, err
-	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
+	} else if m.w.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
 		s := m.s
 		rec, err := s.PrepareDelete(tableID, k, partNum)
 		if err != nil {
@@ -665,13 +665,13 @@ func (m *MTransaction) GetRecord(tableID int, k Key, partNum int, req *LockReq, 
 		}
 	}
 
-	if m.partToExec[partNum] == PARTITION {
+	if m.w.partToExec[partNum] == PARTITION {
 		rec, _, _, err := m.s.GetRecByID(tableID, k, partNum)
 		if err != nil {
 			return nil, err
 		}
 		return rec, err
-	} else if m.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
+	} else if m.w.partToExec[partNum] == LOCKING || (k[3]&HOTBIT) != 0 {
 		k[3] = k[3] & HOTMASK
 		var rec Record
 		var err error

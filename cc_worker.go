@@ -392,7 +392,7 @@ func (w *Worker) One(t Trans) (Value, error) {
 			mode := <-w.modeChan
 			if mode != -1 {
 				w.mode = mode
-				w.E = w.ExecPool[w.mode]
+				//w.E = w.ExecPool[w.mode]
 				w.partToExec[w.ID] = w.mode
 			}
 		} else {
