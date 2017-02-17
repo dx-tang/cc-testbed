@@ -347,6 +347,8 @@ type SingleTransGen struct {
 	otherNPart      []int
 	start           []int
 	end             []int
+	crMix           []float64
+	crRange         int
 	partRnd         *rand.Rand
 	padding2        [PADDING]byte
 }
@@ -355,35 +357,15 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	s.w.Lock()
 	defer s.w.Unlock()
 
-	start := time.Now()
-
-	if !s.timeInit {
-		s.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
-		s.validTime = start.Add(time.Duration(TIMESLICE*s.validProb) * time.Millisecond)
-		s.timeInit = true
-	}
-
-	if start.After(s.validTime) {
-		if start.Before(s.endTime) { // Issue Dummy Trans
-			return &s.dt
-		} else {
-			s.endTime = start.Add(time.Duration(TIMESLICE) * time.Millisecond)
-			s.validTime = start.Add(time.Duration(TIMESLICE*s.validProb) * time.Millisecond)
-		}
-	}
-
 	t := s.transBuf[s.head]
 	s.head = (s.head + 1) % QUEUESIZE
 
 	rnd := s.rnd
 	gen := s.gen
-	cr := int(s.cr)
 	var pi int
 
 	//nParts := s.nParts
-	isPartAlign := s.isPartAlign
 	tlen := s.tlen
-	mp := s.mp
 
 	txn := rnd.Intn(100)
 	for i, v := range s.transPercentage {
@@ -395,10 +377,14 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 
 	t.TXN = txn + SINGLEBASE
 
-	if *SysType == ADAPTIVE && !*Hybrid {
-		pi = s.start[s.partIndex] + s.partRnd.Intn(s.clusterNPart[s.partIndex])
+	if *SysType == ADAPTIVE {
+		if *Hybrid {
+			pi = gen.GenOnePart()
+		} else {
+			pi = s.partIndex
+		}
 	} else {
-		if isPartAlign {
+		if s.isPartAlign {
 			pi = s.partIndex
 		} else {
 			pi = gen.GenOnePart()
@@ -413,10 +399,9 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 		t.home = false
 	}
 
-	if rnd.Intn(100) < cr && mp > 1 {
-		//if *SysType == ADAPTIVE {
+	if s.crRange > 1 && pi < s.crRange && rnd.Intn(100) < int(s.crMix[pi]) {
 		t.accessParts = t.accessParts[:2]
-		tmpPi := (s.end[pi] + s.partRnd.Intn(s.otherNPart[pi]) + 1) % *NumPart
+		tmpPi := (pi + s.partRnd.Intn(s.crRange-1) + 1) % s.crRange
 		if tmpPi > pi {
 			t.accessParts[0] = pi
 			t.accessParts[1] = tmpPi
@@ -424,88 +409,9 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 			t.accessParts[0] = tmpPi
 			t.accessParts[1] = pi
 		}
-		//}
-
-		/*else {
-			ap := nParts
-			if ap > mp {
-				ap = mp
-			}
-			if ap > tlen {
-				ap = tlen
-			}
-			t.accessParts = t.accessParts[:ap]
-			start := gen.GenOnePart()
-			//start := rnd.Intn(nParts)
-			end := (start + ap - 1) % nParts
-			wrap := false
-			if start >= end {
-				wrap = true
-			}
-			//clog.Info("start %v; end %v; pi %v", start, end, pi)
-			if (!wrap && pi >= start && pi < end) || (wrap && (pi >= start || pi < end)) { // The Extending Parts Includes the Home Partition
-				if start+ap <= nParts {
-					for i := 0; i < ap; i++ {
-						t.accessParts[i] = start + i
-					}
-				} else {
-					for i := 0; i < ap; i++ {
-						tmp := start + i
-						if tmp >= nParts {
-							t.accessParts[tmp-nParts] = tmp - nParts
-						} else {
-							t.accessParts[ap-nParts+start+i] = tmp
-						}
-					}
-				}
-			} else {
-				if !wrap { // Conseculative Partitions; No Wrap
-					if pi < start { // pi to the left
-						t.accessParts[0] = pi
-						for i := 0; i < ap-1; i++ {
-							t.accessParts[i+1] = start + i
-						}
-					} else { // pi to the right
-						t.accessParts[ap-1] = pi
-						for i := 0; i < ap-1; i++ {
-							t.accessParts[i] = start + i
-						}
-					}
-				} else { // Wrap
-					t.accessParts[ap-nParts+start-1] = pi
-					for i := 0; i < ap-1; i++ {
-						tmp := start + i
-						if tmp >= nParts {
-							t.accessParts[tmp-nParts] = tmp - nParts
-						} else {
-							t.accessParts[ap-nParts+start+i] = tmp
-						}
-					}
-				}
-			}
-		}*/
-
 	} else {
-		if s.clusterNPart[pi] >= 2 {
-			t.accessParts = t.accessParts[:2]
-			var tmpPi int
-			for {
-				tmpPi = s.start[pi] + s.partRnd.Intn(s.clusterNPart[pi])
-				if tmpPi != pi {
-					break
-				}
-			}
-			if tmpPi > pi {
-				t.accessParts[0] = pi
-				t.accessParts[1] = tmpPi
-			} else {
-				t.accessParts[0] = tmpPi
-				t.accessParts[1] = pi
-			}
-		} else {
-			t.accessParts = t.accessParts[:1]
-			t.accessParts[0] = pi
-		}
+		t.accessParts = t.accessParts[:1]
+		t.accessParts[0] = pi
 	}
 
 	t.keys = t.keys[:tlen]
@@ -679,6 +585,9 @@ func NewSingleWL(workload string, nParts int, isPartition bool, nWorkers int, s 
 		}
 		tg.head = 0
 		tg.tail = -1
+
+		tg.crMix = make([]float64, *NumPart+PADDINGINT64*2)
+		tg.crMix = tg.crMix[PADDINGINT64 : *NumPart+PADDINGINT64]
 		singleWL.transGen[i] = tg
 	}
 
@@ -791,6 +700,22 @@ func (singleWL *SingelWorkload) OnlineReconf(keygens [][]KeyGen, partGens []Part
 		tg.mp = mp
 		tg.validProb = singleWL.zp.GetProb(i)
 		tg.timeInit = false
+		tg.w.Unlock()
+	}
+}
+
+func (singleWL *SingelWorkload) OnlineMixReconf(tc []TestCase, keygens [][]KeyGen) {
+	for i := 0; i < len(singleWL.transGen); i++ {
+		tg := singleWL.transGen[i]
+		tg.w.Lock()
+		tg.gen.keyGens = keygens[i]
+		tg.cr = tc[0].CR
+		tg.tlen = tc[0].Tlen
+		tg.rr = tc[0].RR
+		for j := 0; j < len(tc); j++ {
+			tg.crMix[j] = tc[j].CR
+		}
+		tg.crRange = tc[0].Range
 		tg.w.Unlock()
 	}
 }

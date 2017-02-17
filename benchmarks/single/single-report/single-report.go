@@ -82,12 +82,13 @@ func main() {
 			if *testbed.Hybrid {
 				initMode = testbed.LOCKING
 				isPartAlign = false
+				clog.Info("Using Hybrid CC")
+
 			} else {
 				initMode = testbed.PARTITION
 				isPartAlign = true
+				clog.Info("Using Adaptive CC: Starting from PCC")
 			}
-
-			clog.Info("Using Adaptive CC: Starting from PCC")
 		} else {
 			isPartAlign = false
 			nParts = 1
@@ -124,19 +125,21 @@ func main() {
 	var single *testbed.SingelWorkload = nil
 	var coord *testbed.Coordinator = nil
 
-	testCases := testbed.BuildTestCases(*tc, testbed.SINGLEWL)
+	testCases := testbed.BuildMixTestCases(*tc, testbed.SINGLEWL)
+
 	wc := testbed.BuildWorkerConfig(*dl)
 	useLatch := testbed.BuildUseLatch(wc)
 
-	tc := &testCases[0]
+	tc := &testCases[0][0]
 
 	clog.Info("Populating Whole Store\n")
-	single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tc.Contention, *tp, tc.CR, tc.Tlen, tc.RR, tc.MP, tc.PS, initMode, false, isPartAlign, useLatch)
+	single = testbed.NewSingleWL(*wl, nParts, isPartition, nWorkers, tc.Contention, *tp, tc.CR, tc.Tlen, tc.RR, tc.MP, testbed.NOPARTSKEW, initMode, false, isPartAlign, useLatch)
 	single.MixConfig(wc)
 
 	coord = testbed.NewCoordinator(nWorkers, single.GetStore(), single.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.SINGLEWL, single, wc)
 
 	single.SetWorkers(coord)
+	single.OnlineMixReconf(testCases[0], coord.KeyGenPool[testCases[0][0].Contention])
 
 	if *prof {
 		f, err := os.Create("single.prof")
@@ -146,8 +149,6 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-
-	clog.Info("CR %v MP %v PS %v Contention %v Tlen %v RR %v \n", tc.CR, tc.MP, tc.PS, tc.Contention, tc.Tlen, tc.RR)
 
 	ts := testbed.TID(0)
 	var wg sync.WaitGroup
