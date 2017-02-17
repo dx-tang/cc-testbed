@@ -20,16 +20,17 @@ func main() {
 	rnd2 := rand.New(rand.NewSource(time.Now().Unix() + 10))
 	rnd3 := rand.New(rand.NewSource(time.Now().Unix() + 1))
 	rnd4 := rand.New(rand.NewSource(time.Now().Unix() + 1000))
-	fmt.Printf("%v\n\n", count)
+	fmt.Printf("%v\n", count)
 	for i := 0; i < count; i++ {
 		temp1 := crRange[rnd0.Intn(len(crRange))]
 		temp2 := 0
 		if temp1 != 0 {
 			temp2 = CR[rnd1.Intn(len(CR))]
 		}
-		temp3 := transMix[rnd2.Intn(len(transMix))]
-		temp4 :=
-			fmt.Printf("%v\t%v\t%v\n", temp2, temp1, temp3)
+		temp3 := RR[rnd2.Intn(len(RR))]
+		temp4 := Tlen[rnd3.Intn(len(Tlen))]
+		temp5 := Skew[rnd4.Intn(len(Skew))]
+		fmt.Printf("%v\t%v\t%v\t%v\t%v\n", temp2, temp1, temp3, temp4, temp5)
 	}
 
 }

@@ -735,12 +735,13 @@ func (coord *Coordinator) predict(summary *ReportInfo, id int) {
 			if curType == 0 { // Start Merging
 				coord.PCCtoOthers(execType, id)
 			} else {
-				if mediated_switch {
+				/*if mediated_switch {
 					coord.switchCC(MEDIATED)
 					coord.switchCC(execType)
 				} else {
 					coord.switchCC(execType)
-				}
+				}*/
+				coord.switchCC(execType, id)
 			}
 		} else { // Use Partitioned Index
 			coord.OtherstoPCC(id)
@@ -928,22 +929,35 @@ func (coord *Coordinator) PCCtoOthers(mode int, id int) {
 
 }
 
-func (coord *Coordinator) switchCC(mode int) {
-	coord.mode = mode
+func (coord *Coordinator) switchCC(mode int, id int) {
+	//coord.mode = mode
 	for i := 0; i < len(coord.Workers); i++ {
-		coord.Workers[i].modeChange <- true
+		coord.Workers[i].modeChange <- (i == id)
 	}
-	if mediated_switch {
-		for i := 0; i < len(coord.Workers); i++ {
-			<-coord.changeACK[i]
-			coord.Workers[i].modeChan <- coord.mode
-		}
-	} else {
-		for i := 0; i < len(coord.Workers); i++ {
-			<-coord.changeACK[i]
-		}
-		for i := 0; i < len(coord.Workers); i++ {
-			coord.Workers[i].modeChan <- coord.mode
+	/*
+		if mediated_switch {
+			for i := 0; i < len(coord.Workers); i++ {
+				<-coord.changeACK[i]
+				coord.Workers[i].modeChan <- mode
+			}
+		} else {
+			for i := 0; i < len(coord.Workers); i++ {
+				<-coord.changeACK[i]
+			}
+			for i := 0; i < len(coord.Workers); i++ {
+				coord.Workers[i].modeChan <- mode
+			}
+		}*/
+	for i := 0; i < len(coord.Workers); i++ {
+		<-coord.changeACK[i]
+	}
+
+	for i := 0; i < len(coord.Workers); i++ {
+		if i == id {
+			coord.Workers[i].modeChan <- mode
+		} else {
+			tmpMode := id<<WORKERSHIFT + mode
+			coord.Workers[i].modeChan <- tmpMode
 		}
 	}
 
