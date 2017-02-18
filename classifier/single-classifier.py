@@ -17,8 +17,8 @@ READRATE = 4
 HOMECONF = 5
 CONFRATE = 6
 
-threshold_part = 0.7
-threshold = 0.7
+threshold_part = 0
+threshold = 0
 
 class Single(object):
 
@@ -36,7 +36,7 @@ class Single(object):
 		for line in open(f):
 			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
 			tmp = []
-			tmp.extend(columns[PARTAVG:RECAVG])
+			tmp.extend(columns[PARTAVG:PARTSKEW])
 			tmp.extend(columns[RECAVG:LATENCY])
 			tmp.extend(columns[READRATE:CONFRATE])
 			X.append(tmp)
@@ -44,8 +44,8 @@ class Single(object):
 				Y.extend([0])
 			else:
 				Y.extend([1])
-		#partclf = tree.DecisionTreeClassifier(max_depth=6)
-		partclf = RandomForestClassifier(max_depth=5, n_estimators=10, max_features=3)
+		partclf = tree.DecisionTreeClassifier(max_depth=6)
+		#partclf = RandomForestClassifier(max_depth=5, n_estimators=10, max_features=3)
 		partclf = partclf.fit(np.array(X), np.array(Y))
 		return partclf
 
@@ -57,22 +57,21 @@ class Single(object):
 			columns = [float(x) for x in line.strip().split('\t')[FEATURESTART:]]
 			tmp = []
 			tmp.extend(columns[RECAVG:LATENCY])
-			tmp.extend(columns[READRATE:HOMECONF])
-			tmp.extend(columns[CONFRATE:FEATURELEN])
-			for _, y in enumerate(columns[FEATURELEN:]):
+                        tmp.extend(columns[READRATE:CONFRATE])
+                        for _, y in enumerate(columns[FEATURELEN:FEATURELEN+1]):
 				if y == 1:
 					X.append(tmp)
 					Y.extend([1])
 				if y == 2:
 					X.append(tmp)
 					Y.extend([2])
-		#occclf = tree.DecisionTreeClassifier(max_depth=4)
-		occclf = RandomForestClassifier(max_depth=4, n_estimators=10, max_features=3)
+		occclf = tree.DecisionTreeClassifier(max_depth=4)
+		#occclf = RandomForestClassifier(max_depth=4, n_estimators=10, max_features=3)
 		occclf = occclf.fit(np.array(X), np.array(Y))
 		return occclf
 
 	def Predict(self, curType, partAvg, partSkew, recAvg, latency, readRate, homeconf, confRate):
-		testPart = [[partAvg, partSkew, recAvg, readRate, homeconf]]
+		testPart = [[partAvg, recAvg, readRate, homeconf]]
 		result = self.partclf.predict(testPart)
 		self.partprob = self.partclf.predict_proba(testPart)[0][result[0]]
 		self.totalprob = self.partprob
@@ -86,7 +85,7 @@ class Single(object):
 		if cur == 0:
 			return 0
 		else:
-			testOCC = [[recAvg, readRate, confRate]]
+			testOCC = [[recAvg, readRate, homeconf]]
 			result = self.occclf.predict(testOCC)
 			self.occprob = self.occclf.predict_proba(testOCC)[0][result[0] - 1]
 			return result[0] + 2
