@@ -135,7 +135,7 @@ func main() {
 	coord = testbed.NewCoordinator(nWorkers, tpccWL.GetStore(), tpccWL.GetTableCount(), initMode, *sr, testCases, *nsecs, testbed.TPCCWL, tpccWL, wc)
 
 	tpccWL.SetWorkers(coord)
-	tpccWL.OnlineMixReconf(testCases[0])
+	tpccWL.OnlineMixReconf(testCases[0], coord.KeyGenPool[testCases[0][0].Contention])
 
 	// Populate Key Gen and Part Gen
 	clog.Info("Populating Key Generators and Part Generators\n")

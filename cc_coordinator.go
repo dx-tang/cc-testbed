@@ -201,10 +201,13 @@ func BuildMixTestCases(f string, workload int) [][]TestCase {
 				}
 			}
 
+			tempSkew, _ := strconv.ParseFloat(splits[3], 64)
+
 			for i := 0; i < *NumPart; i++ {
 				ts[j][i].CR = tempCR
 				ts[j][i].Range = tempRange
 				ts[j][i].TPCCTransPer = tempTransMix
+				ts[j][i].Contention = tempSkew
 			}
 		} else {
 			tempRR, _ := strconv.Atoi(splits[2])
@@ -381,6 +384,21 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, TPCCWL)
 			}
 			coordinator.tpccWL = wl.(*TPCCWorkload)
+
+			tpccWL := coordinator.tpccWL
+			for i, _ := range testCases {
+				tc := &testCases[i][0]
+				keyGens, ok1 := coordinator.KeyGenPool[tc.Contention]
+				if !ok1 {
+					keyGens = tpccWL.NewKeyGen(tc.Contention)
+					coordinator.KeyGenPool[tc.Contention] = keyGens
+				}
+			}
+			partGens, ok := coordinator.tpccPartPool[NOPARTSKEW]
+			if !ok {
+				partGens = tpccWL.NewPartGen(NOPARTSKEW)
+				coordinator.tpccPartPool[NOPARTSKEW] = partGens
+			}
 			/*tpccWL := coordinator.tpccWL
 			for i, _ := range testCases {
 				tc := &testCases[i]
@@ -519,7 +537,7 @@ func (coord *Coordinator) process() {
 				*/
 				if coord.workload == TPCCWL {
 					tpccWL := coord.tpccWL
-					tpccWL.OnlineMixReconf(tc)
+					tpccWL.OnlineMixReconf(tc, coord.KeyGenPool[tc[0].Contention])
 				} else {
 					single := coord.singleWL
 					single.OnlineMixReconf(tc, coord.KeyGenPool[tc[0].Contention])

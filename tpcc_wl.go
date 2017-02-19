@@ -1071,7 +1071,7 @@ func (tpccWL *TPCCWorkload) OnlineReconf(keygens [][]KeyGen, partGens []KeyGen, 
 	}
 }
 
-func (tpccWL *TPCCWorkload) OnlineMixReconf(tc []TestCase) {
+func (tpccWL *TPCCWorkload) OnlineMixReconf(tc []TestCase, keygens [][]KeyGen) {
 	for i := 0; i < tpccWL.nWorkers; i++ {
 		tg := &tpccWL.transGen[i]
 		tg.w.Lock()
@@ -1080,9 +1080,10 @@ func (tpccWL *TPCCWorkload) OnlineMixReconf(tc []TestCase) {
 			tg.transPerMix[j] = tc[j].TPCCTransPer
 		}
 		tg.crRange = tc[0].Range
+		tg.c_id_gen = keygens[i][0]
+		tg.c_last_gen = keygens[i][1]
+		tg.i_id_gen = keygens[i][2]
 		tg.w.Unlock()
-		tg.validProb = tpccWL.zp.GetProb(i)
-		tg.timeInit = false
 	}
 }
 
