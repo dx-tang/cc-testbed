@@ -311,7 +311,7 @@ func (tx *TTransaction) WriteValue_Ex(tableID int, k Key, partNum int, value Val
 			rr.exist = false
 			n := len(rt.wRecs)
 			rt.wRecs = rt.wRecs[0 : n+1]
-			wr := &rt.wRecs[n]
+			wr = &rt.wRecs[n]
 			wr.k = k
 			wr.partNum = partNum
 			wr.rec = rr.rec
@@ -351,7 +351,7 @@ func (tx *TTransaction) WriteValue_Ex(tableID int, k Key, partNum int, value Val
 	if ok {
 		n := len(rt.wRecs)
 		rt.wRecs = rt.wRecs[0 : n+1]
-		wr := &rt.wRecs[n]
+		wr = &rt.wRecs[n]
 		wr.k = k
 		wr.partNum = partNum
 		wr.rec = rec
