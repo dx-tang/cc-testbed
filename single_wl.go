@@ -400,7 +400,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	}
 
 	if s.crRange > 1 && pi < s.crRange && rnd.Intn(100) < int(s.crMix[pi]) {
-		t.accessParts = t.accessParts[:2]
+		t.accessParts = t.accessParts[:3]
 		tmpPi := (pi + s.partRnd.Intn(s.crRange-1) + 1) % s.crRange
 		if tmpPi > pi {
 			t.accessParts[0] = pi
@@ -409,6 +409,22 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 			t.accessParts[0] = tmpPi
 			t.accessParts[1] = pi
 		}
+		if t.accessParts[0] + 1 != t.accessParts[1] {
+			t.accessParts[2] = t.accessParts[1]
+			t.accessParts[1] = t.accessParts[0] + 1
+		} else {
+			newPart := (t.accessParts[1] + 1) % s.crRange
+			if newPart < t.accessParts[0] { // newPart is the smallest
+				t.accessParts[2] = t.accessParts[1]
+				t.accessParts[1] = t.accessParts[0]
+				t.accessParts[0] = newPart
+			} else { //newPart is the largest
+				t.accessParts[2] = newPart
+			}
+		}
+		//if t.accessParts[0] == t.accessParts[1] || t.accessParts[0] == t.accessParts[2] || t.accessParts[2] == t.accessParts[1] {
+		//	clog.Error("duplicate partition %d %d %s\n", pi, tmpPi, t.accessParts)
+		//}
 	} else {
 		t.accessParts = t.accessParts[:1]
 		t.accessParts[0] = pi
@@ -420,7 +436,7 @@ func (s *SingleTransGen) GenOneTrans(mode int) Trans {
 	for i := 0; i < len(t.keys); i++ {
 		t.parts[i] = t.accessParts[j]
 		t.keys[i] = gen.GetKey(SINGLE, t.parts[i])
-		if *Hybrid && t.keys[i][0] < HOTREC { // isHot
+		if t.parts[i] >= *r_part && *Hybrid && t.keys[i][0] < HOTREC { // isHot
 			t.keys[i][3] |= HOTBIT
 		}
 		j = (j + 1) % len(t.accessParts)

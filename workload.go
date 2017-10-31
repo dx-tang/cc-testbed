@@ -5,9 +5,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"flag"
 
 	"github.com/totemtang/cc-testbed/clog"
 )
+
+var r_part = flag.Int("r_part", 0, "number of read-only partitions")
 
 var (
 	WLTYPE int

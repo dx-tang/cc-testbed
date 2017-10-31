@@ -158,6 +158,11 @@ func BuildMixTestCases(f string, workload int) [][]TestCase {
 
 	reader := bufio.NewReader(tf)
 
+	_, _, err = reader.ReadLine()
+	if err != nil {
+		clog.Error("Read Header Error %v", err.Error())
+	}
+
 	var data []byte
 
 	data, _, err = reader.ReadLine()
@@ -319,13 +324,13 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 		coordinator.tpccPartPool = make(map[float64][]KeyGen)
 		coordinator.workload = workload
 		if workload == SINGLEWL {
-			if *SysType == ADAPTIVE {
+			/*if *SysType == ADAPTIVE {
 				partFile := CLASSIFERPATH + "/" + SINGLEPARTTRAIN
 				occFile := CLASSIFERPATH + "/" + SINGLEOCCTRAIN
 				pureFile := CLASSIFERPATH + "/" + SINGLEPURETRAIN
 				indexFile := CLASSIFERPATH + "/" + SINGLEINDEXTRAIN
 				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, SINGLEWL)
-			}
+			}*/
 			coordinator.singleWL = wl.(*SingelWorkload)
 
 			single := coordinator.singleWL
@@ -466,11 +471,11 @@ func (coord *Coordinator) process() {
 				collectReport(ri[i], summary)
 			}
 
-			if *SysType == ADAPTIVE && !*Hybrid {
+			/*if *SysType == ADAPTIVE && !*Hybrid {
 				for i := 0; i < len(coord.reports); i++ {
 					coord.predict(ri[i], i)
 				}
-			}
+			}*/
 
 			execTime := float64(*NumPart*REPORTPERIOD/PERMINISEC) - summary.genTime.Seconds()
 
