@@ -69,13 +69,13 @@ func NewOrder_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
-	// Lock district
-	d_num := w_id*10 + d_id
-	NO_Dist_Locks[d_num].Lock()
-
 	distTuple := rec.GetTuple().(*DistrictTuple)
 	d_tax := distTuple.d_tax
 	d_next_o_id := distTuple.d_next_o_id
+
+	// Lock district
+	d_num := w_id*10 + d_id
+	NO_Dist_Locks[d_num].Lock()
 
 	// Increment D_NEXT_O_ID
 	wb_next_o_id := &noTrans.wb_next_o_id

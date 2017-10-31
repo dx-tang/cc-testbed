@@ -323,9 +323,9 @@ func (tx *TTransaction) WriteValue_Ex(tableID int, k Key, partNum int, value Val
 			wr.isDelta[0] = isDelta
 		}
 		if isDelta {
-			wr.rec.DeltaValue(value, colNum)
+			rr.rec.DeltaValue(value, colNum)
 		} else {
-			wr.rec.SetValue(value, colNum)
+			rr.rec.SetValue(value, colNum)
 		}
 		return nil
 	}
