@@ -74,6 +74,16 @@ func main() {
 			isPartition = false
 			clog.Info("Using 2PL\n")
 		}
+	} else if *testbed.SysType == testbed.TEBALDI {
+		initMode = testbed.TEBALDI
+		isPartAlign = false
+		if *isPart {
+			clog.Info("Using TEBALDI with partition\n")
+		} else {
+			nParts = 1
+			isPartition = false
+			clog.Info("Using TEBALDI\n")
+		}
 	} else if *testbed.SysType == testbed.ADAPTIVE {
 		isPartAlign = false
 		if *isPart {

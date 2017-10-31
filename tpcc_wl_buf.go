@@ -10,6 +10,7 @@ type OrderAllocator struct {
 	oRecs    []ORecord
 	pRecs    []PRecord
 	aRecs    []ARecord
+	tRecs    []TRecord
 	tuples   []OrderTuple
 	cur      int
 	padding2 [PADDING]byte
@@ -31,6 +32,7 @@ func (oa *OrderAllocator) OneAllocate() {
 	oa.pRecs = nil
 	oa.pRecs = nil
 	oa.aRecs = nil
+	oa.tRecs = nil
 	if *SysType == LOCKING {
 		oa.lRecs = make([]LRecord, ORDER_PER_ALLOC)
 		for i := 0; i < ORDER_PER_ALLOC; i++ {
@@ -50,6 +52,11 @@ func (oa *OrderAllocator) OneAllocate() {
 		oa.aRecs = make([]ARecord, ORDER_PER_ALLOC)
 		for i := 0; i < ORDER_PER_ALLOC; i++ {
 			oa.aRecs[i].SetTuple(&oa.tuples[i])
+		}
+	} else if *SysType == TEBALDI {
+		oa.tRecs = make([]TRecord, ORDER_PER_ALLOC)
+		for i := 0; i < ORDER_PER_ALLOC; i++ {
+			oa.tRecs[i].SetTuple(&oa.tuples[i])
 		}
 	} else {
 		clog.Info("System Type %v Not Support", *SysType)
@@ -71,6 +78,8 @@ func (oa *OrderAllocator) genOrderRec() Record {
 		rec = &oa.pRecs[oa.cur]
 	} else if *SysType == ADAPTIVE {
 		rec = &oa.aRecs[oa.cur]
+	} else if *SysType == TEBALDI {
+		rec = &oa.tRecs[oa.cur]
 	} else {
 		clog.Info("System Type %v Not Support", *SysType)
 	}
@@ -86,6 +95,7 @@ type OrderLineAllocator struct {
 	oRecs    []ORecord
 	pRecs    []PRecord
 	aRecs    []ARecord
+	tRecs    []TRecord
 	tuples   []OrderLineTuple
 	cur      int
 	padding2 [PADDING]byte
@@ -123,6 +133,11 @@ func (ola *OrderLineAllocator) OneAllocate() {
 		for i := 0; i < ORDERLINE_PER_ALLOC; i++ {
 			ola.aRecs[i].SetTuple(&ola.tuples[i])
 		}
+	} else if *SysType == TEBALDI {
+		ola.tRecs = make([]TRecord, ORDERLINE_PER_ALLOC)
+		for i := 0; i < ORDERLINE_PER_ALLOC; i++ {
+			ola.tRecs[i].SetTuple(&ola.tuples[i])
+		}
 	} else {
 		clog.Info("System Type %v Not Support", *SysType)
 	}
@@ -143,6 +158,8 @@ func (ola *OrderLineAllocator) genOrderLineRec() Record {
 		rec = &ola.pRecs[ola.cur]
 	} else if *SysType == ADAPTIVE {
 		rec = &ola.aRecs[ola.cur]
+	} else if *SysType == TEBALDI {
+		rec = &ola.tRecs[ola.cur]
 	} else {
 		clog.Info("System Type %v Not Support", *SysType)
 	}
@@ -158,6 +175,7 @@ type HistoryAllocator struct {
 	oRecs    []ORecord
 	pRecs    []PRecord
 	aRecs    []ARecord
+	tRecs    []TRecord
 	tuples   []HistoryTuple
 	cur      int
 	padding2 [PADDING]byte
@@ -191,6 +209,11 @@ func (ha *HistoryAllocator) OneAllocate() {
 		for i := 0; i < HISTORY_PER_ALLOC; i++ {
 			ha.aRecs[i].SetTuple(&ha.tuples[i])
 		}
+	} else if *SysType == TEBALDI {
+		ha.tRecs = make([]TRecord, HISTORY_PER_ALLOC)
+		for i := 0; i < HISTORY_PER_ALLOC; i++ {
+			ha.tRecs[i].SetTuple(&ha.tuples[i])
+		}
 	} else {
 		clog.Info("System Type %v Not Support", *SysType)
 	}
@@ -211,6 +234,8 @@ func (ha *HistoryAllocator) genHistoryRec() Record {
 		rec = &ha.pRecs[ha.cur]
 	} else if *SysType == ADAPTIVE {
 		rec = &ha.aRecs[ha.cur]
+	} else if *SysType == TEBALDI {
+		rec = &ha.tRecs[ha.cur]
 	} else {
 		clog.Info("System Type %v Not Support", *SysType)
 	}

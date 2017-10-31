@@ -1195,6 +1195,7 @@ type ReadRec struct {
 	k        Key
 	rec      Record
 	exist    bool
+	locked   bool
 	padding2 [PADDING]byte
 }
 

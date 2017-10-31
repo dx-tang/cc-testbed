@@ -99,6 +99,14 @@ func MakeRecord(table Table, k Key, tuple Tuple) Record {
 		//ar.wdLock.Initialize()
 
 		return ar
+	} else if *SysType == TEBALDI {
+		tr := &TRecord{
+			table: table,
+			key:   k,
+			tuple: tuple,
+		}
+
+		return tr
 	} else {
 		clog.Error("System Type %v Not Supported Yet", *SysType)
 		return nil

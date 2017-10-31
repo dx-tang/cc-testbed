@@ -145,25 +145,33 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.ExecPool[LOCKING] = StartLTransaction(w, tableCount)
 	w.ExecPool[ADAPTIVE] = StartMTransaction(w, tableCount, wc)
 	w.ExecPool[MEDIATED] = StartOPTransaction(w, tableCount, wc)
+	w.ExecPool[TEBALDI] = StartTTransaction(w, tableCount)
 
 	if *SysType == PARTITION {
-		w.E = w.ExecPool[mode]
+		w.E = w.ExecPool[PARTITION]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = PARTITION
 			w.needLock[i] = true
 			w.isLocked[i] = false
 		}
 	} else if *SysType == OCC {
-		w.E = w.ExecPool[mode]
+		w.E = w.ExecPool[PARTITION]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = OCC
 			w.needLock[i] = false
 			w.isLocked[i] = false
 		}
 	} else if *SysType == LOCKING {
-		w.E = w.ExecPool[mode]
+		w.E = w.ExecPool[PARTITION]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = LOCKING
+			w.needLock[i] = false
+			w.isLocked[i] = false
+		}
+	} else if *SysType == TEBALDI {
+		w.E = w.ExecPool[TEBALDI]
+		for i := 0; i < len(w.partToExec); i++ {
+			w.partToExec[i] = TEBALDI
 			w.needLock[i] = false
 			w.isLocked[i] = false
 		}
@@ -241,13 +249,23 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 	w.Register(UPDATEINT, UpdateInt)
 
 	// TPCC Workload
-	w.Register(TPCC_NEWORDER, NewOrder)
-	w.Register(TPCC_PAYMENT_ID, Payment)
-	w.Register(TPCC_PAYMENT_LAST, Payment)
-	w.Register(TPCC_ORDERSTATUS_ID, OrderStatus)
-	w.Register(TPCC_ORDERSTATUS_LAST, OrderStatus)
-	w.Register(TPCC_STOCKLEVEL, StockLevel)
-	w.Register(TPCC_DELIVERY, Delivery)
+	if *SysType == TEBALDI {
+		w.Register(TPCC_NEWORDER, NewOrder_Tebaldi)
+		w.Register(TPCC_PAYMENT_ID, Payment_Tebaldi)
+		w.Register(TPCC_PAYMENT_LAST, Payment_Tebaldi)
+		w.Register(TPCC_ORDERSTATUS_ID, OrderStatus_Tebaldi)
+		w.Register(TPCC_ORDERSTATUS_LAST, OrderStatus_Tebaldi)
+		w.Register(TPCC_STOCKLEVEL, StockLevel_Tebaldi)
+		w.Register(TPCC_DELIVERY, Delivery_Tebaldi)
+	} else {
+		w.Register(TPCC_NEWORDER, NewOrder)
+		w.Register(TPCC_PAYMENT_ID, Payment)
+		w.Register(TPCC_PAYMENT_LAST, Payment)
+		w.Register(TPCC_ORDERSTATUS_ID, OrderStatus)
+		w.Register(TPCC_ORDERSTATUS_LAST, OrderStatus)
+		w.Register(TPCC_STOCKLEVEL, StockLevel)
+		w.Register(TPCC_DELIVERY, Delivery)
+	}
 
 	return w
 }
