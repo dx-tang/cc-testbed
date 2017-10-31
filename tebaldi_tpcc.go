@@ -17,7 +17,7 @@ var NOTLOCK = false
 var NO_Dist_Locks []SpinLockPad
 
 func Init_Tebaldi(warehouse int) {
-	NO_Dist_Locks = make([]SpinLockPad, 0, warehouse*10)
+	NO_Dist_Locks = make([]SpinLockPad, warehouse*10)
 }
 
 func NewOrder_Tebaldi(t Trans, exec ETransaction) (Value, error) {
