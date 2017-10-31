@@ -832,6 +832,8 @@ func NewTPCCWL(workload string, nParts int, isPartition bool, nWorkers int, s fl
 				tmpRec := &ARecord{}
 				//tmpRec.wdLock.Initialize()
 				noRec = tmpRec
+			} else if *SysType == TEBALDI {
+				noRec = &TRecord{}
 			} else {
 				clog.Info("System Type %v Not Support", *SysType)
 			}
