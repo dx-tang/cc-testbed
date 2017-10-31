@@ -155,14 +155,14 @@ func NewWorker(id int, s *Store, c *Coordinator, tableCount int, mode int, sampl
 			w.isLocked[i] = false
 		}
 	} else if *SysType == OCC {
-		w.E = w.ExecPool[PARTITION]
+		w.E = w.ExecPool[OCC]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = OCC
 			w.needLock[i] = false
 			w.isLocked[i] = false
 		}
 	} else if *SysType == LOCKING {
-		w.E = w.ExecPool[PARTITION]
+		w.E = w.ExecPool[LOCKING]
 		for i := 0; i < len(w.partToExec); i++ {
 			w.partToExec[i] = LOCKING
 			w.needLock[i] = false
