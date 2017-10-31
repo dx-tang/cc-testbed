@@ -387,6 +387,8 @@ func NewCoordinator(nWorkers int, store *Store, tableCount int, mode int, sample
 				pureFile := CLASSIFERPATH + "/" + TPCCPURETRAIN
 				indexFile := CLASSIFERPATH + "/" + TPCCINDEXTRAIN
 				coordinator.clf = classifier.NewClassifier(CLASSIFERPATH, partFile, occFile, pureFile, indexFile, TPCCWL)
+			} else if *SysType == TEBALDI {
+				Init_Tebaldi(*NumPart)
 			}
 			coordinator.tpccWL = wl.(*TPCCWorkload)
 
