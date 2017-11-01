@@ -11,6 +11,7 @@ import (
 
 var GROUPA = 0
 var GROUPB = 1
+var GROUPC = 2
 var LOCK = true
 var NOTLOCK = false
 
@@ -419,6 +420,7 @@ func Payment_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 
 func OrderStatus_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	orderTrans := t.(*OrderStatusTrans)
+	tx := exec.(*TTransaction)
 
 	var k Key
 
@@ -440,7 +442,7 @@ func OrderStatus_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		//for i, b := range orderTrans.c_last {
 		//	k[i+16] = b
 		//}
-		err = exec.GetKeysBySecIndex(CUSTOMER, k, partNum, intRB)
+		err = tx.GetKeysBySecIndex(CUSTOMER, k, partNum, intRB)
 		if err != nil {
 			return nil, err
 		}
@@ -452,14 +454,14 @@ func OrderStatus_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		k[2] = orderTrans.c_id
 		k[3] = orderTrans.c_hot_bit
 	}
-	_, err = exec.GetRecord(CUSTOMER, k, partNum, req, isHome)
+	_, err = tx.GetRecord_Ex(CUSTOMER, k, partNum, req, NOTLOCK, GROUPC)
 	if err != nil {
 		return nil, err
 	}
 	k[3] = 0
 
 	// Select one row from orders
-	err = exec.GetKeysBySecIndex(ORDER, k, partNum, intRB)
+	err = tx.GetKeysBySecIndex(ORDER, k, partNum, intRB)
 	if err != nil {
 		if err == ENOORDER {
 			exec.Abort(req)
@@ -470,7 +472,7 @@ func OrderStatus_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	o_id := intRB.intVal
 
 	k[2] = o_id
-	rec, err = exec.GetRecord(ORDER, k, partNum, req, isHome)
+	rec, err = tx.GetRecord_Ex(ORDER, k, partNum, req, NOTLOCK, GROUPC)
 	if err != nil {
 		return nil, err
 	}
@@ -478,13 +480,13 @@ func OrderStatus_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	ol_cnt := rec.GetTuple().(*OrderTuple).o_ol_cnt
 	for i := 0; i < ol_cnt; i++ {
 		k[3] = i
-		_, err = exec.GetRecord(ORDERLINE, k, partNum, req, isHome)
+		_, err = tx.GetRecord_Ex(ORDERLINE, k, partNum, req, NOTLOCK, GROUPC)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if exec.Commit(req, isHome) == 0 {
+	if tx.Commit_Ex(req, isHome, GROUPC) == 0 {
 		return nil, EABORT
 	}
 
@@ -584,6 +586,7 @@ func Delivery_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 
 func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	stockTrans := t.(*StockLevelTrans)
+	tx := exec.(*TTransaction)
 
 	var k Key
 	var s_k Key
@@ -600,7 +603,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	k[0] = stockTrans.w_id
 	k[1] = stockTrans.d_id
 	k[3] = stockTrans.d_hot_bit
-	rec, err = exec.GetRecord(DISTRICT, k, partNum, req, isHome)
+	rec, err = tx.GetRecord_Ex(DISTRICT, k, partNum, req, NOTLOCK, GROUPC)
 	if err != nil {
 		return nil, err
 	}
@@ -617,7 +620,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		// Read one row from ORDER Table
 		k[2] = i
 		k[3] = 0
-		rec, err = exec.GetRecord(ORDER, k, partNum, req, isHome)
+		rec, err = tx.GetRecord_Ex(ORDER, k, partNum, req, NOTLOCK, GROUPC)
 		if err != nil {
 			return nil, err
 		}
@@ -626,7 +629,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		for j := 0; j < ol_cnt; j++ {
 			// Read ol_cnt rows from OrderLine Table
 			k[3] = j
-			rec, err = exec.GetRecord(ORDERLINE, k, partNum, req, isHome)
+			rec, err = tx.GetRecord_Ex(ORDERLINE, k, partNum, req, NOTLOCK, GROUPC)
 			if err != nil {
 				return nil, err
 			}
@@ -652,7 +655,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 			if *Hybrid && i_id < HOTREC {
 				s_k[3] = HOTBIT
 			}
-			rec, err = exec.GetRecord(STOCK, s_k, partNum, req, isHome)
+			rec, err = tx.GetRecord_Ex(STOCK, s_k, partNum, req, NOTLOCK, GROUPC)
 			if err != nil {
 				return nil, err
 			}
@@ -663,7 +666,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		}
 	}
 
-	if exec.Commit(req, isHome) == 0 {
+	if tx.Commit_Ex(req, isHome, GROUPC) == 0 {
 		return nil, EABORT
 	}
 
