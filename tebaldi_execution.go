@@ -136,6 +136,9 @@ func (tx *TTransaction) GetRecord_Ex(tableID int, k Key, partNum int, req *LockR
 
 	// Try RLock
 	rec, _, _, err = tx.s.GetRecByID(tableID, k, partNum)
+	for err == ENOKEY {
+		rec, _, _, err = tx.s.GetRecByID(tableID, k, partNum)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -421,6 +424,7 @@ func (tx *TTransaction) Commit_Ex(req *LockReq, isHome bool, group int) TID {
 					rr.rec.WUnlock(req, tx.maxSeen)
 				}
 			}
+			rr.exist = false
 		}
 		t.rRecs = t.rRecs[:0]
 	}

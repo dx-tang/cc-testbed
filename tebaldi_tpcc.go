@@ -454,10 +454,10 @@ func OrderStatus_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		k[2] = orderTrans.c_id
 		k[3] = orderTrans.c_hot_bit
 	}
-	_, err = tx.GetRecord_Ex(CUSTOMER, k, partNum, req, NOTLOCK, GROUPC)
-	if err != nil {
-		return nil, err
-	}
+	//_, err = tx.GetRecord_Ex(CUSTOMER, k, partNum, req, NOTLOCK, GROUPC)
+	//if err != nil {
+	//	return nil, err
+	//}
 	k[3] = 0
 
 	// Select one row from orders
@@ -607,7 +607,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	next_o_id := rec.GetTuple().(*DistrictTuple).d_next_o_id
+	next_o_id := rec.GetTuple().(*DistrictTuple).d_next_o_id - 5
 	k[3] = 0
 
 	threshold := stockTrans.threshold

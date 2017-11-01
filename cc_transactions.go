@@ -595,10 +595,10 @@ func OrderStatus(t Trans, exec ETransaction) (Value, error) {
 		k[2] = orderTrans.c_id
 		k[3] = orderTrans.c_hot_bit
 	}
-	_, err = exec.GetRecord(CUSTOMER, k, partNum, req, isHome)
-	if err != nil {
-		return nil, err
-	}
+	//_, err = exec.GetRecord(CUSTOMER, k, partNum, req, isHome)
+	//if err != nil {
+	//	return nil, err
+	//}
 	k[3] = 0
 
 	// Select one row from orders
