@@ -28,7 +28,10 @@ func (s *Spinlock) Lock() {
 			runtime.Gosched()
 			i = PREEMPT
 		}
-		done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
+		locked := atomic.LoadInt32(&s.state)
+		if locked == 0 {
+			done = atomic.CompareAndSwapInt32(&s.state, 0, mutexLocked)
+		}
 		i--
 	}
 }
