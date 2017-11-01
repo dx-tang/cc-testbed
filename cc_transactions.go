@@ -716,6 +716,10 @@ func Delivery(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 
+	if exec.Commit(req, isHome) == 0 {
+		return nil, EABORT
+	}
+
 	return nil, nil
 }
 

@@ -493,6 +493,7 @@ func OrderStatus_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 
 func Delivery_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	deliveryTrans := t.(*DeliveryTrans)
+	tx := exec.(*TTransaction)
 
 	var k Key
 
@@ -509,7 +510,8 @@ func Delivery_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 
 	k[0] = deliveryTrans.w_id
 	k[1] = deliveryTrans.d_id
-	rec, err = exec.DeleteRecord(NEWORDER, k, partNum)
+
+	rec, err = tx.DeleteRecord(NEWORDER, k, partNum)
 	if err != nil {
 		if err == ENODEL {
 			return nil, nil
@@ -522,7 +524,7 @@ func Delivery_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 
 	// Update ORDER Table
 	k[2] = o_id
-	rec, err = exec.GetRecord(ORDER, k, partNum, req, isHome)
+	rec, err = tx.GetRecord_Ex(ORDER, k, partNum, req, LOCK, GROUPB)
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +534,7 @@ func Delivery_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	rec.GetValue(intRB, O_OL_CNT)
 	ol_cnt := intRB.intVal
 
-	err = exec.WriteValue(ORDER, k, partNum, &deliveryTrans.wb_o_carrier, O_CARRIER_ID, req, false, isHome, rec)
+	err = tx.WriteValue_Ex(ORDER, k, partNum, &deliveryTrans.wb_o_carrier, O_CARRIER_ID, req, false, LOCK, GROUPB, rec)
 	if err != nil {
 		return nil, err
 	}
@@ -541,12 +543,12 @@ func Delivery_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	ol_amount := float32(0)
 	for i := 0; i < ol_cnt; i++ {
 		k[3] = i
-		rec, val, _, err = exec.ReadValue(ORDERLINE, k, partNum, floatRB, OL_AMOUNT, req, isHome)
+		rec, val, _, err = tx.ReadValue_Ex(ORDERLINE, k, partNum, floatRB, OL_AMOUNT, req, LOCK, GROUPB)
 		if err != nil {
 			return nil, err
 		}
 		ol_amount += val.(*FloatValue).floatVal
-		err = exec.WriteValue(ORDERLINE, k, partNum, &deliveryTrans.wb_date_ar[i], OL_DELIVERY_D, req, false, isHome, rec)
+		err = tx.WriteValue_Ex(ORDERLINE, k, partNum, &deliveryTrans.wb_date_ar[i], OL_DELIVERY_D, req, false, LOCK, GROUPB, rec)
 		if err != nil {
 			return nil, err
 		}
@@ -561,16 +563,20 @@ func Delivery_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	}
 	wb_ol_amount := &deliveryTrans.wb_ol_amount
 	wb_ol_amount.floatVal = ol_amount
-	err = exec.WriteValue(CUSTOMER, k, partNum, wb_ol_amount, C_BALANCE, req, true, isHome, nil)
+	err = tx.WriteValue_Ex(CUSTOMER, k, partNum, wb_ol_amount, C_BALANCE, req, true, LOCK, GROUPB, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	wb_delivery_cnt := &deliveryTrans.wb_delivery_cnt
 	wb_delivery_cnt.intVal = 1
-	err = exec.WriteValue(CUSTOMER, k, partNum, wb_delivery_cnt, C_DELIVERY_CNT, req, true, isHome, nil)
+	err = tx.WriteValue_Ex(CUSTOMER, k, partNum, wb_delivery_cnt, C_DELIVERY_CNT, req, true, LOCK, GROUPB, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if tx.Commit_Ex(req, isHome, GROUPB) == 0 {
+		return nil, EABORT
 	}
 
 	return nil, nil
