@@ -98,7 +98,7 @@ func (tr *TRecord) DeltaValue(val Value, col int) {
 func (tr *TRecord) GroupLock(group int) {
 	if group == GROUPA {
 		tr.groupLock.RLock()
-	} else {
+	} else if group == GROUPB {
 		tr.groupLock.Lock()
 	}
 }
@@ -106,7 +106,7 @@ func (tr *TRecord) GroupLock(group int) {
 func (tr *TRecord) GroupUnlock(group int) {
 	if group == GROUPA {
 		tr.groupLock.RUnlock()
-	} else {
+	} else if group == GROUPB {
 		tr.groupLock.Unlock()
 	}
 }
