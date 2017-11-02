@@ -5,9 +5,11 @@ import (
 )
 
 type SSI_Entry struct {
-	index int
-	val   [SSI_MAX_VERSION]Value
-	col   [SSI_MAX_VERSION]Value
+	padding1 [PADDING]byte
+	index    int
+	val      [SSI_MAX_VERSION]Value
+	col      [SSI_MAX_VERSION]Value
+	padding2 [PADDING]byte
 }
 
 const (
@@ -77,6 +79,7 @@ func (sht *SSI_HashTable) Put(k Key, val Value, col Value) {
 				bucket.recArray[i].col[version] = col
 				bucket.recArray[i].index = (bucket.recArray[i].index + 1) % SSI_MAX_VERSION
 				sht.latches[bucketIndex].Unlock()
+				return
 			}
 		}
 		bucket = bucket.next
