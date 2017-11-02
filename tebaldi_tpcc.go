@@ -25,11 +25,15 @@ func Init_Tebaldi(warehouse int) {
 	stock_version_table = make([]SSI_Entry, warehouse*STOCKSIZE_PER_WAREHOUSE)
 }
 
-func Insert_NewVersion(k Key, val Value, col Value) {
+func Insert_NewVersion(k Key, vals []Value, cols []int) {
 	hash_index := k[0]*STOCKSIZE_PER_WAREHOUSE + k[1]
 	version := stock_version_table[hash_index].index
-	stock_version_table[hash_index].val[version] = val
-	stock_version_table[hash_index].col[version] = col
+	stock_version_table[hash_index].vals[version][0] = vals[0].(*IntValue).intVal
+	stock_version_table[hash_index].vals[version][1] = vals[1].(*IntValue).intVal
+	stock_version_table[hash_index].vals[version][2] = vals[2].(*IntValue).intVal
+	stock_version_table[hash_index].cols[version][0] = cols[0]
+	stock_version_table[hash_index].cols[version][1] = cols[1]
+	stock_version_table[hash_index].cols[version][2] = cols[2]
 	stock_version_table[hash_index].index = (version + 1) % SSI_MAX_VERSION
 }
 
