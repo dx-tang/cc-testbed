@@ -657,7 +657,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	next_o_id = rec.GetTuple().(*DistrictTuple).d_next_o_id
+	next_o_id = rec.GetTuple().(*DistrictTuple).d_next_o_id - 10
 	k[3] = 0
 
 	threshold := stockTrans.threshold
