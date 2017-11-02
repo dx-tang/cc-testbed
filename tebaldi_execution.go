@@ -410,7 +410,7 @@ func (tx *TTransaction) Commit_Ex(req *LockReq, isHome bool, group int) TID {
 
 			// For SSI, write multiple versions
 			if i == STOCK {
-				Insert_NewVersion(wr.k, wr.vals, wr.cols)
+				wr.rec.(*TRecord).Insert(wr.vals, wr.cols)
 			}
 
 			wr.vals = wr.vals[:0]

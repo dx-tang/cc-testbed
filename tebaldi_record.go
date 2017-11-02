@@ -18,6 +18,7 @@ type TRecord struct {
 	groupLock spinlock.RWSpinlock
 	table     Table
 	tuple     Tuple
+	stash     SSI_Entry
 	padding2  [PADDING]byte
 }
 
@@ -109,4 +110,13 @@ func (tr *TRecord) GroupUnlock(group int) {
 	} else if group == GROUPB {
 		tr.groupLock.Unlock()
 	}
+}
+
+func (tr *TRecord) Insert(vals []Value, cols []int) {
+	tr.stash.vals[0] = vals[0].(*IntValue).intVal
+	tr.stash.vals[1] = vals[1].(*IntValue).intVal
+	tr.stash.vals[2] = vals[2].(*IntValue).intVal
+	tr.stash.cols[0] = cols[0]
+	tr.stash.cols[1] = cols[1]
+	tr.stash.cols[2] = cols[2]
 }
