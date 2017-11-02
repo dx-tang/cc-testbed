@@ -306,6 +306,25 @@ func NewOrder(t Trans, exec ETransaction) (Value, error) {
 	rb_o_dist := &noTrans.rb_o_dist
 	var iTuple *ItemTuple
 
+	// Sort
+	// j := 0
+	// for i := 1; i < int(noTrans.ol_cnt); i++ {
+	// 	temp_w_id := noTrans.ol_supply_w_id[i]
+	// 	temp_i_id := noTrans.ol_i_id[i]
+	// 	for j = i - 1; j >= 0; j-- {
+	// 		cur_w_id := noTrans.ol_supply_w_id[j]
+	// 		cur_i_id := noTrans.ol_i_id[j]
+	// 		if temp_w_id < cur_w_id || (temp_w_id == cur_w_id && temp_i_id < cur_i_id) {
+	// 			noTrans.ol_supply_w_id[j+1] = cur_w_id
+	// 			noTrans.ol_i_id[j+1] = cur_i_id
+	// 		} else {
+	// 			break
+	// 		}
+	// 	}
+	// 	noTrans.ol_supply_w_id[j+1] = temp_w_id
+	// 	noTrans.ol_i_id[j+1] = temp_i_id
+	// }
+
 	for i := 0; i < int(noTrans.ol_cnt); i++ {
 		k[0] = noTrans.ol_i_id[i]
 		rec, _ = table.data[0].ht.Get(k)

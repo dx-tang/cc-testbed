@@ -15,13 +15,28 @@ var GROUPC = 2
 var LOCK = true
 var NOTLOCK = false
 
+type DistEntry struct {
+	padding1 [PADDING]byte
+	index    int
+	value1   [10]int
+	value2   [10]float32
+	padding2 [PADDING]byte
+}
+
 var NO_Dist_Locks []SpinLockPad
+var NO_Dist_Latches []SpinLockPad
+var NO_Dist_Values []DistEntry
+var PM_Dist_Latches []SpinLockPad
+var PM_Dist_Values []DistEntry
 
 //var stock_version_table [32 * STOCKSIZE_PER_WAREHOUSE]SSI_Entry
 
 func Init_Tebaldi(warehouse int) {
 	NO_Dist_Locks = make([]SpinLockPad, warehouse*10)
-
+	NO_Dist_Latches = make([]SpinLockPad, warehouse*10)
+	NO_Dist_Values = make([]DistEntry, warehouse*10)
+	PM_Dist_Latches = make([]SpinLockPad, warehouse*10)
+	PM_Dist_Values = make([]DistEntry, warehouse*10)
 }
 
 /*func Insert_NewVersion(k Key, vals []Value, cols []int) {
@@ -92,6 +107,13 @@ func NewOrder_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	// Lock district
 	d_num := w_id*10 + d_id
 	NO_Dist_Locks[d_num].Lock()
+
+	// For SSI
+	NO_Dist_Latches[d_num].Lock()
+	version := NO_Dist_Values[d_num].index
+	NO_Dist_Values[d_num].value1[version] = d_next_o_id + 1
+	NO_Dist_Values[d_num].index = (version + 1) % 10
+	NO_Dist_Latches[d_num].Unlock()
 
 	// Increment D_NEXT_O_ID
 	wb_next_o_id := &noTrans.wb_next_o_id
@@ -326,6 +348,14 @@ func Payment_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 		return nil, err
 	}
 	k[3] = 0
+
+	// For SSI
+	d_num := payTrans.w_id*10 + payTrans.d_id
+	PM_Dist_Latches[d_num].Lock()
+	version := PM_Dist_Values[d_num].index
+	PM_Dist_Values[d_num].value2[version] = payTrans.h_amount
+	PM_Dist_Values[d_num].index = (version + 1) % 10
+	PM_Dist_Latches[d_num].Unlock()
 
 	k[0] = payTrans.c_w_id
 	k[1] = payTrans.d_id
