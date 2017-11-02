@@ -644,6 +644,11 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 
 	isHome := t.isHome()
 
+	d_num := stockTrans.w_id*10 + stockTrans.d_id
+	NO_Dist_Latches[d_num].Lock()
+	next_o_id := NO_Dist_Values[d_num].value1[NO_Dist_Values[d_num].index]
+	NO_Dist_Latches[d_num].Unlock()
+
 	// Select one row from District Table
 	k[0] = stockTrans.w_id
 	k[1] = stockTrans.d_id
@@ -652,7 +657,7 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	next_o_id := rec.GetTuple().(*DistrictTuple).d_next_o_id - 5
+	next_o_id = rec.GetTuple().(*DistrictTuple).d_next_o_id
 	k[3] = 0
 
 	threshold := stockTrans.threshold
