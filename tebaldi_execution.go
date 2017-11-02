@@ -413,6 +413,11 @@ func (tx *TTransaction) Commit_Ex(req *LockReq, isHome bool, group int) TID {
 			//clog.Info("Worker %v: Trans %v WUnlock Table %v; Key %v\n", w.ID, w.NStats[NTXN], i, ParseKey(wr.k, 0))
 			wr.rec.WUnlock(req, tx.maxSeen)
 			wr.rec.(*TRecord).GroupUnlock(group)
+
+			// For SSI, write multiple versions
+			if i == STOCK {
+				stock_version_table.Put(wr.k, wr.vals, wr.cols)
+			}
 		}
 		t.wRecs = t.wRecs[:0]
 

@@ -16,9 +16,21 @@ var LOCK = true
 var NOTLOCK = false
 
 var NO_Dist_Locks []SpinLockPad
+var stock_version_table *SSI_HashTable
 
 func Init_Tebaldi(warehouse int) {
 	NO_Dist_Locks = make([]SpinLockPad, warehouse*10)
+
+	// Populate stock version table
+	stock_version_table = NewSSITable(warehouse * STOCKSIZE_PER_WAREHOUSE)
+	var k Key
+	for i := 0; i < warehouse; i++ {
+		for j := 0; j < STOCKSIZE_PER_WAREHOUSE; j++ {
+			k[0] = i
+			k[1] = j
+			stock_version_table.Insert(k)
+		}
+	}
 }
 
 func NewOrder_Tebaldi(t Trans, exec ETransaction) (Value, error) {
