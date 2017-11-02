@@ -407,6 +407,12 @@ func (tx *TTransaction) Commit_Ex(req *LockReq, isHome bool, group int) TID {
 
 		for j, _ := range t.wRecs {
 			wr := &t.wRecs[j]
+
+			// For SSI, write multiple versions
+			if i == STOCK {
+				Insert_NewVersion(wr.k, wr.vals, wr.cols)
+			}
+
 			wr.vals = wr.vals[:0]
 			wr.cols = wr.cols[:0]
 			wr.isDelta = wr.isDelta[:0]
@@ -414,10 +420,6 @@ func (tx *TTransaction) Commit_Ex(req *LockReq, isHome bool, group int) TID {
 			wr.rec.WUnlock(req, tx.maxSeen)
 			wr.rec.(*TRecord).GroupUnlock(group)
 
-			// For SSI, write multiple versions
-			if i == STOCK {
-				Insert_NewVersion(wr.k, wr.vals, wr.cols)
-			}
 		}
 		t.wRecs = t.wRecs[:0]
 
