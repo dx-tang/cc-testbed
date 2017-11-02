@@ -709,10 +709,12 @@ func StockLevel_Tebaldi(t Trans, exec ETransaction) (Value, error) {
 			if err != nil {
 				return nil, err
 			}
+			rec.(*TRecord).GetLatch()
 			s_k[3] = 0
 			if rec.GetTuple().(*StockTuple).s_quantity < threshold {
 				count++
 			}
+			rec.(*TRecord).PutLatch()
 		}
 	}
 

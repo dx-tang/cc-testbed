@@ -16,6 +16,7 @@ type TRecord struct {
 	key       Key
 	lock      spinlock.Spinlock
 	groupLock spinlock.RWSpinlock
+	latch     spinlock.Spinlock
 	table     Table
 	tuple     Tuple
 	stash     SSI_Entry
@@ -113,10 +114,20 @@ func (tr *TRecord) GroupUnlock(group int) {
 }
 
 func (tr *TRecord) Insert(vals []Value, cols []int) {
+	tr.latch.Lock()
 	tr.stash.vals[0] = vals[0].(*IntValue).intVal
 	tr.stash.vals[1] = vals[1].(*IntValue).intVal
 	tr.stash.vals[2] = vals[2].(*IntValue).intVal
 	tr.stash.cols[0] = cols[0]
 	tr.stash.cols[1] = cols[1]
 	tr.stash.cols[2] = cols[2]
+	tr.latch.Unlock()
+}
+
+func (tr *TRecord) GetLatch() {
+	tr.latch.Lock()
+}
+
+func (tr *TRecord) PutLatch() {
+	tr.latch.Unlock()
 }
