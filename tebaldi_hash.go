@@ -6,9 +6,8 @@ package testbed
 
 type SSI_Entry struct {
 	padding1 [PADDING]byte
-	index    int
-	vals     [SSI_MAX_VERSION][3]int
-	cols     [SSI_MAX_VERSION][3]int
+	vals     [3]int
+	cols     [3]int
 	padding2 [PADDING]byte
 }
 
